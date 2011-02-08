@@ -60,7 +60,7 @@
 Kinds
 
 > kind       = kindBit `chainr1` kindArrow
-> kindBit    = setKind <|> natKind
+> kindBit    = setKind <|> natKind <|> parens kind
 > setKind    = symbol "*" >> return Set
 > natKind    = symbol "Nat" >> return KindNat
 > kindArrow  = reservedOp "->" >> return KindArr
@@ -81,7 +81,7 @@ Types
 > tyAll      = tyQuant "forall" (Bind All)
 > tyPi       = tyQuant "pi" (Bind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
-> tyBit      = tyBob `chainr1` pure TyApp
+> tyBit      = tyBob `chainl1` pure TyApp
 > tyBob      = tyVarOrCon <|> parens (reservedOp "->" *> pure Arr <|> tyExp)
 > tyArrow    = reservedOp "->" >> return (-->)
 

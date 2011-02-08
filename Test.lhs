@@ -19,7 +19,7 @@
 >                 name ++ " PASS\n" ++ show (prettyHigh prog')
 >               | otherwise      ->
 >                 name ++ " FAIL: round trip mismatch:\n"
->                      ++ s ++ "\n" ++ show prog ++ "\n" ++ show prog'
+>                      ++ s ++ "\n" ++ s' ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err ->
 >                 name ++ " FAIL: round trip re-parse:\n" ++ s' ++ "\n" ++ show err
 >     Left err    -> name ++ " FAIL: initial parse:\n" ++ show err
@@ -55,6 +55,12 @@
 >   "f = x :: forall (a :: Nat)b(c :: * -> *)(d :: *) . a" :
 >   "f = x :: forall a b . pi (c :: Nat) d . b -> c" :
 >   "f = x :: forall (a b c :: *) . a" :
+>   "f x y z = x y z" :
+>   "f Con = (\\ x -> x) :: (->) a a" :
+>   "f Con = \\ x -> x :: (->) a" :
+>   "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
+>   "data Nat where Zero :: Nat\n Suc :: Nat -> Nat" :
+>   "data Foo :: (* -> *) -> (Nat -> *) where Bar :: forall (f :: * -> *)(n :: Nat) . (Vec (f Int) n -> a b) -> Foo f n" :
 >   []
 
 

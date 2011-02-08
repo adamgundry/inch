@@ -54,7 +54,7 @@
 
 > prettyBind :: Binder -> Bwd (String, Kind) -> Ty String -> Size -> Doc
 > prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) (unbind a t)
-> prettyBind b bs t = wrapDoc AppSize $ prettyHigh b
+> prettyBind b bs t = wrapDoc ArrSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <+> pretty t ArrSize
 >   where
