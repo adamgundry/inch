@@ -62,8 +62,8 @@ Kinds
 > kind       = kindBit `chainr1` kindArrow
 > kindBit    = setKind <|> natKind
 > setKind    = symbol "*" >> return Set
-> natKind    = symbol "Nat" >> return NatKind
-> kindArrow  = reservedOp "->" >> return (::->)
+> natKind    = symbol "Nat" >> return KindNat
+> kindArrow  = reservedOp "->" >> return KindArr
 
 
 
@@ -78,18 +78,19 @@ Types
 > tyVar      = TyVar <$> tyVarName
 > tyCon      = TyCon <$> tyConName
 > tyExp      = tyAll <|> tyPi <|> tyExpArr
-> tyAll      = tyQuant "forall" All
-> tyPi       = tyQuant "pi" Pi
+> tyAll      = tyQuant "forall" (Bind All)
+> tyPi       = tyQuant "pi" (Bind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
-> tyBit      = tyVarOrCon <|> parens tyExp
-> tyArrow    = reservedOp "->" >> return (:->)
+> tyBit      = tyBob `chainr1` pure TyApp
+> tyBob      = tyVarOrCon <|> parens (reservedOp "->" *> pure Arr <|> tyExp)
+> tyArrow    = reservedOp "->" >> return (-->)
 
 > tyQuant q f = do
 >     reserved q
 >     aks <- many1 $ foo <$> quantifiedVar
 >     reservedOp "."
 >     t <- tyExp
->     return $ foldr (uncurry f) t $ join aks
+>     return $ foldr (\ (a, k) t -> f a k (bind a t)) t $ join aks
 >   where
 >     foo :: ([as], k) -> [(as, k)]
 >     foo (as, k) = map (\ a -> (a, k)) as
@@ -105,7 +106,7 @@ Terms
 >       <|>  fexp 
 
 > fexp = do
->     t <- foldl1 (:$) <$> many1 aexp
+>     t <- foldl1 TmApp <$> many1 aexp
 >     mty <- optionMaybe (doubleColon >> tyExp)
 >     case mty of
 >         Just ty -> return $ t :? ty
@@ -118,7 +119,7 @@ Terms
 > isVar :: String -> Bool
 > isVar = isLower . head
 
-> identLike var desc = do
+> identLike var desc = try $ do
 >     s <- identifier <?> desc
 >     when (var /= isVar s) $ fail $ "expected " ++ desc
 >     return s
@@ -138,19 +139,20 @@ Terms
 >     t <- fexp
 >     return $ wrapLam ss t
 
-> wrapLam :: [String] -> Term -> Term
+> wrapLam :: [String] -> Tm String -> Tm String
 > wrapLam [] t = t
-> wrapLam (s:ss) t = Lam s (wrapLam ss t)
+> wrapLam (s:ss) t = lam s $ wrapLam ss t
 
-
+> lam :: String -> Tm String -> Tm String
+> lam s = Lam s . bind s
 
 
 Programs
 
 > program = whiteSpace >> many decl <* eof
 
-> decl  =    dataDecl
->       <|>  funDecl
+> decl  =    DD <$> dataDecl
+>       <|>  FD <$> funDecl
 
 
 > dataDecl = I.lineFold $ do
@@ -158,7 +160,7 @@ Programs
 >     s <- tyConName
 >     k <- (doubleColon >> kind) <|> return Set
 >     reserved "where"
->     cs <- many constructor
+>     cs <- many $ I.lineFold constructor
 >     return $ DataDecl s k cs
 >     
 
@@ -186,8 +188,11 @@ Programs
 
 > pattern = Pat <$> many patTerm <* reservedOp "=" <*> pure Trivial <*> expr
 
-> patTerm  =    PatVar <$> variable
->          <|>  parens (PatCon <$> dataConName <*> many patTerm)
+> patTerm  =    parens (PatCon <$> dataConName <*> many patTerm)
+>          <|>  PatCon <$> dataConName <*> pure []
+>          <|>  PatVar <$> variable
+>          
+
 
 > signature = do
 >     s <- variable
