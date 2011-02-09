@@ -76,65 +76,50 @@
 > substTm x t (TmApp f s) = TmApp (substTm x t f) (substTm x t s)
 > substTm x t (Lam s u) = Lam s (substTm (S x) (fmap S t) u)
 
-> class Bifunctor f where
->     bimap :: (a -> c) -> (b -> d) -> f a b -> f c d
 
-> data DataDecl tyv tmv where
->     DataDecl  :: tyv -> Kind -> [Con tyv tmv] -> DataDecl tyv tmv
->   deriving (Eq, Show)
+> data DataDecl a where
+>     DataDecl  :: a -> Kind -> [Con a] -> DataDecl a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Bifunctor DataDecl where
->     bimap f g (DataDecl t k cs) = DataDecl (f t) k (map (bimap f g) cs)
+> data FunDecl a where
+>     FunDecl   :: a -> Maybe (Ty a) -> [Pat a] -> FunDecl a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data FunDecl tyv tmv where
->     FunDecl   :: tmv -> Maybe (Ty tyv) -> [Pat tmv] -> FunDecl tyv tmv
->   deriving (Eq, Show)
+> data Decl a where
+>     DD :: DataDecl a  -> Decl a
+>     FD :: FunDecl a   -> Decl a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Bifunctor FunDecl where
->     bimap f g (FunDecl t mt ps) = FunDecl (g t) (fmap (fmap f) mt) (map (fmap g) ps)
+> data Con a where
+>     Con :: a -> Ty a -> Con a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data Decl tyv tmv where
->     DD :: DataDecl tyv tmv  -> Decl tyv tmv
->     FD :: FunDecl tyv tmv   -> Decl tyv tmv
->   deriving (Eq, Show)
+> data Pat a where
+>     Pat :: [PatTerm a] -> Guard a -> Tm a -> Pat a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Bifunctor Decl where
->     bimap f g (DD d) = DD (bimap f g d)
->     bimap f g (FD d) = FD (bimap f g d)
+> data PatTerm a where
+>     PatVar  :: a -> PatTerm a
+>     PatCon  :: a -> [PatTerm a] -> PatTerm a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data Con tyv tmv where
->     Con :: tmv -> Ty tyv -> Con tyv tmv
->   deriving (Eq, Show)
-
-> instance Bifunctor Con where
->     bimap f g (Con t ty) = Con (g t) (fmap f ty)
-
-> data Pat tmv where
->     Pat :: [PatTerm tmv] -> Guard tmv -> Tm tmv -> Pat tmv
->   deriving (Eq, Show, Functor)
-
-> data PatTerm tmv where
->     PatVar  :: tmv -> PatTerm tmv
->     PatCon  :: tmv -> [PatTerm tmv] -> PatTerm tmv
->   deriving (Eq, Show, Functor)
-
-> data Guard tmv where
->     Trivial :: Guard tmv
->   deriving (Eq, Show, Functor)
+> data Guard a where
+>     Trivial :: Guard a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 
-> type TyName           = (String, Int)
-> type TmName           = String
-> type Term             = Tm TmName
-> type Type             = Ty TyName
-> type Constructor      = Con TyName TmName
-> type Pattern          = Pat TmName
-> type PatternTerm      = PatTerm TmName
-> type Declaration      = Decl TyName TmName
-> type DataDeclaration  = DataDecl TyName TmName
-> type FunDeclaration   = FunDecl TyName TmName
-> type Prog tyv tmv     = [Decl tyv tmv]
-> type Program          = [Declaration]
+> type Prog a           = [Decl a]
+
+> type Name             = (String, Int)
+> type Term             = Tm Name
+> type Type             = Ty Name
+> type Constructor      = Con Name
+> type Pattern          = Pat Name
+> type PatternTerm      = PatTerm Name
+> type Declaration      = Decl Name
+> type DataDeclaration  = DataDecl Name
+> type FunDeclaration   = FunDecl Name
+> type Program          = Prog Name
 
 
 > patToTm :: PatTerm a -> Tm a

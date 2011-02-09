@@ -32,9 +32,9 @@
 
 
 > class FV a where
->     (<?) :: TyName -> a -> Bool
+>     (<?) :: Name -> a -> Bool
 
-> instance FV TyName where
+> instance FV Name where
 >     (<?) = (==)
 
 > instance FV a => FV (Ty a) where
@@ -49,7 +49,7 @@
 > instance FV TyEntry where
 >     alpha <? (a := d ::: k) = alpha <? a || alpha <? d
 
-> unify :: Ty TyName -> Ty TyName -> Contextual t ()
+> unify :: Type -> Type -> Contextual t ()
 > unify Arr Arr = return ()
 > unify (TyVar alpha)        (TyVar beta)                 = onTop $
 >   \ (gamma := d ::: k) -> case
@@ -72,11 +72,15 @@
 >     nm <- fresh a (Nothing ::: k)
 >     unify (unbind nm ty) tau
 
+> unify tau (Bind b a k ty) = do
+>     nm <- fresh a (Nothing ::: k)
+>     unify tau (unbind nm ty)
+
 > unify (TyVar alpha)  tau            =  solve alpha F0 tau
 > unify tau            (TyVar alpha)  =  solve alpha F0 tau
 > unify tau            upsilon        =  fail $ "Could not unify " ++ show tau ++ " and " ++ show upsilon
 
-> solve :: TyName -> Suffix -> Ty TyName -> Contextual t ()
+> solve :: Name -> Suffix -> Type -> Contextual t ()
 > solve alpha _Xi tau = onTop $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
 >     (gamma == alpha,  occurs,  d             ) of

@@ -75,22 +75,22 @@
 >     pretty (t :? ty)  = wrapDoc AppSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty AppSize
 
-> instance Pretty (Decl String String) where
+> instance Pretty (Decl String) where
 >     pretty (DD d) = pretty d 
 >     pretty (FD f) = pretty f
 
-> instance Pretty (DataDecl String String) where
+> instance Pretty (DataDecl String) where
 >     pretty (DataDecl n k cs) _ = hang (text "data" <+> prettyHigh n
 >         <+> (if k /= Set then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
 >             vcat (map prettyHigh cs)
 
-> instance Pretty (FunDecl String String) where
+> instance Pretty (FunDecl String) where
 >     pretty (FunDecl n Nothing ps) _ = vcat (map ((prettyHigh n <+>) . prettyHigh) ps)
 >     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyHigh n <+> text "::" <+> prettyHigh ty) : map ((prettyHigh n <+>) . prettyHigh) ps
 
 
-> instance Pretty (Con String String) where
+> instance Pretty (Con String) where
 >     pretty (Con s ty) _ = prettyHigh s <+> text "::" <+> prettyHigh ty
 
 > instance Pretty (Pat String) where
@@ -102,12 +102,12 @@
 
 
 
-> instance Pretty [Decl String String] where
+> instance Pretty (Prog String) where
 >     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)
 
 > instance Pretty Program where
 >     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)
 
-> instance (Pretty (f String String), Bifunctor f)
->              => Pretty (f (String, a) String) where
->    pretty x = pretty (bimap fst id x)
+> instance (Functor f, Pretty (f String))
+>              => Pretty (f (String, a)) where
+>    pretty x = pretty (fmap fst x)

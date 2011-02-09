@@ -76,6 +76,7 @@
 >   "f x = x" :
 >   "f = f" :
 >   "f = \\ x -> x" :
+>   "f = (\\ x -> x) :: forall a. a -> a" :
 >   "f = \\ x y z -> x y z" :
 >   "f x y z = x (y z)" :
 >   "f x y z = x y z" :
