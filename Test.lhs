@@ -8,32 +8,27 @@
 > import Syntax
 > import TypeCheck
 
+> test f = mapM_ (putStrLn . f)
 
-> roundTrip :: String -> String -> String
-> roundTrip name s = case I.parse program name s of
+
+> roundTrip :: String -> String
+> roundTrip s = case I.parse program "roundTrip" s of
 >     Right prog  ->
 >         let s' = show $ prettyHigh prog in
->         case I.parse program name s' of
+>         case I.parse program "roundTrip2" s' of
 >             Right prog'
 >               | prog == prog'  ->
->                 name ++ " PASS\n" ++ show (prettyHigh prog')
+>                 "PASS:\n" ++ show (prettyHigh prog')
 >               | otherwise      ->
->                 name ++ " FAIL: round trip mismatch:\n"
->                      ++ s ++ "\n" ++ s' ++ "\n" ++ show prog ++ "\n" ++ show prog'
+>                 "FAIL: round trip mismatch:\n" ++ s ++ "\n" ++ s'
+>                     ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err ->
->                 name ++ " FAIL: round trip re-parse:\n" ++ s' ++ "\n" ++ show err
->     Left err    -> name ++ " FAIL: initial parse:\n" ++ show err
+>                 "FAIL: round trip re-parse:\n" ++ s' ++ "\n" ++ show err
+>     Left err -> "FAIL: initial parse:\n" ++ s ++ "\n" ++ show err
 
-> test s = putStrLn (roundTrip "test" s)
-> halfTest s = I.parse program "test" s
-> parseCheck s = putStrLn $ case I.parse program "parseCheck" s of
->     Right p   -> case typeCheck p of
->         Right (p', (_, (), c)) -> "Typechecked program\n" ++ show (prettyHigh p')
->                                       ++ "\nin context\n" ++ show c
->         Left err -> "Typecheck error: " ++ err
->     Left err  -> "Parse error: " ++ show err
+> roundTripTest = test roundTrip roundTripTestData
 
-> validTestData = 
+> roundTripTestData = 
 >   "f = x" :
 >   "f = a b" :
 >   "f = \\ x -> x" :
@@ -64,7 +59,26 @@
 >   []
 
 
-> runTests i [] = []
-> runTests i (s:ss) = roundTrip (show i) s : runTests (i+1) ss
 
-> testValid = mapM_ putStrLn $ runTests 0 validTestData
+> parseCheck :: String -> String
+> parseCheck s = case I.parse program "parseCheck" s of
+>     Right p   -> case typeCheck p of
+>         Right (p', (_, (), c)) -> "PASS: checked program\n"
+>                                       ++ show (prettyHigh p')
+>         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ err
+>     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
+
+
+
+> parseCheckTest = test parseCheck parseCheckTestData
+
+> parseCheckTestData = 
+>   "f x = x" :
+>   "f = f" :
+>   "f = \\ x -> x" :
+>   "f = \\ x y z -> x y z" :
+>   "f x y z = x (y z)" :
+>   "f x y z = x y z" :
+>   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
+>   "data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
+>   []
