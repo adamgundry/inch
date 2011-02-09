@@ -239,9 +239,24 @@ is a fresh variable, then returns $\alpha$.
 
 
 > checkFunDecl :: FunDecl String -> Contextual () FunDeclaration
-> checkFunDecl (FunDecl s mty pats@(Pat xs _ _ : _)) = do
+> checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) = do
 >     modifyContext (:< Layer FunTop)
 >     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
+>     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
+>     let pts = map (map tyOf) $ fst pattys
+>     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
+>     mapM unifyAll (transpose pts)
+>     let ttys = map tyOf $ snd pattys
+>     unifyAll ttys
+>     let ty = foldr (-->) (head ttys) (head pts)
+>     unify ty sty
+>     ty' <- generalise ty
+>     modifyContext (:< Func (s, 0) ty')
+>     return (FunDecl (s, 0) (Just ty') (map tmOf $ snd pattys))
+> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
+>     modifyContext (:< Layer FunTop)
+>     (sty ::: k) <- inferKind B0 st
+>     unless (targetsSet k) $ fail $ "Kind " ++ show k ++ " of " ++ show s ++ " is not *"
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys
 >     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
