@@ -4,7 +4,7 @@
 > import Control.Monad
 > import Data.Char
 
-> import Text.ParserCombinators.Parsec hiding (many, (<|>))
+> import Text.ParserCombinators.Parsec hiding (optional, many, (<|>))
 > import Text.ParserCombinators.Parsec.Expr
 > import Text.ParserCombinators.Parsec.Language
 > import qualified Text.ParserCombinators.Parsec.Token as T
@@ -65,10 +65,6 @@ Kinds
 
 Types
 
-> tyVarOrCon = f <$> (identifier <?> "type variable or constructor")
->   where f s  | isVar s    = TyVar s
->              | otherwise  = TyCon s
-
 > tyVarName  = identLike True "type variable"
 > tyConName  = identLike False "type constructor"
 > tyVar      = TyVar <$> tyVarName
@@ -79,13 +75,15 @@ Types
 > tyExpArr   = tyBit `chainr1` tyArrow
 > tyArrow    = reservedOp "->" >> return (-->)
 > tyBit      = tyBob `chainl1` pure TyApp
-> tyBob      =    tyVarOrCon
+> tyBob      =    TyVar <$> tyVarName
+>            <|>  TyCon <$> tyConName
 >            <|>  TyNum <$> try tyNumTerm
 >            <|>  parens (reservedOp "->" *> pure Arr <|> tyExp)
 
+> numVarName   = identLike True "numeric type variable"
 > tyNum        = tyNumTerm `chainr1` tyPlusMinus
 > tyPlusMinus  = reservedOp "+" *> return (+) <|> specialOp "-" *> return (-)
-> tyNumTerm    =    NumVar <$> tyVarName
+> tyNumTerm    =    NumVar <$> numVarName
 >              <|>  NumConst <$> integer
 >              <|>  Neg <$> (specialOp "-" *> tyNumTerm)
 >              <|>  parens tyNum
@@ -118,7 +116,8 @@ Terms
 >         Just ty -> return $ t :? ty
 >         Nothing -> return t
 
-> aexp  =    varOrCon
+> aexp  =    TmVar <$> tmVarName
+>       <|>  TmCon <$> dataConName
 >       <|>  parens expr
 
 
@@ -130,17 +129,12 @@ Terms
 >     when (var /= isVar s) $ fail $ "expected " ++ desc
 >     return s
 
-> variable = identLike True "variable"
-
-> varOrCon = f <$> (identifier <?> "term variable or constructor")
->   where f s  | isVar s    = TmVar s
->              | otherwise  = TmCon s
-
-> dataConName  = identLike False "data constructor"
+> tmVarName    = identLike True   "term variable"
+> dataConName  = identLike False  "data constructor"
 
 > lambda = do
 >     reservedOp "\\"
->     ss <- many1 variable
+>     ss <- many1 tmVarName
 >     reservedOp "->"
 >     t <- fexp
 >     return $ wrapLam ss t
@@ -181,14 +175,19 @@ Programs
 
 
 > funDecl = do
->     (s, p) <- patternStart
->     ps <- many $ patternFor s
->     return $ FunDecl s Nothing (p:ps)
+>     mst <- optional $ try signature
+>     case mst of
+>         Just (s, t) -> FunDecl s (Just t) <$> many (patternFor s)
+>         Nothing -> do
+>             (s, p) <- patternStart
+>             ps <- many $ patternFor s
+>             return $ FunDecl s Nothing (p:ps)
 
-> patternStart = I.lineFold $ (,) <$> variable <*> pattern
+
+> patternStart = I.lineFold $ (,) <$> tmVarName <*> pattern
 
 > patternFor s = I.lineFold $ do
->     try $ do  x <- variable
+>     try $ do  x <- tmVarName
 >               unless (s == x) $ fail $ "expected pattern for " ++ show s
 >     pattern
 
@@ -196,12 +195,13 @@ Programs
 
 > patTerm  =    parens (PatCon <$> dataConName <*> many patTerm)
 >          <|>  PatCon <$> dataConName <*> pure []
->          <|>  PatVar <$> variable
+>          <|>  PatVar <$> patVarName
 >          
 
+> patVarName = identLike True "pattern variable"
 
-> signature = do
->     s <- variable
+> signature = I.lineFold $ do
+>     s <- tmVarName
 >     doubleColon
 >     t <- tyExp
 >     return (s, t)

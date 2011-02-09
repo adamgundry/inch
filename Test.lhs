@@ -64,6 +64,9 @@
 >   "huh = huh :: Vec (-1) a" :
 >   "heh = heh :: Vec m a -> Vec n a -> Vec (m-n) a" :
 >   "hah = hah :: Foo 0 1 (-1) (-2) m (m+n) (m+1-n+2)" :
+>   "f :: a -> a\nf x = x" :
+>   "f :: forall a. a -> a\nf x = x" :
+>   "f :: forall a.\n a\n -> a\nf x = x" :
 >   []
 
 
