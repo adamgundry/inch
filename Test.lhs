@@ -21,6 +21,7 @@
 >                 "PASS:\n" ++ show (prettyHigh prog')
 >               | otherwise      ->
 >                 "FAIL: round trip mismatch:\n" ++ s ++ "\n" ++ s'
+>                     ++ "\n" ++ show (prettyHigh prog')
 >                     ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err ->
 >                 "FAIL: round trip re-parse:\n" ++ s' ++ "\n" ++ show err
@@ -59,6 +60,10 @@
 >   "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
 >   "data Nat where Zero :: Nat\n Suc :: Nat -> Nat" :
 >   "data Foo :: (* -> *) -> (Nat -> *) where Bar :: forall (f :: * -> *)(n :: Nat) . (Vec (f Int) n -> a b) -> Foo f n" :
+>   "data Vec :: Nat -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Nat). a -> Vec m a -> Vec (m+1) a" :
+>   "huh = huh :: Vec (-1) a" :
+>   "heh = heh :: Vec m a -> Vec n a -> Vec (m-n) a" :
+>   "hah = hah :: Foo 0 1 (-1) (-2) m (m+n) (m+1-n+2)" :
 >   []
 
 

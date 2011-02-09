@@ -50,7 +50,10 @@
 > semiSep1       = IT.semiSep1 lexer
 > commaSep       = IT.commaSep lexer
 > commaSep1      = IT.commaSep1 lexer
- 
+
+
+> specialOp s = try $
+>     string s >> notFollowedBy (opLetter toyDef) >> whiteSpace
 
 
 > doubleColon = reservedOp "::"
@@ -81,9 +84,19 @@ Types
 > tyAll      = tyQuant "forall" (Bind All)
 > tyPi       = tyQuant "pi" (Bind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
-> tyBit      = tyBob `chainl1` pure TyApp
-> tyBob      = tyVarOrCon <|> parens (reservedOp "->" *> pure Arr <|> tyExp)
 > tyArrow    = reservedOp "->" >> return (-->)
+> tyBit      = tyBob `chainl1` pure TyApp
+> tyBob      =    tyVarOrCon
+>            <|>  TyNum <$> try tyNumTerm
+>            <|>  parens (reservedOp "->" *> pure Arr <|> tyExp)
+
+> tyNum        = tyNumTerm `chainr1` tyPlusMinus
+> tyPlusMinus  = reservedOp "+" *> return (+) <|> specialOp "-" *> return (-)
+> tyNumTerm    =    NumVar <$> tyVarName
+>              <|>  NumConst <$> integer
+>              <|>  Neg <$> (specialOp "-" *> tyNumTerm)
+>              <|>  parens tyNum
+> 
 
 > tyQuant q f = do
 >     reserved q

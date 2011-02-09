@@ -34,11 +34,27 @@
 >     All  :: Binder
 >   deriving (Eq, Show)
 
+> data TyNum a where
+>     NumConst  :: Integer -> TyNum a
+>     NumVar    :: a -> TyNum a
+>     (:+:)     :: TyNum a -> TyNum a -> TyNum a
+>     Neg       :: TyNum a -> TyNum a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
+
+> instance (Eq a, Show a) => Num (TyNum a) where
+>     (+)          = (:+:)
+>     negate       = Neg
+>     fromInteger  = NumConst
+>     (*)          = error "no *"
+>     abs          = error "no abs"
+>     signum       = error "no signum"
+
 > data Ty a where
 >     TyVar  :: a -> Ty a
 >     TyCon  :: a -> Ty a
 >     TyApp  :: Ty a -> Ty a -> Ty a
 >     Arr    :: Ty a
+>     TyNum  :: TyNum a -> Ty a
 >     Bind   :: Binder -> String -> Kind -> Ty (S a) -> Ty a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 

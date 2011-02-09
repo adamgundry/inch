@@ -45,6 +45,16 @@
 >     pretty Pi _   = text "pi"
 >     pretty All _  = text "forall"
 
+> instance Pretty (TyNum String) where
+>     pretty (NumConst k) = const $ integer k
+>     pretty (NumVar a) = pretty a
+>     pretty (m :+: Neg n) = wrapDoc AppSize $ 
+>         pretty m ArgSize <+> text "-" <+> pretty n ArgSize
+>     pretty (m :+: n) = wrapDoc AppSize $ 
+>         pretty m ArgSize <+> text "+" <+> pretty n ArgSize
+>     pretty (Neg n) = wrapDoc ArgSize $
+>         text "-" <+> pretty n ArgSize
+
 > instance Pretty (Ty String) where
 >     pretty (TyVar a)                = pretty a
 >     pretty (TyCon c)                = pretty c
@@ -53,11 +63,13 @@
 >     pretty (TyApp f s)  = wrapDoc AppSize $ 
 >         pretty f AppSize <+> pretty s ArgSize
 >     pretty Arr          = const (parens (text "->"))
+>     pretty (TyNum n) = pretty n
 >     pretty (Bind b a k t) = prettyBind b (B0 :< (a, k)) $
 >                                 alphaConvert [(a, a ++ "'")] (unbind a t)
 
 > prettyBind :: Binder -> Bwd (String, Kind) -> Ty String -> Size -> Doc
-> prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) (unbind a t)
+> prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) $
+>     alphaConvert [(a, a ++ "'")] (unbind a t)
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <+> pretty t ArrSize
