@@ -49,8 +49,8 @@
 >   "f = x :: forall (a :: *) . a" :
 >   "f = x :: forall a . a" :
 >   "f = x :: forall a b c . a" :
->   "f = x :: forall (a :: Nat)b(c :: * -> *)(d :: *) . a" :
->   "f = x :: forall a b . pi (c :: Nat) d . b -> c" :
+>   "f = x :: forall (a :: Num)b(c :: * -> *)(d :: *) . a" :
+>   "f = x :: forall a b . pi (c :: Num) d . b -> c" :
 >   "f = x :: forall (a b c :: *) . a" :
 >   "f x y z = x y z" :
 >   "f Con = (\\ x -> x) :: (->) a a" :
@@ -59,8 +59,8 @@
 >   "f x y = (x y :: Nat -> Nat) y" :
 >   "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
 >   "data Nat where Zero :: Nat\n Suc :: Nat -> Nat" :
->   "data Foo :: (* -> *) -> (Nat -> *) where Bar :: forall (f :: * -> *)(n :: Nat) . (Vec (f Int) n -> a b) -> Foo f n" :
->   "data Vec :: Nat -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Nat). a -> Vec m a -> Vec (m+1) a" :
+>   "data Foo :: (* -> *) -> (Num -> *) where Bar :: forall (f :: * -> *)(n :: Num) . (Vec (f Int) n -> a b) -> Foo f n" :
+>   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a" :
 >   "huh = huh :: Vec (-1) a" :
 >   "heh = heh :: Vec m a -> Vec n a -> Vec (m-n) a" :
 >   "hah = hah :: Foo 0 1 (-1) (-2) m (m+n) (m+1-n+2)" :
@@ -89,7 +89,7 @@
 >   "f = \\ x y z -> x y z" :
 >   "f x y z = x (y z)" :
 >   "f x y z = x y z" :
->   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
->   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf x = x :: Nat -> Nat" :
+>   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat" :
 >   "data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
+>   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs\nid2 (Cons x xs) = Cons x xs\nid2 Nil = Nil\n" :
 >   []

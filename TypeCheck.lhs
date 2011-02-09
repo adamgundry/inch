@@ -11,6 +11,7 @@
 > import Syntax
 > import Context
 > import Unify
+> import Orphans
 
 
 > lookupTyVar :: Bwd (Name ::: Kind) -> String -> Contextual t (Type ::: Kind)
@@ -21,6 +22,20 @@
 >     seek B0 = fail $ "Missing type variable " ++ a
 >     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ TyVar (t, n) ::: k
 >     seek (g :< _) = seek g
+
+> lookupNumVar :: Bwd (Name ::: Kind) -> String -> Contextual t TypeNum
+> lookupNumVar (g :< ((b, n) ::: k)) a
+>     | a == b && k == KindNum  = return $ NumVar (a, n)
+>     | a == b                  = fail $ "Type variable " ++ a ++ " is not numeric"
+>     | otherwise               = lookupNumVar g a
+> lookupNumVar B0 a = getContext >>= seek
+>   where
+>     seek B0 = fail $ "Missing numeric variable " ++ a
+>     seek (g :< A ((t, n) := _ ::: k))
+>         | a == t && k == KindNum = return $ NumVar (t, n)
+>         | a == t = fail $ "Type variable " ++ a ++ " is not numeric"
+>     seek (g :< _) = seek g
+
 
 > lookupTyCon :: String -> Contextual t (Type ::: Kind)
 > lookupTyCon a = getContext >>= seek
@@ -42,11 +57,17 @@
 >             return $ TyApp f' s' ::: k2
 >         _ -> fail $ "Kind mismatch: kind " ++ show k ++ " of " ++ show f ++ " is not an arrow"
 > inferKind g Arr             = return $ Arr ::: Set ---> Set ---> Set
+> inferKind g (TyNum n)       = (\ n -> TyNum n ::: KindNum) <$> checkNumKind g n
 > inferKind g (Bind b a k t)  = do
 >     n <- freshName
 >     ty ::: l <- inferKind (g :< ((a, n) ::: k)) (unbind a t)
 >     return $ Bind b a k (bind (a, n) ty) ::: l
 
+> checkNumKind :: Bwd (Name ::: Kind) -> TyNum String -> Contextual t TypeNum
+> checkNumKind g (NumConst k) = return $ NumConst k
+> checkNumKind g (NumVar a) = lookupNumVar g a
+> checkNumKind g (m :+: n) = (:+:) <$> checkNumKind g m <*> checkNumKind g n
+> checkNumKind g (Neg n) = Neg <$> checkNumKind g n
 
 
 
@@ -148,13 +169,11 @@ is a fresh variable, then returns $\alpha$.
 >                            | otherwise  = seekIn cs
 
 > specialise :: Type -> Contextual t Type
-> specialise (TyVar a)       = return $ TyVar a
-> specialise (TyCon c)       = return $ TyCon c
 > specialise (TyApp f s)     = TyApp <$> specialise f <*> specialise s
-> specialise Arr             = return $ Arr
 > specialise (Bind b x k t)  = do
 >     beta <- fresh x (Nothing ::: k)
 >     specialise (unbind beta t)
+> specialise t               = return t
 
 > inferType :: Contextual Term Type
 > inferType = getT >>= \ t -> case t of
@@ -200,7 +219,7 @@ is a fresh variable, then returns $\alpha$.
 
 > targetsSet :: Kind -> Bool
 > targetsSet Set            = True
-> targetsSet KindNat        = False
+> targetsSet KindNum        = False
 > targetsSet (KindArr _ k)  = targetsSet k 
 
 > checkConstructor :: Name -> Con String -> Contextual () Constructor
@@ -280,7 +299,3 @@ is a fresh variable, then returns $\alpha$.
 >     nm <- fresh "cod" (Nothing ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
 >     return (PatCon (c, 0) (map tmOf pts') ::: TyVar nm, ptsBinds)
-
-> instance Monad m => Applicative (StateT s m) where
->     pure = return
->     (<*>) = ap

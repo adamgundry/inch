@@ -37,7 +37,7 @@
 
 > instance Pretty Kind where
 >     pretty Set            = const $ text "*"
->     pretty KindNat        = const $ text "Nat"
+>     pretty KindNum        = const $ text "Nat"
 >     pretty (KindArr k l)  = wrapDoc AppSize $
 >         pretty k ArgSize <+> text "->" <+> pretty l AppSize
 

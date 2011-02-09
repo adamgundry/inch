@@ -13,15 +13,8 @@
 
 
 > import Syntax
+> import Orphans
 
-
-> instance Applicative (GenParser s a) where
->    pure  = return
->    (<*>) = ap
-
-> instance Alternative (GenParser s a) where
->    empty = mzero
->    (<|>) = mplus
 
 > toyDef = haskellDef
 
@@ -65,7 +58,7 @@ Kinds
 > kind       = kindBit `chainr1` kindArrow
 > kindBit    = setKind <|> natKind <|> parens kind
 > setKind    = symbol "*" >> return Set
-> natKind    = symbol "Nat" >> return KindNat
+> natKind    = symbol "Num" >> return KindNum
 > kindArrow  = reservedOp "->" >> return KindArr
 
 

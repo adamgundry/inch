@@ -22,7 +22,7 @@
 
 > data Kind where
 >     Set      :: Kind
->     KindNat  :: Kind
+>     KindNum  :: Kind
 >     KindArr  :: Kind -> Kind -> Kind
 >   deriving (Eq, Show)
 
@@ -38,14 +38,15 @@
 >     NumConst  :: Integer -> TyNum a
 >     NumVar    :: a -> TyNum a
 >     (:+:)     :: TyNum a -> TyNum a -> TyNum a
+>     (:*:)     :: TyNum a -> TyNum a -> TyNum a
 >     Neg       :: TyNum a -> TyNum a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > instance (Eq a, Show a) => Num (TyNum a) where
 >     (+)          = (:+:)
+>     (*)          = (:*:)
 >     negate       = Neg
 >     fromInteger  = NumConst
->     (*)          = error "no *"
 >     abs          = error "no abs"
 >     signum       = error "no signum"
 
@@ -67,6 +68,7 @@
 > subst a t (TyCon c) = TyCon c
 > subst a t (TyApp f s) = TyApp (subst a t f) (subst a t s)
 > subst a t Arr = Arr
+> subst a t (TyNum n) = TyNum n
 > subst a t (Bind b s k u) = Bind b s k (subst (S a) (fmap S t) u)
 
 > alphaConvert :: [(String, String)] -> Ty a -> Ty a
@@ -129,6 +131,7 @@
 > type Name             = (String, Int)
 > type Term             = Tm Name
 > type Type             = Ty Name
+> type TypeNum          = TyNum Name
 > type Constructor      = Con Name
 > type Pattern          = Pat Name
 > type PatternTerm      = PatTerm Name
