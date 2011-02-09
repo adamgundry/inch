@@ -158,6 +158,7 @@ The |substGExp| function substitutes a group expression for a variable
 
 > foldGExp :: (Integer -> a -> b -> b) -> (Integer -> b) -> GExp () a -> b
 > foldGExp f g (GExp vs [((), m)]) = foldr (\ (a, n) -> f n a) (g m) vs
+> foldGExp f g (GExp vs []) = foldr (\ (a, n) -> f n a) (g 0) vs
 
 
 The following utility functions are just used within this module.

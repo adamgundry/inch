@@ -42,6 +42,26 @@
 >     Neg       :: TyNum a -> TyNum a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
+> simplifyNum :: TyNum a -> TyNum a
+> simplifyNum (n :+: m) = case (simplifyNum n, simplifyNum m) of
+>     (NumConst k,  NumConst l)  -> NumConst (k+l)
+>     (NumConst 0,  m)           -> m
+>     (n,           NumConst 0)  -> n
+>     _                          -> n :+: m
+> simplifyNum (n :*: m) = case (simplifyNum n, simplifyNum m) of
+>     (NumConst k,     NumConst l)     -> NumConst (k*l)
+>     (NumConst 0,     m)              -> NumConst 0
+>     (NumConst 1,     m)              -> m
+>     (NumConst (-1),  m)              -> Neg m
+>     (n,              NumConst 0)     -> NumConst 0
+>     (n,              NumConst 1)     -> n
+>     (n,              NumConst (-1))  -> Neg n
+>     _                                -> n :*: m
+> simplifyNum (Neg n) = case simplifyNum n of
+>     NumConst k  -> NumConst (-k)
+>     _           -> Neg n
+> simplifyNum t = t
+
 > instance (Eq a, Show a) => Num (TyNum a) where
 >     (+)          = (:+:)
 >     (*)          = (:*:)
@@ -49,6 +69,7 @@
 >     fromInteger  = NumConst
 >     abs          = error "no abs"
 >     signum       = error "no signum"
+
 
 > substNum :: Eq a => a -> TyNum a -> TyNum a -> TyNum a
 > substNum a m (NumVar b) | a == b = m

@@ -52,7 +52,9 @@
 >         pretty m ArgSize <+> text "-" <+> pretty n ArgSize
 >     pretty (m :+: n) = wrapDoc AppSize $ 
 >         pretty m ArgSize <+> text "+" <+> pretty n ArgSize
->     pretty (Neg n) = wrapDoc ArgSize $
+>     pretty (m :*: n) = wrapDoc AppSize $ 
+>         pretty m ArgSize <+> text "*" <+> pretty n ArgSize
+>     pretty (Neg n) = wrapDoc AppSize $
 >         text "-" <+> pretty n ArgSize
 
 > instance Pretty (Ty String) where
