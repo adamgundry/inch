@@ -44,6 +44,7 @@
 >   "f = x :: (->) a b" :
 >   "f = x :: F a -> G b" :
 >   "f = \\ x -> x :: a -> b" :
+>   "f = (\\ x -> x) :: a -> b" :
 >   "f = x :: forall (a :: *) . a" :
 >   "f = x :: forall a . a" :
 >   "f = x :: forall a b c . a" :
@@ -53,6 +54,8 @@
 >   "f x y z = x y z" :
 >   "f Con = (\\ x -> x) :: (->) a a" :
 >   "f Con = \\ x -> x :: (->) a" :
+>   "f = f :: (forall a . a) -> (forall b. b)" : 
+>   "f x y = (x y :: Nat -> Nat) y" :
 >   "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
 >   "data Nat where Zero :: Nat\n Suc :: Nat -> Nat" :
 >   "data Foo :: (* -> *) -> (Nat -> *) where Bar :: forall (f :: * -> *)(n :: Nat) . (Vec (f Int) n -> a b) -> Foo f n" :
@@ -64,7 +67,7 @@
 > parseCheck s = case I.parse program "parseCheck" s of
 >     Right p   -> case typeCheck p of
 >         Right (p', (_, (), c)) -> "PASS: checked program\n"
->                                       ++ show (prettyHigh p')
+>                                       ++ show (prettyProgram p')
 >         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ err
 >     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
 
@@ -77,9 +80,11 @@
 >   "f = f" :
 >   "f = \\ x -> x" :
 >   "f = (\\ x -> x) :: forall a. a -> a" :
+>   "f x = x :: forall a b. a -> b" :
 >   "f = \\ x y z -> x y z" :
 >   "f x y z = x (y z)" :
 >   "f x y z = x y z" :
 >   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)" :
+>   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf x = x :: Nat -> Nat" :
 >   "data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
 >   []

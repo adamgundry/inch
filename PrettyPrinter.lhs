@@ -27,6 +27,9 @@
 >   | dSize > curSize  = parens d
 >   | otherwise        = d
 
+> prettyProgram :: Program -> Doc
+> prettyProgram = prettyHigh . map (fmap fst)
+
 
 > instance Pretty String where
 >     pretty s _ = text s
@@ -55,7 +58,7 @@
 
 > prettyBind :: Binder -> Bwd (String, Kind) -> Ty String -> Size -> Doc
 > prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) (unbind a t)
-> prettyBind b bs t = wrapDoc ArrSize $ prettyHigh b
+> prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <+> pretty t ArrSize
 >   where
@@ -70,10 +73,14 @@
 >     pretty (TmCon s)  = pretty s
 >     pretty (TmApp f s)   = wrapDoc AppSize $
 >         pretty f AppSize <+> pretty s ArgSize
->     pretty (Lam x t)  = wrapDoc LamSize $
->         text "\\" <+> prettyHigh x <+> text "->" <+> pretty (unbind x t) AppSize
->     pretty (t :? ty)  = wrapDoc AppSize $ 
->         pretty t AppSize <+> text "::" <+> pretty ty AppSize
+>     pretty (Lam x t)  = prettyLam (text x) (unbind x t)
+>     pretty (t :? ty)  = wrapDoc ArrSize $ 
+>         pretty t AppSize <+> text "::" <+> pretty ty maxBound
+
+> prettyLam :: Doc -> Tm String -> Size -> Doc
+> prettyLam d (Lam x t) = prettyLam (d <+> text x) (unbind x t)
+> prettyLam d t = wrapDoc LamSize $
+>         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
 > instance Pretty (Decl String) where
 >     pretty (DD d) = pretty d 
@@ -104,10 +111,3 @@
 
 > instance Pretty (Prog String) where
 >     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)
-
-> instance Pretty Program where
->     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)
-
-> instance (Functor f, Pretty (f String))
->              => Pretty (f (String, a)) where
->    pretty x = pretty (fmap fst x)
