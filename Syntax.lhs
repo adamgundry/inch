@@ -53,6 +53,14 @@
 > subst a t Arr = Arr
 > subst a t (Bind b s k u) = Bind b s k (subst (S a) (fmap S t) u)
 
+> alphaConvert :: [(String, String)] -> Ty a -> Ty a
+> alphaConvert xys (TyApp f s) = TyApp (alphaConvert xys f)
+>                                      (alphaConvert xys s)
+> alphaConvert xys (Bind b a k t) = case lookup a xys of
+>     Just y   -> Bind b y k (alphaConvert ((a, y ++ "'") : xys) t)
+>     Nothing  -> Bind b a k (alphaConvert xys t)
+> alphaConvert xys t = t
+
 > data Tm a where
 >     TmVar  :: a -> Tm a
 >     TmCon  :: a -> Tm a
