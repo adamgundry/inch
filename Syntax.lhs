@@ -50,6 +50,14 @@
 >     abs          = error "no abs"
 >     signum       = error "no signum"
 
+> substNum :: Eq a => a -> TyNum a -> TyNum a -> TyNum a
+> substNum a m (NumVar b) | a == b = m
+>                         | otherwise = NumVar b
+> substNum a m (NumConst k) = NumConst k
+> substNum a m (n1 :+: n2) = substNum a m n1 :+: substNum a m n2
+> substNum a m (n1 :*: n2) = substNum a m n1 :*: substNum a m n2
+> substNum a m (Neg n) = Neg (substNum a m n)
+
 > data Ty a where
 >     TyVar  :: a -> Ty a
 >     TyCon  :: a -> Ty a
@@ -68,6 +76,7 @@
 > subst a t (TyCon c) = TyCon c
 > subst a t (TyApp f s) = TyApp (subst a t f) (subst a t s)
 > subst a t Arr = Arr
+> subst a (TyNum m) (TyNum n) = TyNum (substNum a m n)
 > subst a t (TyNum n) = TyNum n
 > subst a t (Bind b s k u) = Bind b s k (subst (S a) (fmap S t) u)
 

@@ -65,14 +65,23 @@
 > instance FV TyEntry where
 >     alpha <? (a := d ::: k) = alpha <? a || alpha <? d
 
+
+Invariant: if a definition |a := Just d ::: KindNat| is in the
+context, then |d| must be of the form |TyNum n| for some |n|.
+
+> var :: Kind -> a -> Ty a
+> var KindNum  = TyNum . NumVar
+> var _        = TyVar
+
+
 > unify :: Type -> Type -> Contextual t ()
 > unify Arr Arr = return ()
 > unify (TyVar alpha)        (TyVar beta)                 = onTop $
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha,  gamma == beta,  d         ) of
 >           (True,            True,           _         )  ->  restore                                 
->           (True,            False,          Nothing   )  ->  replace ((alpha := Just (TyVar beta) ::: k) :> F0)
->           (False,           True,           Nothing   )  ->  replace ((beta := Just (TyVar alpha) ::: k) :> F0)
+>           (True,            False,          Nothing   )  ->  replace ((alpha := Just (var k beta) ::: k) :> F0)
+>           (False,           True,           Nothing   )  ->  replace ((beta := Just (var k alpha) ::: k) :> F0)
 >           (True,            False,          Just tau  )  ->  unify (TyVar beta)   tau       >> restore   
 >           (False,           True,           Just tau  )  ->  unify (TyVar alpha)  tau       >> restore   
 >           (False,           False,          _         )  ->  unify (TyVar alpha)  (TyVar beta)  >> restore   
