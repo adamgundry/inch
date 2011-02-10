@@ -9,6 +9,7 @@
 
 > import BwdFwd hiding ((<+>))
 > import Syntax
+> import Kit
 
 
 > data Size = ArgSize | AppSize | ArrSize | LamSize

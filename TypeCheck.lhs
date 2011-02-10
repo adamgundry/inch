@@ -13,6 +13,7 @@
 > import Context
 > import Unify
 > import Orphans
+> import Kit
 
 
 > lookupTyVar :: Bwd (TyName ::: Kind) -> String -> Contextual t (TyName ::: Kind)

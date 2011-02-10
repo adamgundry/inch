@@ -9,6 +9,7 @@
 
 > import BwdFwd
 > import Syntax
+> import Kit
 
 
 > data TmLayer a x  =  PatternTop (x ::: Ty a) [x ::: Ty a]

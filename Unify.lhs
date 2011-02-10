@@ -11,6 +11,7 @@
 > import Context
 > import Num
 > import Orphans
+> import Kit
 
 
 > data Extension = Restore | Replace Suffix

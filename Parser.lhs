@@ -14,6 +14,7 @@
 
 > import Syntax
 > import Orphans
+> import Kit
 
 
 > toyDef = haskellDef
