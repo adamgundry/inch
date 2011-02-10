@@ -4,7 +4,7 @@
 
 > import Control.Applicative
 > import Data.Foldable 
-> import Prelude hiding (any)
+> import Prelude hiding (any, mapM_)
 
 > import BwdFwd
 > import Syntax
@@ -111,9 +111,36 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unify (TyNum m)      (TyNum n)      = unifyNum m n
 
-> unify (TyVar alpha)  tau            =  solve alpha F0 tau
-> unify tau            (TyVar alpha)  =  solve alpha F0 tau
+> unify (TyVar alpha)  tau            =  startSolve alpha tau
+> unify tau            (TyVar alpha)  =  startSolve alpha tau
 > unify tau            upsilon        =  fail $ "Could not unify " ++ show tau ++ " and " ++ show upsilon
+
+
+> startSolve :: TyName -> Type -> Contextual t ()
+> startSolve alpha tau = do
+>     (rho, xs) <- rigidHull tau
+>     solve alpha (constraintsToSuffix xs) rho
+>     solveConstraints xs
+>     return ()
+
+> rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
+> rigidHull (TyVar a)              = return (TyVar a, F0)
+> rigidHull (TyCon c)              = return (TyCon c, F0)
+> rigidHull (TyApp f s)            = do  (f',      xs  )  <- rigidHull f
+>                                        (s',  ys  )  <- rigidHull s
+>                                        return (TyApp f' s', xs <+> ys)
+> rigidHull Arr = return (Arr, F0)
+> rigidHull (TyNum d)          = do  n <- freshName
+>                                    let beta = ("_i", n)
+>                                    return (TyNum (NumVar beta), (beta, d) :> F0)
+> rigidHull (Bind b x k t) = return (Bind b x k t, F0)
+
+> constraintsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
+> constraintsToSuffix = fmap ((:= Nothing ::: KindNum) . fst)
+
+> solveConstraints :: Fwd (TyName, TypeNum) -> Contextual t ()
+> solveConstraints = mapM_ (uncurry $ unifyNum . NumVar)
+
 
 > solve :: TyName -> Suffix -> Type -> Contextual t ()
 > solve alpha _Xi tau =
@@ -125,8 +152,13 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >     (True,            False,   Just upsilon  )  ->  modifyContext (<>< _Xi)
 >                                                 >>  unify upsilon tau
 >                                                 >>  restore
->     (False,           True,    _             )  ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
+>     (False,           True,    Nothing             )  ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
 >                                                 >>  replace F0   
+>     (False,           True,    Just upsilon  )  ->  do
+>                 (upsilon', xs) <- rigidHull upsilon
+>                 solve alpha (constraintsToSuffix xs <+> ((gamma := Just upsilon' ::: k) :> _Xi)) tau
+>                 solveConstraints xs
+>                 replace F0   
 >     (False,           False,   _             )  ->  solve alpha _Xi tau
 >                                                 >>  restore
 
