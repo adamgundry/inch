@@ -112,8 +112,8 @@
 >     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyHigh n <+> text "::" <+> prettyHigh ty) : map ((prettyHigh n <+>) . prettyHigh) ps
 
 
-> instance Pretty (Con String String) where
->     pretty (Con s ty) _ = prettyHigh s <+> text "::" <+> prettyHigh ty
+> instance Pretty (Con String) where
+>     pretty (s ::: ty) _ = prettyHigh s <+> text "::" <+> prettyHigh ty
 
 > instance Pretty (Pat String String) where
 >     pretty (Pat vs Trivial e) _ = hsep (map prettyLow vs) <+> text "="

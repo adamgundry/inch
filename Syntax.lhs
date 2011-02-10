@@ -1,4 +1,4 @@
-> {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GADTs #-}
+> {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GADTs, TypeOperators #-}
 
 > module Syntax where
 
@@ -23,6 +23,21 @@
 > unbind x = fmap unS
 >   where  unS Z      = x
 >          unS (S a)  = a
+
+
+> data a :=   b  = a :=   b
+>     deriving (Eq, Show, Functor, Foldable, Traversable)
+> data a :::  b  = a :::  b
+>     deriving (Eq, Show, Functor, Foldable, Traversable)
+> infix 3 :=
+> infix 4 :::
+
+> tmOf :: a ::: b -> a
+> tmOf (a ::: _) = a
+
+> tyOf :: a ::: b -> b
+> tyOf (_ ::: b) = b
+
 
 > data Kind where
 >     Set      :: Kind
@@ -130,7 +145,7 @@
 
 
 > data DataDecl a x where
->     DataDecl  :: TyConName -> Kind -> [Con a x] -> DataDecl a x
+>     DataDecl  :: TyConName -> Kind -> [TmConName ::: Ty a] -> DataDecl a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 
@@ -141,10 +156,6 @@
 > data Decl a x where
 >     DD :: DataDecl a x  -> Decl a x
 >     FD :: FunDecl a x   -> Decl a x
->   deriving (Eq, Show, Functor, Foldable, Traversable)
-
-> data Con a x where
->     Con :: TmConName -> Ty a -> Con a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Pat a x where
@@ -178,7 +189,7 @@
 
 > instance Bitraversable DataDecl where
 >     bitraverse f g (DataDecl x k cs) =
->         DataDecl x k <$> traverse (bitraverse f g) cs
+>         DataDecl x k <$> traverse (traverse (traverse f)) cs
 
 > instance Bifunctor DataDecl where
 >     bimap = bimapDefault
@@ -204,15 +215,6 @@
 >     bimap = bimapDefault
 
 > instance Bifoldable Decl where
->     bifoldMap = bifoldMapDefault
-
-> instance Bitraversable Con where
->     bitraverse f g (Con x t) = Con x <$> traverse f t
-
-> instance Bifunctor Con where
->     bimap = bimapDefault
-
-> instance Bifoldable Con where
 >     bifoldMap = bifoldMapDefault
 
 > instance Bitraversable Pat where
@@ -255,7 +257,8 @@
 > type Type             = Ty TyName
 > type Term             = Tm TyName TmName
 > type TypeNum          = TyNum TyName
-> type Constructor      = Con TyName TmName
+> type Con a            = TmConName ::: Ty a
+> type Constructor      = Con TyName
 > type Pattern          = Pat TyName TmName
 > type PatternTerm      = PatTerm TyName TmName
 > type Declaration      = Decl TyName TmName

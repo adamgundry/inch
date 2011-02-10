@@ -68,8 +68,8 @@
 >     seek (g :< _) = seek g
 >
 >     seekIn [] = mzero
->     seekIn (Con c ty : cs) | x == c     = return ty
->                            | otherwise  = seekIn cs
+>     seekIn ((c ::: ty) : cs)  | x == c     = return ty
+>                               | otherwise  = seekIn cs
 
 
 
@@ -228,13 +228,13 @@ is a fresh variable, then returns $\alpha$.
 > targetsSet KindNum        = False
 > targetsSet (KindArr _ k)  = targetsSet k 
 
-> checkConstructor :: TyConName -> Con String String -> Contextual () Constructor
-> checkConstructor t (Con c ty) = do
+> checkConstructor :: TyConName -> Con String -> Contextual () Constructor
+> checkConstructor t (c ::: ty) = do
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ fail $ "Kind of constructor " ++ c ++ " is not *"
 >     unless (ty' `targets` t) $ fail $ "Type of constructor " ++ c
 >                                         ++ " doesn't target " ++ show t
->     return (Con c ty')
+>     return (c ::: ty')
 
 > targets :: Eq a => Ty a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True

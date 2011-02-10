@@ -11,20 +11,6 @@
 > import Syntax
 
 
-> data a :=   b  = a :=   b
->     deriving (Eq, Show, Functor, Foldable)
-> data a :::  b  = a :::  b
->     deriving (Eq, Show, Functor, Foldable)
-> infix 3 :=
-> infix 4 :::
-
-> tmOf :: a ::: b -> a
-> tmOf (a ::: _) = a
-
-> tyOf :: a ::: b -> b
-> tyOf (_ ::: b) = b
-
-
 > data TmLayer a x  =  PatternTop (x ::: Ty a) [x ::: Ty a]
 >                   |  AppLeft () (Tm a x)
 >                   |  AppRight (Tm a x ::: Ty a) ()
@@ -38,7 +24,7 @@
 
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
->               |  Data   TyConName Kind [Con a x]
+>               |  Data   TyConName Kind [Con a]
 >               |  Func   x (Ty a)
 >   deriving Show
 

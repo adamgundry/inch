@@ -168,7 +168,7 @@ Programs
 >     s <- dataConName
 >     doubleColon
 >     t <- tyExp
->     return (Con s t)
+>     return (s ::: t)
 
 
 
