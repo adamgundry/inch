@@ -76,7 +76,7 @@
 >     Right p   -> case typeCheck p of
 >         Right (p', (_, (), c)) -> "PASS: checked program\n"
 >                                       ++ show (prettyProgram p')
->         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ err
+>         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ show (prettyHigh err)
 >     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
 
 
@@ -92,6 +92,7 @@
 >   "f = \\ x y z -> x y z" :
 >   "f x y z = x (y z)" :
 >   "f x y z = x y z" :
+>   "f x = x :: Foo" :
 >   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat" :
 >   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Suc = Suc" :
 >   "data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :

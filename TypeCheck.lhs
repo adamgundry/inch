@@ -14,6 +14,8 @@
 > import Unify
 > import Orphans
 > import Kit
+> import Error
+> import PrettyPrinter
 
 
 > lookupTyVar :: Bwd (TyName ::: Kind) -> String -> Contextual t (TyName ::: Kind)
@@ -21,7 +23,7 @@
 >                                      | otherwise  = lookupTyVar g a
 > lookupTyVar B0 a = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing type variable " ++ a
+>     seek B0 = missingTyVar a
 >     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ (t, n) ::: k
 >     seek (g :< _) = seek g
 
@@ -32,7 +34,7 @@
 >     | otherwise               = lookupNumVar g a
 > lookupNumVar B0 a = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing numeric variable " ++ a
+>     seek B0 = missingNumVar a
 >     seek (g :< A ((t, n) := _ ::: k))
 >         | a == t && k == KindNum = return $ NumVar (t, n)
 >         | a == t = fail $ "Type variable " ++ a ++ " is not numeric"
@@ -41,14 +43,14 @@
 > lookupTyCon :: String -> Contextual t (Type ::: Kind)
 > lookupTyCon a = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing type constructor " ++ a
+>     seek B0 = missingTyCon a
 >     seek (g :< Data b k _) | a == b = return $ TyCon b ::: k
 >     seek (g :< _) = seek g
 
 > lookupTm :: TmName -> Contextual t (Term ::: Type)
 > lookupTm x = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing term variable " ++ show x
+>     seek B0 = missingTmVar x
 >     seek (g :< Func y ty)                         | x == y = return $ TmVar y ::: ty
 >     seek (g :< Layer (LamBody (y ::: ty) ()))     | x == y = return $ TmVar y ::: ty
 >     seek (g :< Layer (PatternTop (y ::: ty) bs))  | x == y = return $ TmVar y ::: ty
@@ -64,7 +66,7 @@
 > lookupConName :: TmName -> Contextual t Type
 > lookupConName x = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing data constructor " ++ show x
+>     seek B0 = missingTmCon x
 >     seek (g :< Data d k cs) = seekIn cs `mplus` seek g
 >     seek (g :< _) = seek g
 >
@@ -213,8 +215,8 @@ is a fresh variable, then returns $\alpha$.
 >     
 
 > checkDataDecl :: DataDecl String String -> Contextual () DataDeclaration
-> checkDataDecl (DataDecl t k cs) = do
->     unless (targetsSet k) $ fail $ "Kind of " ++ show t ++ " doesn't target *"
+> checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
+>     unless (targetsSet k) $ errKindTarget k
 >     modifyContext (:< Data t k [])
 >     cs' <- mapM (checkConstructor t) cs
 >     modifyContext (replaceData cs')
@@ -230,11 +232,10 @@ is a fresh variable, then returns $\alpha$.
 > targetsSet (KindArr _ k)  = targetsSet k 
 
 > checkConstructor :: TyConName -> Con String -> Contextual () Constructor
-> checkConstructor t (c ::: ty) = do
+> checkConstructor t (c ::: ty) = inLocation ("in constructor " ++ c) $ do
 >     (ty' ::: k) <- inferKind B0 ty
->     unless (k == Set) $ fail $ "Kind of constructor " ++ c ++ " is not *"
->     unless (ty' `targets` t) $ fail $ "Type of constructor " ++ c
->                                         ++ " doesn't target " ++ show t
+>     unless (k == Set) $ errKindNotSet k
+>     unless (ty' `targets` t) $ errConstructorTarget ty'
 >     return (c ::: ty')
 
 > targets :: Eq a => Ty a -> TyConName -> Bool
@@ -246,7 +247,8 @@ is a fresh variable, then returns $\alpha$.
 
 
 > checkFunDecl :: FunDecl String String -> Contextual () FunDeclaration
-> checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) = do
+> checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
+>   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
@@ -260,10 +262,11 @@ is a fresh variable, then returns $\alpha$.
 >     ty' <- simplifyTy <$> generalise ty
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
-> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
+> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
+>   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     (sty ::: k) <- inferKind B0 st
->     unless (targetsSet k) $ fail $ "Kind " ++ show k ++ " of " ++ s ++ " is not *"
+>     unless (k == Set) $ errKindNotSet k
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys
 >     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
@@ -296,7 +299,8 @@ is a fresh variable, then returns $\alpha$.
 
 > checkPat :: String ::: Type -> Pat String String ->
 >     Contextual () ([PatternTerm ::: Type], Pattern ::: Type)
-> checkPat (s ::: sty) (Pat xs g t) = do
+> checkPat (s ::: sty) (Pat xs g t) =
+>   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
 >     (ps, btys) <- checkPatTerms xs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
 >     t' ::: ty <- infer t
@@ -320,9 +324,7 @@ is a fresh variable, then returns $\alpha$.
 >     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
 >     ty <- lookupConName c
->     unless (length pts == args ty) $ fail $
->         "Constructor " ++ c ++ " should have " ++ show (args ty) ++ " arguments,"
->         ++ " but has been given " ++ show (length pts)
+>     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
 >     (pts', ptsBinds) <- checkPatTerms pts
 >     nm <- fresh "cod" (Nothing ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')

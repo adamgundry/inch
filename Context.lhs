@@ -10,6 +10,7 @@
 > import BwdFwd
 > import Syntax
 > import Kit
+> import Error
 
 
 > data TmLayer a x  =  PatternTop (x ::: Ty a) [x ::: Ty a]
@@ -44,7 +45,7 @@
 > infixl 8 <><
 
 
-> type Contextual t a = StateT (ZipState t) (Either String) a
+> type Contextual t a = StateT (ZipState t) (Either ErrorData) a
 
 > getT :: Contextual t t
 > getT = do  (_, t, _) <- get

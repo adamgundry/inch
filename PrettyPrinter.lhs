@@ -32,6 +32,8 @@
 > prettyProgram :: Program -> Doc
 > prettyProgram = prettyHigh . map (bimap fst id)
 
+> prettyFst :: (Pretty (f a), Functor f) => f (a, b) -> Doc
+> prettyFst = prettyHigh . fmap fst
 
 > instance Pretty String where
 >     pretty s _ = text s
