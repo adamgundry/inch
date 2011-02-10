@@ -53,9 +53,9 @@
 
 
 > class FV a where
->     (<?) :: Name -> a -> Bool
+>     (<?) :: TyName -> a -> Bool
 
-> instance FV Name where
+> instance FV TyName where
 >     (<?) = (==)
 
 > instance FV a => FV (Ty a) where
@@ -80,6 +80,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 
 > unify :: Type -> Type -> Contextual t ()
+> -- unify s t | s == t = return ()
 > unify Arr Arr = return ()
 > unify (TyVar alpha)        (TyVar beta)                 =
 >   onTop ("unify " ++ show alpha ++ " = " ++ show beta) $
@@ -113,7 +114,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > unify tau            (TyVar alpha)  =  solve alpha F0 tau
 > unify tau            upsilon        =  fail $ "Could not unify " ++ show tau ++ " and " ++ show upsilon
 
-> solve :: Name -> Suffix -> Type -> Contextual t ()
+> solve :: TyName -> Suffix -> Type -> Contextual t ()
 > solve alpha _Xi tau =
 >   onTop ("solve " ++ show alpha ++ " = " ++ show tau) $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
@@ -132,7 +133,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 
 > type NormNum a = GExp () a
-> type NormalNum = NormNum Name
+> type NormalNum = NormNum TyName
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
 > unifyNum m n = unifyZero Nothing =<< normaliseNum (m - n)
@@ -158,7 +159,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > typeToNum (TyVar a) = lookupNormNumVar a
 > typeToNum t = fail $ "Bad type in numeric constraint: " ++ show t
 
-> lookupNormNumVar :: Name -> Contextual t NormalNum
+> lookupNormNumVar :: TyName -> Contextual t NormalNum
 > lookupNormNumVar a = getContext >>= seek
 >   where
 >     seek B0 = fail $ "Missing numeric variable " ++ show a
@@ -174,7 +175,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > reifyNum :: NormalNum -> TypeNum
 > reifyNum = simplifyNum . foldGExp (\ k n m -> NumConst k * NumVar n + m) NumConst
 
-> unifyZero :: Maybe Name -> NormalNum -> Contextual t ()
+> unifyZero :: Maybe TyName -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
 >   | isConstant e  = fail "Unit mismatch!"
@@ -211,7 +212,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 We can insert a fresh variable into a unit thus:
 
-> insertFreshVar :: NormalNum -> Contextual t (NormalNum, Name)
+> insertFreshVar :: NormalNum -> Contextual t (NormalNum, TyName)
 > insertFreshVar d = do
 >     n <- freshName
 >     let beta = ("beta", n)

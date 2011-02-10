@@ -139,11 +139,9 @@ Terms
 >     t <- fexp
 >     return $ wrapLam ss t
 
-> wrapLam :: [String] -> Tm String -> Tm String
 > wrapLam [] t = t
 > wrapLam (s:ss) t = lam s $ wrapLam ss t
 
-> lam :: String -> Tm String -> Tm String
 > lam s = Lam s . bind s
 
 

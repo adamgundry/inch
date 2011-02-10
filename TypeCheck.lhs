@@ -6,6 +6,7 @@
 > import Control.Monad
 > import Control.Monad.State
 > import Data.List
+> import Data.Bitraversable
 
 > import BwdFwd
 > import Syntax
@@ -14,16 +15,16 @@
 > import Orphans
 
 
-> lookupTyVar :: Bwd (Name ::: Kind) -> String -> Contextual t (Type ::: Kind)
-> lookupTyVar (g :< ((b, n) ::: k)) a  | a == b     = return $ TyVar (a, n) ::: k
+> lookupTyVar :: Bwd (TyName ::: Kind) -> String -> Contextual t (TyName ::: Kind)
+> lookupTyVar (g :< ((b, n) ::: k)) a  | a == b     = return $ (a, n) ::: k
 >                                      | otherwise  = lookupTyVar g a
 > lookupTyVar B0 a = getContext >>= seek
 >   where
 >     seek B0 = fail $ "Missing type variable " ++ a
->     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ TyVar (t, n) ::: k
+>     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ (t, n) ::: k
 >     seek (g :< _) = seek g
 
-> lookupNumVar :: Bwd (Name ::: Kind) -> String -> Contextual t TypeNum
+> lookupNumVar :: Bwd (TyName ::: Kind) -> String -> Contextual t TypeNum
 > lookupNumVar (g :< ((b, n) ::: k)) a
 >     | a == b && k == KindNum  = return $ NumVar (a, n)
 >     | a == b                  = fail $ "Type variable " ++ a ++ " is not numeric"
@@ -36,7 +37,6 @@
 >         | a == t = fail $ "Type variable " ++ a ++ " is not numeric"
 >     seek (g :< _) = seek g
 
-
 > lookupTyCon :: String -> Contextual t (Type ::: Kind)
 > lookupTyCon a = getContext >>= seek
 >   where
@@ -44,8 +44,37 @@
 >     seek (g :< Data (t, n) k _) | a == t = return $ TyCon (t, n) ::: k
 >     seek (g :< _) = seek g
 
-> inferKind :: Bwd (Name ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
-> inferKind g (TyVar a)    = lookupTyVar g a
+> lookupTm :: TmName -> Contextual t (Term ::: Type)
+> lookupTm x = getContext >>= seek
+>   where
+>     seek B0 = fail $ "Missing term variable " ++ show x
+>     seek (g :< Func y ty)                         | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (LamBody (y ::: ty) ()))     | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (PatternTop (y ::: ty) bs))  | x == y = return $ TmVar y ::: ty
+>                                                   | otherwise = case lookIn bs of
+>                                                       Just tt  -> return tt
+>                                                       Nothing  -> seek g
+>     seek (g :< _) = seek g
+>
+>     lookIn [] = Nothing
+>     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
+>                               | otherwise  = lookIn bs
+
+> lookupConName :: TmName -> Contextual t Type
+> lookupConName x = getContext >>= seek
+>   where
+>     seek B0 = fail $ "Missing data constructor " ++ show x
+>     seek (g :< Data d k cs) = seekIn cs `mplus` seek g
+>     seek (g :< _) = seek g
+>
+>     seekIn [] = mzero
+>     seekIn (Con c ty : cs) | x == c     = return ty
+>                            | otherwise  = seekIn cs
+
+
+
+> inferKind :: Bwd (TyName ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
+> inferKind g (TyVar a)    = (\ (b ::: k) -> TyVar b ::: k) <$> lookupTyVar g a
 > inferKind g (TyCon c)    = lookupTyCon c
 > inferKind g (TyApp f s)  = do
 >     f' ::: k  <- inferKind g f
@@ -63,7 +92,7 @@
 >     ty ::: l <- inferKind (g :< ((a, n) ::: k)) (unbind a t)
 >     return $ Bind b a k (bind (a, n) ty) ::: l
 
-> checkNumKind :: Bwd (Name ::: Kind) -> TyNum String -> Contextual t TypeNum
+> checkNumKind :: Bwd (TyName ::: Kind) -> TyNum String -> Contextual t TypeNum
 > checkNumKind g (NumConst k) = return $ NumConst k
 > checkNumKind g (NumVar a) = lookupNumVar g a
 > checkNumKind g (m :+: n) = (:+:) <$> checkNumKind g m <*> checkNumKind g n
@@ -74,7 +103,7 @@
 
 > goLam :: Type -> Contextual Term ()
 > goLam tau = modify g
->   where g (n, Lam x t, es) = (n, unbind (x, 0) t, es :< Layer (LamBody ((x, 0) ::: tau) ()))
+>   where g (n, Lam x t, es) = (n, unbind x t, es :< Layer (LamBody (x ::: tau) ()))
 
 
 |goAppLeft| descends left into an application.
@@ -113,7 +142,7 @@ is found.
 >                 tau' <- matchAppTypes sigma tau
 >                 goUp tau' F0
 >             LamBody (x ::: sigma) () -> do
->                 put (n, Lam (fst x) (bind x t), es) 
+>                 put (n, Lam x (bind x t), es) 
 >                 goUp (sigma --> tau) _Xi
 >             AnnotLeft () ty -> do
 >                 put (n, t :? ty, es <>< _Xi)
@@ -141,33 +170,6 @@ is a fresh variable, then returns $\alpha$.
 >     return $ TyVar alpha
 
 
-
-
-> lookupTm :: Name -> Contextual t Type
-> lookupTm x = getContext >>= seek
->   where
->     seek B0 = fail $ "Missing term variable " ++ show x
->     seek (g :< Func y ty)                         | x == y = return ty
->     seek (g :< Layer (LamBody (y ::: ty) ()))     | x == y = return ty
->     seek (g :< Layer (PatternTop (y ::: ty) bs))  | x == y = return ty
->                                                   | Just ty <- lookIn bs = return ty
->     seek (g :< _) = seek g
-
->     lookIn [] = Nothing
->     lookIn ((y ::: ty) : bs)  | x == y = Just ty
->                               | otherwise = lookIn bs
-
-> lookupCon :: Name -> Contextual t Type
-> lookupCon x = getContext >>= seek
->   where
->     seek B0 = fail $ "Missing data constructor " ++ show x
->     seek (g :< Data d k cs) = seekIn cs `mplus` seek g
->     seek (g :< _) = seek g
->
->     seekIn [] = mzero
->     seekIn (Con c ty : cs) | x == c     = return ty
->                            | otherwise  = seekIn cs
-
 > specialise :: Type -> Contextual t Type
 > specialise (TyApp f s)     = TyApp <$> specialise f <*> specialise s
 > specialise (Bind b x k t)  = do
@@ -177,8 +179,8 @@ is a fresh variable, then returns $\alpha$.
 
 > inferType :: Contextual Term Type
 > inferType = getT >>= \ t -> case t of
->     TmVar x -> lookupTm x >>= specialise >>= flip goUp F0
->     TmCon c -> lookupCon c >>= specialise >>= flip goUp F0
+>     TmVar x -> lookupTm x >>= specialise . tyOf >>= flip goUp F0
+>     TmCon c -> lookupConName c >>= specialise >>= flip goUp F0
 >     TmApp f s -> goAppLeft >> inferType
 >     Lam x t -> do
 >         a <- fresh "a" (Nothing ::: Set)
@@ -187,24 +189,29 @@ is a fresh variable, then returns $\alpha$.
 >     t :? ty -> goAnnotLeft >> inferType
 
 
-> infer :: Term -> Contextual () Type
-> infer t = withT t inferType
+> infer :: Tm String String -> Contextual () (Term ::: Type)
+> infer t = do
+>     t' <- scopeCheckTypes t
+>     ty <- withT t' inferType
+>     return (t' ::: ty)
 
+> scopeCheckTypes :: Tm String String -> Contextual () Term
+> scopeCheckTypes = bitraverse (fmap tmOf . lookupTyVar B0) pure 
 
 
 
 
 > typeCheck p = runStateT (checkProg p) (0, (), B0)
 
-> checkProg :: Prog String -> Contextual () Program
+> checkProg :: Prog String String -> Contextual () Program
 > checkProg = mapM checkDecl 
 
-> checkDecl :: Decl String -> Contextual () Declaration
+> checkDecl :: Decl String String -> Contextual () Declaration
 > checkDecl (DD d) = DD <$> checkDataDecl d
 > checkDecl (FD f) = FD <$> checkFunDecl f
 >     
 
-> checkDataDecl :: DataDecl String -> Contextual () DataDeclaration
+> checkDataDecl :: DataDecl String String -> Contextual () DataDeclaration
 > checkDataDecl (DataDecl t k cs) = do
 >     unless (targetsSet k) $ fail $ "Kind of " ++ show t ++ " doesn't target *"
 >     n <- freshName 
@@ -222,13 +229,13 @@ is a fresh variable, then returns $\alpha$.
 > targetsSet KindNum        = False
 > targetsSet (KindArr _ k)  = targetsSet k 
 
-> checkConstructor :: Name -> Con String -> Contextual () Constructor
+> checkConstructor :: TyName -> Con String String -> Contextual () Constructor
 > checkConstructor t (Con c ty) = do
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ fail $ "Kind of constructor " ++ c ++ " is not *"
 >     unless (ty' `targets` t) $ fail $ "Type of constructor " ++ c
 >                                         ++ " doesn't target " ++ show t
->     return (Con (c, 0) ty')
+>     return (Con c ty')
 
 > targets :: Eq a => Ty a -> a -> Bool
 > targets (TyCon c)                 t | c == t = True
@@ -238,7 +245,7 @@ is a fresh variable, then returns $\alpha$.
 > targets _                         _ = False
 
 
-> checkFunDecl :: FunDecl String -> Contextual () FunDeclaration
+> checkFunDecl :: FunDecl String String -> Contextual () FunDeclaration
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) = do
 >     modifyContext (:< Layer FunTop)
 >     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
@@ -251,8 +258,8 @@ is a fresh variable, then returns $\alpha$.
 >     let ty = foldr (-->) (head ttys) (head pts)
 >     unify ty sty
 >     ty' <- generalise ty
->     modifyContext (:< Func (s, 0) ty')
->     return (FunDecl (s, 0) (Just ty') (map tmOf $ snd pattys))
+>     modifyContext (:< Func s ty')
+>     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
 >     modifyContext (:< Layer FunTop)
 >     (sty ::: k) <- inferKind B0 st
@@ -266,8 +273,8 @@ is a fresh variable, then returns $\alpha$.
 >     let ty = foldr (-->) (head ttys) (head pts)
 >     unify ty sty
 >     ty' <- generalise ty
->     modifyContext (:< Func (s, 0) ty')
->     return (FunDecl (s, 0) (Just ty') (map tmOf $ snd pattys))
+>     modifyContext (:< Func s ty')
+>     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 
 > unifyAll :: [Type] -> Contextual () ()
 > unifyAll []         = return ()
@@ -285,32 +292,31 @@ is a fresh variable, then returns $\alpha$.
 >     help (g :< A (((a, n) := Nothing ::: k))) t = help g (Bind All a k (bind (a, n) t))
 >     help (g :< A (((a, n) := Just d ::: k))) t = help g (subst (a, n) d t)
 
-> checkPat :: String ::: Type -> Pat String ->
+> checkPat :: String ::: Type -> Pat String String ->
 >     Contextual () ([PatternTerm ::: Type], Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) = do
 >     (ps, btys) <- checkPatTerms xs
->     modifyContext (:< Layer (PatternTop ((s, 0) ::: sty) btys))
->     let  t'  = fmap (\ x -> (x, 0))  t
->          g'  = fmap (\ x -> (x, 0))  g
->     ty <- infer t'
+>     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
+>     t' ::: ty <- infer t
+>     let g' = Trivial -- nonsense
 >     return (ps, Pat (fmap tmOf ps) g' t' ::: ty)
 
-> checkPatTerms :: [PatTerm String] ->
->     Contextual () ([PatternTerm ::: Type], [Name ::: Type])
+> checkPatTerms :: [PatTerm String String] ->
+>     Contextual () ([PatternTerm ::: Type], [TmName ::: Type])
 > checkPatTerms [] = return ([], [])
 > checkPatTerms (pt : pts) = do
 >     (pt', ptBinds) <- checkPatTerm pt
 >     (pts', ptsBinds) <- checkPatTerms pts
 >     return (pt' : pts', ptBinds ++ ptsBinds)
 
-> checkPatTerm :: PatTerm String ->
->     Contextual () (PatternTerm ::: Type, [Name ::: Type])
+> checkPatTerm :: PatTerm String String ->
+>     Contextual () (PatternTerm ::: Type, [TmName ::: Type])
 > checkPatTerm (PatVar v) = do
 >     nm <- fresh ("ty" ++ v) (Nothing ::: Set)
->     return (PatVar (v, 0) ::: TyVar nm, [(v, 0) ::: TyVar nm])
+>     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
->     ty <- lookupCon (c, 0)
+>     ty <- lookupConName c
 >     (pts', ptsBinds) <- checkPatTerms pts
 >     nm <- fresh "cod" (Nothing ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
->     return (PatCon (c, 0) (map tmOf pts') ::: TyVar nm, ptsBinds)
+>     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds)

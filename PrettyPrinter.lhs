@@ -5,6 +5,7 @@
 > import Data.Foldable
 > import Data.List
 > import Text.PrettyPrint.HughesPJ
+> import Data.Bifunctor
 
 > import BwdFwd hiding ((<+>))
 > import Syntax
@@ -28,7 +29,7 @@
 >   | otherwise        = d
 
 > prettyProgram :: Program -> Doc
-> prettyProgram = prettyHigh . map (fmap fst)
+> prettyProgram = prettyHigh . map (bimap fst id)
 
 
 > instance Pretty String where
@@ -82,7 +83,7 @@
 >     prettyRun Set  d aks = d <+> prettyBits aks
 >     prettyRun l    d aks = parens (d <+> text "::" <+> prettyHigh l) <+> prettyBits aks
 
-> instance Pretty (Tm String) where
+> instance Pretty (Tm String String) where
 >     pretty (TmVar x)  = pretty x
 >     pretty (TmCon s)  = pretty s
 >     pretty (TmApp f s)   = wrapDoc AppSize $
@@ -91,37 +92,37 @@
 >     pretty (t :? ty)  = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
-> prettyLam :: Doc -> Tm String -> Size -> Doc
+> prettyLam :: Doc -> Tm String String -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) (unbind x t)
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
-> instance Pretty (Decl String) where
+> instance Pretty (Decl String String) where
 >     pretty (DD d) = pretty d 
 >     pretty (FD f) = pretty f
 
-> instance Pretty (DataDecl String) where
+> instance Pretty (DataDecl String String) where
 >     pretty (DataDecl n k cs) _ = hang (text "data" <+> prettyHigh n
 >         <+> (if k /= Set then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
 >             vcat (map prettyHigh cs)
 
-> instance Pretty (FunDecl String) where
+> instance Pretty (FunDecl String String) where
 >     pretty (FunDecl n Nothing ps) _ = vcat (map ((prettyHigh n <+>) . prettyHigh) ps)
 >     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyHigh n <+> text "::" <+> prettyHigh ty) : map ((prettyHigh n <+>) . prettyHigh) ps
 
 
-> instance Pretty (Con String) where
+> instance Pretty (Con String String) where
 >     pretty (Con s ty) _ = prettyHigh s <+> text "::" <+> prettyHigh ty
 
-> instance Pretty (Pat String) where
+> instance Pretty (Pat String String) where
 >     pretty (Pat vs Trivial e) _ = hsep (map prettyLow vs) <+> text "="
 >                                       <+> prettyHigh e
 
-> instance Pretty (PatTerm String) where
+> instance Pretty (PatTerm String String) where
 >     pretty p = pretty (patToTm p)
 
 
 
-> instance Pretty (Prog String) where
+> instance Pretty (Prog String String) where
 >     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)

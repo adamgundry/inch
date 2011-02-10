@@ -25,25 +25,27 @@
 > tyOf (_ ::: b) = b
 
 
-> data TmLayer a  =  PatternTop (a ::: Ty a) [a ::: Ty a]
->                 |  AppLeft () (Tm a)
->                 |  AppRight (Tm a ::: Ty a) ()
->                 |  LamBody (a ::: Ty a) ()
->                 |  AnnotLeft () (Ty a)
->                 |  FunTop
+> data TmLayer a x  =  PatternTop (x ::: Ty a) [x ::: Ty a]
+>                   |  AppLeft () (Tm a x)
+>                   |  AppRight (Tm a x ::: Ty a) ()
+>                   |  LamBody (x ::: Ty a) ()
+>                   |  AnnotLeft () (Ty a)
+>                   |  FunTop
 >     deriving (Eq, Show)
 
-> type TermLayer = TmLayer Name
+> type TermLayer = TmLayer TyName TmName
 
 
-> data Entry  =  A      TyEntry
->             |  Layer  TermLayer
->             |  Data   Name Kind [Constructor]
->             |  Func   Name Type
+> data Ent a x  =  A      (TyEnt a)
+>               |  Layer  (TmLayer a x)
+>               |  Data   a Kind [Con a x]
+>               |  Func   x (Ty a)
 >   deriving Show
 
-> type TyEntry = Name := Maybe Type ::: Kind
+> type TyEnt a = a := Maybe (Ty a) ::: Kind
 
+> type Entry = Ent TyName TmName
+> type TyEntry = TyEnt TyName
 > type Context = Bwd Entry
 > type ZipState t = (Int, t, Context)
 
@@ -91,7 +93,7 @@
 >                 put (succ beta, t, _Gamma)
 >                 return beta
 
-> fresh :: String -> Maybe Type ::: Kind -> Contextual t Name
+> fresh :: String -> Maybe Type ::: Kind -> Contextual t TyName
 > fresh a d = do  beta <- freshName
 >                 modifyContext (:< A ((a, beta) := d))
 >                 return (a, beta)
