@@ -172,7 +172,7 @@ is a fresh variable, then returns $\alpha$.
 
 
 > specialise :: Type -> Contextual t Type
-> specialise (TyApp f s)     = TyApp <$> specialise f <*> specialise s
+> specialise (TyApp f s)     = TyApp f <$> specialise s
 > specialise (Bind b x k t)  = do
 >     beta <- fresh x (Nothing ::: k)
 >     specialise (unbind beta t)
@@ -269,10 +269,12 @@ is a fresh variable, then returns $\alpha$.
 >     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
 >     mapM unifyAll (transpose pts)
 >     let ttys = map tyOf $ snd pattys
->     unifyAll ttys
+>     -- unifyAll ttys
 >     let ty = foldr (-->) (head ttys) (head pts)
->     unify ty sty
 >     ty' <- simplifyTy <$> generalise ty
+>         -- "Inferred type " ++ show ty' ++ " for " ++ s ++ " is not " ++ show sty
+>     sty' <- specialise sty
+>     match ty' sty'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 
@@ -299,6 +301,8 @@ is a fresh variable, then returns $\alpha$.
 >     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
 >     t' ::: ty <- infer t
 >     let g' = Trivial -- nonsense
+>     let oty = foldr (-->) ty (map tyOf ps)
+>     unify oty sty
 >     return (ps, Pat (fmap tmOf ps) g' t' ::: ty)
 
 > checkPatTerms :: [PatTerm String String] ->

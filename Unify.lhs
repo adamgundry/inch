@@ -80,40 +80,48 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var _        = TyVar
 
 
-> unify :: Type -> Type -> Contextual t ()
-> -- unify s t | s == t = return ()
-> unify Arr Arr = return ()
-> unify (TyVar alpha)        (TyVar beta)                 =
+> data UnifyMode = Unify | Match
+>     deriving Show
+
+> unify = unifyTypes Unify
+> match = unifyTypes Match
+
+> unifyTypes :: UnifyMode -> Type -> Type -> Contextual t ()
+> -- unifyTypes _ s t | s == t = return ()
+> unifyTypes _ Arr Arr = return ()
+> unifyTypes md (TyVar alpha) (TyVar beta) =
 >   onTop ("unify " ++ show alpha ++ " = " ++ show beta) $
 >   \ (gamma := d ::: k) -> case
->           (gamma == alpha,  gamma == beta,  d         ) of
->           (True,            True,           _         )  ->  restore                                 
->           (True,            False,          Nothing   )  ->  replace ((alpha := Just (var k beta) ::: k) :> F0)
->           (False,           True,           Nothing   )  ->  replace ((beta := Just (var k alpha) ::: k) :> F0)
->           (True,            False,          Just tau  )  ->  unify (TyVar beta)   tau       >> restore   
->           (False,           True,           Just tau  )  ->  unify (TyVar alpha)  tau       >> restore   
->           (False,           False,          _         )  ->  unify (TyVar alpha)  (TyVar beta)  >> restore   
+>           (gamma == alpha, gamma == beta, d, md) of
+>           (True,   True,   _,         _)  ->  restore                                 
+>           (True,   False,  Nothing,   _)  ->  replace ((alpha := Just (var k beta) ::: k) :> F0)
+>           (False,  True,   Nothing,   Unify)  ->  replace ((beta := Just (var k alpha) ::: k) :> F0)
+>           (False,  True,   Nothing,   Match)  ->  fail $ "Bad match between " ++ show alpha ++ " and " ++ show beta
+>           (True,   False,  Just tau,  _)  ->  unifyTypes md (TyVar beta)   tau       >> restore   
+>           (False,  True,   Just tau,  _)  ->  unifyTypes md (TyVar alpha)  tau       >> restore   
+>           (False,  False,  _,         _)  ->  unifyTypes md (TyVar alpha)  (TyVar beta)  >> restore   
 
-> unify (TyCon c1) (TyCon c2)
+> unifyTypes md (TyCon c1) (TyCon c2)
 >     | c1 == c2   = return ()
 >     | otherwise  = fail $ "Mismatched type constructors " ++ c1
 >                               ++ " and " ++ c2
 
-> unify (TyApp f1 s1) (TyApp f2 s2) = unify f1 f2 >> unify s1 s2
+> unifyTypes md (TyApp f1 s1) (TyApp f2 s2) = unifyTypes md f1 f2 >> unifyTypes md s1 s2
 
-> unify (Bind b a k ty) tau = do
+> unifyTypes md (Bind b a k ty) tau = do
 >     nm <- fresh a (Nothing ::: k)
->     unify (unbind nm ty) tau
+>     unifyTypes md (unbind nm ty) tau
 
-> unify tau (Bind b a k ty) = do
+> unifyTypes md tau (Bind b a k ty) = do
 >     nm <- fresh a (Nothing ::: k)
->     unify tau (unbind nm ty)
+>     unifyTypes md tau (unbind nm ty)
 
-> unify (TyNum m)      (TyNum n)      = unifyNum m n
+> unifyTypes md (TyNum m)      (TyNum n)      = unifyNum m n
 
-> unify (TyVar alpha)  tau            =  startSolve alpha tau
-> unify tau            (TyVar alpha)  =  startSolve alpha tau
-> unify tau            upsilon        =  fail $ "Could not unify " ++ show tau ++ " and " ++ show upsilon
+> unifyTypes md (TyVar alpha)  tau            =  startSolve alpha tau
+> unifyTypes Unify tau            (TyVar alpha)  =  startSolve alpha tau
+> unifyTypes md tau            upsilon        =  fail $
+>     "Could not " ++ show md ++ " " ++ show tau ++ " and " ++ show upsilon
 
 
 > startSolve :: TyName -> Type -> Contextual t ()
