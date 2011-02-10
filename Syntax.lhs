@@ -106,6 +106,13 @@
 >     Nothing  -> Bind b a k (alphaConvert xys t)
 > alphaConvert xys t = t
 
+> args :: Ty a -> Int
+> args (TyApp (TyApp Arr s) t) = succ $ args t
+> args (Bind b x k t) = args t
+> args _ = 0
+
+
+
 > data Tm a x where
 >     TmVar  :: x -> Tm a x
 >     TmCon  :: TmConName -> Tm a x

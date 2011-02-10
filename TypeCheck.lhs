@@ -316,6 +316,9 @@ is a fresh variable, then returns $\alpha$.
 >     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
 >     ty <- lookupConName c
+>     unless (length pts == args ty) $ fail $
+>         "Constructor " ++ c ++ " should have " ++ show (args ty) ++ " arguments,"
+>         ++ " but has been given " ++ show (length pts)
 >     (pts', ptsBinds) <- checkPatTerms pts
 >     nm <- fresh "cod" (Nothing ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
