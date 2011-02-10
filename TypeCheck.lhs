@@ -257,7 +257,7 @@ is a fresh variable, then returns $\alpha$.
 >     unifyAll ttys
 >     let ty = foldr (-->) (head ttys) (head pts)
 >     unify ty sty
->     ty' <- generalise ty
+>     ty' <- simplifyTy <$> generalise ty
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
@@ -272,7 +272,7 @@ is a fresh variable, then returns $\alpha$.
 >     unifyAll ttys
 >     let ty = foldr (-->) (head ttys) (head pts)
 >     unify ty sty
->     ty' <- generalise ty
+>     ty' <- simplifyTy <$> generalise ty
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 

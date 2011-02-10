@@ -206,7 +206,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > numToType  = TyNum . reifyNum
 
 > reifyNum :: NormalNum -> TypeNum
-> reifyNum = simplifyNum . foldGExp (\ k n m -> NumConst k * NumVar n + m) NumConst
+> reifyNum = foldGExp (\ k n m -> NumConst k * NumVar n + m) NumConst
 
 > unifyZero :: Maybe TyName -> NormalNum -> Contextual t ()
 > unifyZero _Psi e

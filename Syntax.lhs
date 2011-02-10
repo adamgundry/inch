@@ -36,21 +36,21 @@
 > simplifyNum :: TyNum a -> TyNum a
 > simplifyNum (n :+: m) = case (simplifyNum n, simplifyNum m) of
 >     (NumConst k,  NumConst l)  -> NumConst (k+l)
->     (NumConst 0,  m)           -> m
->     (n,           NumConst 0)  -> n
->     _                          -> n :+: m
+>     (NumConst 0,  m')          -> m'
+>     (n',          NumConst 0)  -> n'
+>     (n',          m')          -> n' :+: m'
 > simplifyNum (n :*: m) = case (simplifyNum n, simplifyNum m) of
 >     (NumConst k,     NumConst l)     -> NumConst (k*l)
->     (NumConst 0,     m)              -> NumConst 0
->     (NumConst 1,     m)              -> m
->     (NumConst (-1),  m)              -> Neg m
->     (n,              NumConst 0)     -> NumConst 0
->     (n,              NumConst 1)     -> n
->     (n,              NumConst (-1))  -> Neg n
->     _                                -> n :*: m
+>     (NumConst 0,     m')             -> NumConst 0
+>     (NumConst 1,     m')             -> m'
+>     (NumConst (-1),  m')             -> Neg m'
+>     (n',             NumConst 0)     -> NumConst 0
+>     (n',             NumConst 1)     -> n'
+>     (n',             NumConst (-1))  -> Neg n'
+>     (n',             m')             -> n' :*: m'
 > simplifyNum (Neg n) = case simplifyNum n of
 >     NumConst k  -> NumConst (-k)
->     _           -> Neg n
+>     n'          -> Neg n'
 > simplifyNum t = t
 
 > instance (Eq a, Show a) => Num (TyNum a) where
@@ -81,6 +81,12 @@
 
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
+
+> simplifyTy :: Ty a -> Ty a
+> simplifyTy (TyNum n)       = TyNum (simplifyNum n)
+> simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
+> simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
+> simplifyTy t               = t
 
 > subst :: Eq a => a -> Ty a -> Ty a -> Ty a
 > subst a t (TyVar b) | a == b = t
