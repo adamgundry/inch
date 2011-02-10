@@ -256,7 +256,7 @@ is a fresh variable, then returns $\alpha$.
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
 >     modifyContext (:< Layer FunTop)
 >     (sty ::: k) <- inferKind B0 st
->     unless (targetsSet k) $ fail $ "Kind " ++ show k ++ " of " ++ show s ++ " is not *"
+>     unless (targetsSet k) $ fail $ "Kind " ++ show k ++ " of " ++ s ++ " is not *"
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys
 >     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
@@ -270,9 +270,9 @@ is a fresh variable, then returns $\alpha$.
 >     return (FunDecl (s, 0) (Just ty') (map tmOf $ snd pattys))
 
 > unifyAll :: [Type] -> Contextual () ()
-> unifyAll [] = return ()
-> unifyAll [t] = return ()
-> unifyAll (s:t:sts) = unify s t >> unifyAll (t:sts)
+> unifyAll []         = return ()
+> unifyAll [t]        = return ()
+> unifyAll (s:t:sts)  = unify s t >> unifyAll (t:sts)
 
 > generalise :: Type -> Contextual () Type
 > generalise t = do

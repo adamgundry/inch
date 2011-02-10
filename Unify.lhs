@@ -15,17 +15,22 @@
 
 > data Extension = Restore | Replace Suffix
 
-> onTop ::  (TyEntry -> Contextual t Extension)
+> onTop ::  String -> (TyEntry -> Contextual t Extension)
 >             -> Contextual t ()
-> onTop f = do
->     _Gamma :< vD <- getContext
->     putContext _Gamma
->     case vD of
->         A alphaD  -> do  m <- f alphaD
->                          case m of
->                              Replace _Xi  -> modifyContext (<>< _Xi)
->                              Restore      -> modifyContext (:< vD)
->         _         -> onTop f >> modifyContext (:< vD)
+> onTop s f = do
+>     c <- getContext
+>     case c of
+>         _Gamma :< A alphaD -> do
+>             putContext _Gamma
+>             m <- f alphaD
+>             case m of
+>                 Replace _Xi  -> modifyContext (<>< _Xi)
+>                 Restore      -> modifyContext (:< A alphaD)
+>         _Gamma :< xD -> do
+>             putContext _Gamma
+>             onTop s f
+>             modifyContext (:< xD)
+>         B0 -> fail $ "onTop: ran out of context at " ++ s
 
 > onTopNum ::  (TyEntry -> Contextual t Extension)
 >             -> Contextual t ()
@@ -76,7 +81,8 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unify :: Type -> Type -> Contextual t ()
 > unify Arr Arr = return ()
-> unify (TyVar alpha)        (TyVar beta)                 = onTop $
+> unify (TyVar alpha)        (TyVar beta)                 =
+>   onTop ("unify " ++ show alpha ++ " = " ++ show beta) $
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha,  gamma == beta,  d         ) of
 >           (True,            True,           _         )  ->  restore                                 
@@ -108,7 +114,8 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > unify tau            upsilon        =  fail $ "Could not unify " ++ show tau ++ " and " ++ show upsilon
 
 > solve :: Name -> Suffix -> Type -> Contextual t ()
-> solve alpha _Xi tau = onTop $
+> solve alpha _Xi tau =
+>   onTop ("solve " ++ show alpha ++ " = " ++ show tau) $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
 >     (gamma == alpha,  occurs,  d             ) of
 >     (True,            True,    _             )  ->  fail "Occurrence detected!"
