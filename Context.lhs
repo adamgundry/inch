@@ -38,7 +38,7 @@
 
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
->               |  Data   a Kind [Con a x]
+>               |  Data   TyConName Kind [Con a x]
 >               |  Func   x (Ty a)
 >   deriving Show
 

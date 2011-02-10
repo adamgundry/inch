@@ -85,7 +85,7 @@
 
 > data Ty a where
 >     TyVar  :: a -> Ty a
->     TyCon  :: a -> Ty a
+>     TyCon  :: TyConName -> Ty a
 >     TyApp  :: Ty a -> Ty a -> Ty a
 >     Arr    :: Ty a
 >     TyNum  :: TyNum a -> Ty a
@@ -115,7 +115,7 @@
 
 > data Tm a x where
 >     TmVar  :: x -> Tm a x
->     TmCon  :: ConName -> Tm a x
+>     TmCon  :: TmConName -> Tm a x
 >     TmApp  :: Tm a x -> Tm a x -> Tm a x
 >     Lam    :: String -> Tm a (S x) -> Tm a x
 >     (:?)   :: Tm a x -> Ty a -> Tm a x
@@ -130,7 +130,7 @@
 
 
 > data DataDecl a x where
->     DataDecl  :: a -> Kind -> [Con a x] -> DataDecl a x
+>     DataDecl  :: TyConName -> Kind -> [Con a x] -> DataDecl a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 
@@ -144,7 +144,7 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Con a x where
->     Con :: x -> Ty a -> Con a x
+>     Con :: TmConName -> Ty a -> Con a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Pat a x where
@@ -153,7 +153,7 @@
 
 > data PatTerm a x where
 >     PatVar  :: x -> PatTerm a x
->     PatCon  :: ConName -> [PatTerm a x] -> PatTerm a x
+>     PatCon  :: TmConName -> [PatTerm a x] -> PatTerm a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Guard a x where
@@ -178,7 +178,7 @@
 
 > instance Bitraversable DataDecl where
 >     bitraverse f g (DataDecl x k cs) =
->         DataDecl <$> f x <*> pure k <*> traverse (bitraverse f g) cs
+>         DataDecl x k <$> traverse (bitraverse f g) cs
 
 > instance Bifunctor DataDecl where
 >     bimap = bimapDefault
@@ -207,7 +207,7 @@
 >     bifoldMap = bifoldMapDefault
 
 > instance Bitraversable Con where
->     bitraverse f g (Con x t) = Con <$> g x <*> traverse f t
+>     bitraverse f g (Con x t) = Con x <$> traverse f t
 
 > instance Bifunctor Con where
 >     bimap = bimapDefault
@@ -249,7 +249,8 @@
 
 > type TyName           = (String, Int)
 > type TmName           = String
-> type ConName          = String
+> type TyConName        = String
+> type TmConName        = String
 
 > type Type             = Ty TyName
 > type Term             = Tm TyName TmName

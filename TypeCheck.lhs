@@ -41,7 +41,7 @@
 > lookupTyCon a = getContext >>= seek
 >   where
 >     seek B0 = fail $ "Missing type constructor " ++ a
->     seek (g :< Data (t, n) k _) | a == t = return $ TyCon (t, n) ::: k
+>     seek (g :< Data b k _) | a == b = return $ TyCon b ::: k
 >     seek (g :< _) = seek g
 
 > lookupTm :: TmName -> Contextual t (Term ::: Type)
@@ -214,22 +214,21 @@ is a fresh variable, then returns $\alpha$.
 > checkDataDecl :: DataDecl String String -> Contextual () DataDeclaration
 > checkDataDecl (DataDecl t k cs) = do
 >     unless (targetsSet k) $ fail $ "Kind of " ++ show t ++ " doesn't target *"
->     n <- freshName 
->     modifyContext (:< Data (t, n) k [])
->     cs' <- mapM (checkConstructor (t, n)) cs
->     modifyContext (replaceData n cs')
->     return (DataDecl (t, n) k cs')
+>     modifyContext (:< Data t k [])
+>     cs' <- mapM (checkConstructor t) cs
+>     modifyContext (replaceData cs')
+>     return (DataDecl t k cs')
 >   where
->     replaceData n cs' (_Gamma :< Data am l [])
->         | am == (t, n) && k == l = _Gamma :< Data am l cs'
->     replaceData n cs' _Gamma = error "wrong thing on end of context"
+>     replaceData cs' (_Gamma :< Data a l [])
+>         | a == t && k == l = _Gamma :< Data a l cs'
+>     replaceData cs' _Gamma = error "wrong thing on end of context"
 
 > targetsSet :: Kind -> Bool
 > targetsSet Set            = True
 > targetsSet KindNum        = False
 > targetsSet (KindArr _ k)  = targetsSet k 
 
-> checkConstructor :: TyName -> Con String String -> Contextual () Constructor
+> checkConstructor :: TyConName -> Con String String -> Contextual () Constructor
 > checkConstructor t (Con c ty) = do
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ fail $ "Kind of constructor " ++ c ++ " is not *"
@@ -237,11 +236,11 @@ is a fresh variable, then returns $\alpha$.
 >                                         ++ " doesn't target " ++ show t
 >     return (Con c ty')
 
-> targets :: Eq a => Ty a -> a -> Bool
+> targets :: Eq a => Ty a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
 > targets (TyApp f s)               t = targets f t
-> targets (Bind b a k ty)           t = targets ty (S t)
+> targets (Bind b a k ty)           t = targets ty t
 > targets _                         _ = False
 
 

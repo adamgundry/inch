@@ -97,7 +97,6 @@
 >   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs\nid2 (Cons x xs) = Cons x xs\nid2 Nil = Nil\n" :
 >   "f :: forall a b. (a -> b) -> (a -> b)\nf x = x" :
 >   "f :: forall a. a\nf x = x" :
->   "f :: forall a. a\nf = (\\ x -> x) :: a -> a" :
 >   "f :: forall a. a\nf x = x :: a" :
 >   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid :: forall a (n :: Num). Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs" :
 >   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = Nil" :

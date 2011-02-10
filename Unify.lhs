@@ -95,8 +95,8 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unify (TyCon c1) (TyCon c2)
 >     | c1 == c2   = return ()
->     | otherwise  = fail $ "Mismatched type constructors " ++ fst c1
->                               ++ " and " ++ fst c2
+>     | otherwise  = fail $ "Mismatched type constructors " ++ c1
+>                               ++ " and " ++ c2
 
 > unify (TyApp f1 s1) (TyApp f2 s2) = unify f1 f2 >> unify s1 s2
 
