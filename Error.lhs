@@ -82,3 +82,6 @@
 
 > inLocation :: (E.MonadError ErrorData m) => String -> m a -> m a
 > inLocation s m = m `E.catchError` (\ (e, ss) -> E.throwError (e, s:ss))
+
+> inLoc :: (E.MonadError ErrorData m) => m a -> m String -> m a
+> inLoc m ms = m `E.catchError` (\ (e, ss) -> ms >>= \ s -> E.throwError (e, s:ss))

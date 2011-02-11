@@ -13,13 +13,13 @@
 > import Orphans
 > import Kit
 > import Error
-
+> import PrettyPrinter
 
 > data Extension = Restore | Replace Suffix
 
-> onTop ::  String -> (TyEntry -> Contextual t Extension)
+> onTop ::  (TyEntry -> Contextual t Extension)
 >             -> Contextual t ()
-> onTop s f = do
+> onTop f = do
 >     c <- getContext
 >     case c of
 >         _Gamma :< A alphaD -> do
@@ -30,9 +30,9 @@
 >                 Restore      -> modifyContext (:< A alphaD)
 >         _Gamma :< xD -> do
 >             putContext _Gamma
->             onTop s f
+>             onTop f
 >             modifyContext (:< xD)
->         B0 -> fail $ "onTop: ran out of context at " ++ s
+>         B0 -> fail $ "onTop: ran out of context"
 
 > onTopNum ::  (TyEntry -> Contextual t Extension)
 >             -> Contextual t ()
@@ -81,14 +81,18 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var _        = TyVar
 
 
-> unify = unifyTypes Unify
+> unify t u = unifyTypes Unify t u `inLoc` (do
+>                 t' <- normaliseType t
+>                 u' <- normaliseType u
+>                 return $ "when unifying\n        " ++ show (prettyFst t')
+>                     ++ "\n    and\n        " ++ show (prettyFst u'))
+>     
 > match = unifyTypes Match
 
 > unifyTypes :: UnifyMode -> Type -> Type -> Contextual t ()
 > -- unifyTypes _ s t | s == t = return ()
 > unifyTypes _ Arr Arr = return ()
-> unifyTypes md (TyVar alpha) (TyVar beta) =
->   onTop ("unify " ++ show alpha ++ " = " ++ show beta) $
+> unifyTypes md (TyVar alpha) (TyVar beta) = onTop $
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha, gamma == beta, d, md) of
 >           (True,   True,   _,         _)  ->  restore                                 
@@ -148,14 +152,13 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 
 > solve :: TyName -> Suffix -> Type -> Contextual t ()
-> solve alpha _Xi tau =
->   onTop ("solve " ++ show alpha ++ " = " ++ show tau) $
+> solve alpha _Xi tau = onTop $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
 >     (gamma == alpha,  occurs,  d             ) of
 >     (True,            True,    _             )  ->  fail "Occurrence detected!"
 >     (True,            False,   Nothing       )  ->  replace (_Xi <+> ((alpha := Just tau ::: k) :> F0))
 >     (True,            False,   Just upsilon  )  ->  modifyContext (<>< _Xi)
->                                                 >>  unify upsilon tau
+>                                                 >>  unifyTypes Unify upsilon tau
 >                                                 >>  restore
 >     (False,           True,    Nothing             )  ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
 >                                                 >>  replace F0   
@@ -216,7 +219,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > unifyZero :: Maybe TyName -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
->   | isConstant e  = fail "Unit mismatch!"
+>   | isConstant e  = errCannotUnify Unify (numToType e) (numToType (normalConst 0))
 >   | otherwise     = onTopNum $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of

@@ -62,8 +62,7 @@
 > inferKind :: Bwd (TyName ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
 > inferKind g (TyVar a)    = (\ (b ::: k) -> TyVar b ::: k) <$> lookupTyVar g a
 > inferKind g (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
-> inferKind g (TyApp f s)  =
->   inLocation ("in type application " ++ show (prettyHigh (TyApp f s))) $ do
+> inferKind g (TyApp f s)  = do
 >     f' ::: k  <- inferKind g f
 >     case k of
 >         KindArr k1 k2 -> do
@@ -239,7 +238,7 @@ is a fresh variable, then returns $\alpha$.
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty ::: k <- inferKind B0 st
+>     sty ::: k <- inLocation ("in type " ++ show (prettyHigh st)) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 >     pattys <- mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)

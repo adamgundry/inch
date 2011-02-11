@@ -2,6 +2,7 @@
 
 > module Context where
 
+> import Control.Applicative
 > import Control.Monad.Error ()
 > import Control.Monad.State
 > import Data.Foldable
@@ -129,3 +130,17 @@ Data constructors
 >     case Map.lookup x tcs of
 >         Just ty  -> return ty
 >         Nothing  -> missingTmCon x
+
+
+
+> normaliseType :: Type -> Contextual t Type
+> normaliseType t = do
+>     g <- getContext
+>     return $ simplifyTy $ t >>= normalTyVar g
+>   where
+>     normalTyVar :: Context -> TyName -> Type
+>     normalTyVar g a = maybe (TyVar a) (>>= normalTyVar g) $ seek g a
+
+>     seek B0 a = error "normaliseType: erk"
+>     seek (g :< A (b := d ::: _)) a | a == b = d
+>     seek (g :< _) a = seek g a

@@ -33,6 +33,14 @@
 >     Neg       :: TyNum a -> TyNum a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
+> instance Monad TyNum where
+>     return = NumVar
+>     NumConst k  >>= f = NumConst k
+>     NumVar a    >>= f = f a
+>     m :+: n     >>= f = (m >>= f) :+: (n >>= f)
+>     m :*: n     >>= f = (m >>= f) :*: (n >>= f)
+>     Neg n       >>= f = Neg (n >>= f)
+
 > simplifyNum :: TyNum a -> TyNum a
 > simplifyNum (n :+: m) = case (simplifyNum n, simplifyNum m) of
 >     (NumConst k,  NumConst l)  -> NumConst (k+l)
@@ -78,6 +86,21 @@
 >     TyNum  :: TyNum a -> Ty a
 >     Bind   :: Binder -> String -> Kind -> Ty (S a) -> Ty a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
+
+> instance Monad Ty where
+>     return = TyVar
+>     TyVar a       >>= g = g a
+>     TyCon c       >>= g = TyCon c
+>     TyApp f s     >>= g = TyApp (f >>= g) (s >>= g) 
+>     Arr           >>= g = Arr
+>     TyNum n       >>= g = TyNum (n >>= (toNum . g))
+>       where  toNum (TyNum n)  = n
+>              toNum (TyVar a)  = NumVar a
+>              toNum d          = error $ "toNum: bad!"
+>     Bind b x k t  >>= g = Bind b x k (t >>= wk g)
+>       where  wk g Z = TyVar Z
+>              wk g (S a) = fmap S (g a)
+
 
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
