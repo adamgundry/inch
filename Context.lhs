@@ -6,6 +6,7 @@
 > import Control.Monad.State
 > import Data.Foldable
 > import Data.Monoid
+> import qualified Data.Map as Map
 
 > import BwdFwd
 > import Syntax
@@ -35,8 +36,6 @@
 > type Entry = Ent TyName TmName
 > type TyEntry = TyEnt TyName
 > type Context = Bwd Entry
-> type ZipState t = (Int, t, Context)
-
 > type Suffix = Fwd TyEntry
 
 > (<><) :: Context -> Suffix -> Context
@@ -44,41 +43,46 @@
 > _Gamma <>< (e :> _Xi)  = _Gamma :< A e <>< _Xi
 > infixl 8 <><
 
+> data ZipState t = St  {  nextFreshInt :: Int
+>                       ,  tValue :: t
+>                       ,  context :: Context
+>                       ,  tyCons :: Map.Map TyConName Kind
+>                       ,  dataCons :: Map.Map TmConName Type
+>                       }
+
+> initialState = St 0 () B0 Map.empty Map.empty
 
 > type Contextual t a = StateT (ZipState t) (Either ErrorData) a
 
 > getT :: Contextual t t
-> getT = do  (_, t, _) <- get
->            return t
+> getT = gets tValue
 
 > putT :: t -> Contextual t ()
-> putT t = do  (beta, _, _Gamma) <- get
->              put (beta, t, _Gamma)
+> putT t = modify $ \ st -> st {tValue = t}
 
 > mapT :: (t -> s) -> (s -> t) -> Contextual s x -> Contextual t x
 > mapT f g m = do
->     (beta, t, _Gamma) <- get
->     case runStateT m (beta, f t, _Gamma) of
->         Right (x, (beta', t', _Gamma')) -> put (beta', g t', _Gamma') >> return x
+>     st <- get
+>     case runStateT m (st {tValue = f (tValue st)}) of
+>         Right (x, st') -> put (st' {tValue = g (tValue st')}) >> return x
 >         Left err -> lift $ Left err
 
 > withT :: t -> Contextual t x -> Contextual () x
 > withT t = mapT (\ _ -> t) (\ _ -> ())
 
 > getContext :: Contextual t Context
-> getContext = do  (_, _, _Gamma) <- get
->                  return _Gamma
+> getContext = gets context
 >
 > putContext :: Context -> Contextual t ()
-> putContext _Gamma = do  (beta,  t, _) <- get
->                         put (beta, t, _Gamma)
+> putContext _Gamma = modify $ \ st -> st {context = _Gamma}
 >
 > modifyContext :: (Context -> Context) -> Contextual t ()
 > modifyContext f = getContext >>= putContext . f
 
 > freshName :: Contextual t Int
-> freshName = do  (beta, t, _Gamma) <- get
->                 put (succ beta, t, _Gamma)
+> freshName = do  st <- get
+>                 let beta = nextFreshInt st
+>                 put (st {nextFreshInt = succ beta})
 >                 return beta
 
 > fresh :: String -> Maybe Type ::: Kind -> Contextual t TyName

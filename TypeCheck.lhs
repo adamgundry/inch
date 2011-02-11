@@ -105,21 +105,23 @@
 
 
 > goLam :: Type -> Contextual Term ()
-> goLam tau = modify g
->   where g (n, Lam x t, es) = (n, unbind x t, es :< Layer (LamBody (x ::: tau) ()))
+> goLam tau = modify $ \ st@(St{tValue = Lam x t}) ->
+>     st {  tValue = unbind x t
+>        ,  context = context st :< Layer (LamBody (x ::: tau) ())
+>        }
 
 
 |goAppLeft| descends left into an application.
 
 > goAppLeft :: Contextual Term ()
-> goAppLeft = modify g
->   where g (n, TmApp f s, es) = (n, f, es :< Layer (AppLeft () s))
+> goAppLeft = modify $ \ st@(St{tValue = TmApp f s}) ->
+>     st {tValue = f, context = context st :< Layer (AppLeft () s)}
 
 
 
 > goAnnotLeft :: Contextual Term ()
-> goAnnotLeft = modify g
->   where g (n, t :? ty, es) = (n, t, es :< Layer (AnnotLeft () ty))
+> goAnnotLeft = modify $ \ st@(St{tValue = t :? ty}) ->
+>     st {tValue = t, context = context st :< Layer (AnnotLeft () ty)}
 
 
 
@@ -133,29 +135,30 @@ is found.
 
 > goUp :: Type -> Suffix -> Contextual Term Type
 > goUp tau _Xi = do
->     (n, t, _Gamma) <- get
->     case _Gamma of
+>     st@(St{tValue = t}) <- get
+>     case context st of
 >       (es :< Layer l) ->
 >         case l of         
 >             AppLeft () a -> do
->                 put (n, a, es <>< _Xi :< Layer (AppRight (t ::: tau) ()))
+>                 put $ st {tValue = a,
+>                     context = es <>< _Xi :< Layer (AppRight (t ::: tau) ())}
 >                 inferType
 >             AppRight (f ::: sigma) () -> do
->                 put (n, TmApp f t, es <>< _Xi)
+>                 put $ st {tValue = TmApp f t, context = es <>< _Xi}
 >                 tau' <- matchAppTypes sigma tau
 >                 goUp tau' F0
 >             LamBody (x ::: sigma) () -> do
->                 put (n, Lam x (bind x t), es) 
+>                 put $ st {tValue = Lam x (bind x t), context = es}
 >                 goUp (sigma --> tau) _Xi
 >             AnnotLeft () ty -> do
->                 put (n, t :? ty, es <>< _Xi)
+>                 put $ st {tValue = t :? ty, context = es <>< _Xi}
 >                 unify ty tau
 >                 goUp ty F0
 >             PatternTop _ _ -> do
->                 put (n, t, es <>< _Xi) 
+>                 put $ st {context = es <>< _Xi}
 >                 return tau
->       (es :< A e) ->
->           put (n, t, es) >>
+>       (es :< A e) -> do
+>           put $ st {context = es}
 >           goUp tau (e :> _Xi)
 >       B0 -> error (  "Ran out of context when going up from " 
 >                      ++ (show t) ++ " : " ++ (show tau))
@@ -204,7 +207,7 @@ is a fresh variable, then returns $\alpha$.
 
 
 
-> typeCheck p = runStateT (checkProg p) (0, (), B0)
+> typeCheck p = runStateT (checkProg p) initialState
 
 > checkProg :: Prog String String -> Contextual () Program
 > checkProg = mapM checkDecl 

@@ -74,8 +74,7 @@
 > parseCheck :: String -> String
 > parseCheck s = case I.parse program "parseCheck" s of
 >     Right p   -> case typeCheck p of
->         Right (p', (_, (), c)) -> "PASS: checked program\n"
->                                       ++ show (prettyProgram p')
+>         Right (p', st) -> "PASS: checked program\n" ++ show (prettyProgram p')
 >         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ show (prettyHigh err)
 >     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
 
