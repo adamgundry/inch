@@ -12,6 +12,7 @@
 > import Num
 > import Orphans
 > import Kit
+> import Error
 
 
 > data Extension = Restore | Replace Suffix
@@ -80,9 +81,6 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var _        = TyVar
 
 
-> data UnifyMode = Unify | Match
->     deriving Show
-
 > unify = unifyTypes Unify
 > match = unifyTypes Match
 
@@ -96,7 +94,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >           (True,   True,   _,         _)  ->  restore                                 
 >           (True,   False,  Nothing,   _)  ->  replace ((alpha := Just (var k beta) ::: k) :> F0)
 >           (False,  True,   Nothing,   Unify)  ->  replace ((beta := Just (var k alpha) ::: k) :> F0)
->           (False,  True,   Nothing,   Match)  ->  fail $ "Bad match between " ++ show alpha ++ " and " ++ show beta
+>           (False,  True,   Nothing,   Match)  ->  errCannotUnify Match (TyVar alpha) (TyVar beta)
 >           (True,   False,  Just tau,  _)  ->  unifyTypes md (TyVar beta)   tau       >> restore   
 >           (False,  True,   Just tau,  _)  ->  unifyTypes md (TyVar alpha)  tau       >> restore   
 >           (False,  False,  _,         _)  ->  unifyTypes md (TyVar alpha)  (TyVar beta)  >> restore   
@@ -120,8 +118,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unifyTypes md (TyVar alpha)  tau            =  startSolve alpha tau
 > unifyTypes Unify tau            (TyVar alpha)  =  startSolve alpha tau
-> unifyTypes md tau            upsilon        =  fail $
->     "Could not " ++ show md ++ " " ++ show tau ++ " and " ++ show upsilon
+> unifyTypes md tau upsilon = errCannotUnify md tau upsilon
 
 
 > startSolve :: TyName -> Type -> Contextual t ()

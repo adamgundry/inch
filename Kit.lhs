@@ -33,3 +33,10 @@
 
 > tyOf :: a ::: b -> b
 > tyOf (_ ::: b) = b
+
+
+> data UnifyMode = Unify | Match
+
+> instance Show UnifyMode where
+>     show Unify = "unify"
+>     show Match = "match"

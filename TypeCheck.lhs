@@ -233,20 +233,13 @@ is a fresh variable, then returns $\alpha$.
 >     modifyContext (:< Layer FunTop)
 >     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
->     let pts = map (map tyOf) $ fst pattys
->     unless (all ((== length (head pts)) . length) pts) $ errArityMismatch
->     mapM unifyAll (transpose pts)
->     let ttys = map tyOf $ snd pattys
->     unifyAll ttys
->     let ty = foldr (-->) (head ttys) (head pts)
->     unify ty sty
->     ty' <- simplifyTy <$> generalise ty
+>     ty' <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     (sty ::: k) <- inferKind B0 st
+>     sty ::: k <- inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys

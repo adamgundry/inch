@@ -25,6 +25,7 @@
 >     DuplicateTmCon     :: TmConName -> Err a x
 >     NonNumericVar      :: a -> Err a x
 >     ArityMismatch      :: Err a x
+>     CannotUnify        :: UnifyMode -> Ty a -> Ty a -> Err a x
 >     Fail               :: String -> Err a x
 
 > instance Pretty Error where
@@ -45,6 +46,8 @@
 >     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a) _ = text $ "Type variable " ++ fst a ++ " is not numeric"
 >     pretty ArityMismatch _ = text "Arity mismatch"
+>     pretty (CannotUnify md t u) _ = text ("Cannot " ++ show md)
+>         <+> prettyFst t <+> text "and" <+> prettyFst u
 >     pretty (Fail s) _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
@@ -65,6 +68,7 @@
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
 > errNonNumericVar a        = throw (NonNumericVar a)
 > errArityMismatch          = throw ArityMismatch
+> errCannotUnify md t u     = throw (CannotUnify md t u)
                             
 
 > type Error = Err TyName TmName
