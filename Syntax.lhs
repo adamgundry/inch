@@ -159,6 +159,15 @@
 
 
 
+> traverseTypes :: Applicative f => (Ty a -> f (Ty b)) -> Tm a x -> f (Tm b x)
+> traverseTypes g (TmVar x) = pure $ TmVar x
+> traverseTypes g (TmCon c) = pure $ TmCon c
+> traverseTypes g (TmApp f s) = TmApp <$> traverseTypes g f <*> traverseTypes g s
+> traverseTypes g (Lam x t) = Lam x <$> traverseTypes g t
+> traverseTypes g (t :? ty) = (:?) <$> traverseTypes g t <*> g ty
+
+
+
 > instance Bitraversable Tm where
 >     bitraverse f g (TmVar x)    = TmVar <$> g x
 >     bitraverse f g (TmCon c)    = pure (TmCon c)

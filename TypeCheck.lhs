@@ -185,7 +185,7 @@ is a fresh variable, then returns $\alpha$.
 >     return (t' ::: ty)
 
 > scopeCheckTypes :: Tm String String -> Contextual () Term
-> scopeCheckTypes = bitraverse (fmap tmOf . lookupTyVar B0) pure 
+> scopeCheckTypes = traverseTypes (\ t -> tmOf <$> inferKind B0 t)
 
 
 
