@@ -119,6 +119,8 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >     unifyTypes md tau (unbind nm ty)
 
 > unifyTypes md (TyNum m)      (TyNum n)      = unifyNum m n
+> unifyTypes md (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
+> unifyTypes md (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n
 
 > unifyTypes md (TyVar alpha)  tau            =  startSolve alpha tau
 > unifyTypes Unify tau            (TyVar alpha)  =  startSolve alpha tau
