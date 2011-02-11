@@ -71,11 +71,15 @@
 
 
 
-> parseCheck :: String -> String
-> parseCheck s = case I.parse program "parseCheck" s of
+> parseCheck :: (String, Bool) -> String
+> parseCheck (s, b) = (++ "\n") $ case I.parse program "parseCheck" s of
 >     Right p   -> case typeCheck p of
->         Right (p', st) -> "PASS: checked program\n" ++ show (prettyProgram p')
->         Left err -> "FAIL: did not typecheck:\n" ++ s ++ "\n" ++ show (prettyHigh err)
+>         Right (p', st)
+>             | b      -> "PASS: accepted good program\n" ++ show (prettyProgram p')
+>             | not b  -> "FAIL: accepted bad program\n" ++ show (prettyProgram p')
+>         Left err
+>             | b      -> "FAIL: rejected good program:\n" ++ s ++ "\n" ++ show (prettyHigh err)
+>             | not b  -> "PASS: rejected bad program:\n" ++ s ++ "\n" ++ show (prettyHigh err)
 >     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
 
 
@@ -83,28 +87,28 @@
 > parseCheckTest = test parseCheck parseCheckTestData
 
 > parseCheckTestData = 
->   "f x = x" :
->   "f = f" :
->   "f = \\ x -> x" :
->   "f = (\\ x -> x) :: forall a. a -> a" :
->   "f x = x :: forall a b. a -> b" :
->   "f = \\ x y z -> x y z" :
->   "f x y z = x (y z)" :
->   "f x y z = x y z" :
->   "f x = x :: Foo" :
->   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat" :
->   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Suc = Suc" :
->   "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Zero = Zero\nf x = \\ y -> y" :
->   "data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
->   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs\nid2 (Cons x xs) = Cons x xs\nid2 Nil = Nil\n" :
->   "f :: forall a b. (a -> b) -> (a -> b)\nf x = x" :
->   "f :: forall a. a\nf x = x" :
->   "f :: forall a. a -> a\nf x = x :: a" :
->   "f :: forall a. a -> (a -> a)\nf x y = y" :
->   "f :: (forall a. a) -> (forall b. b -> b)\nf x y = y" :
->   "f :: forall b. (forall a. a) -> (b -> b)\nf x y = y" :
->   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid :: forall a (n :: Num). Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs" :
->   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
->   "data One where A :: Two -> One\ndata Two where B :: One -> Two" :
->   "data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf Foo = Foo\nf Bar = Foo" :
+>   ("f x = x", True) :
+>   ("f = f", True) :
+>   ("f = \\ x -> x", True) :
+>   ("f = (\\ x -> x) :: forall a. a -> a", True) :
+>   ("f x = x :: forall a b. a -> b", True) :
+>   ("f = \\ x y z -> x y z", True) :
+>   ("f x y z = x (y z)", True) :
+>   ("f x y z = x y z", True) :
+>   ("f x = x :: Foo", False) :
+>   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat", True) :
+>   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Suc = Suc", False) :
+>   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Zero = Zero\nf x = \\ y -> y", False) :
+>   ("data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs\nid2 (Cons x xs) = Cons x xs\nid2 Nil = Nil\n", True) :
+>   ("f :: forall a b. (a -> b) -> (a -> b)\nf x = x", True) :
+>   ("f :: forall a. a\nf x = x", False) :
+>   ("f :: forall a. a -> a\nf x = x :: a", True) :
+>   ("f :: forall a. a -> (a -> a)\nf x y = y", True) :
+>   ("f :: (forall a. a) -> (forall b. b -> b)\nf x y = y", True) :
+>   ("f :: forall b. (forall a. a) -> (b -> b)\nf x y = y", True) :
+>   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
+>   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   ("data One where A :: Two -> One\ndata Two where B :: One -> Two", True) :
+>   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   []
