@@ -96,6 +96,12 @@
 >   ("f x y z = x (y z)", True) :
 >   ("f x y z = x y z", True) :
 >   ("f x = x :: Foo", False) :
+>   ("f :: forall a. a -> a\nf x = x", True) :
+>   ("f :: forall a. a\nf = f", True) :
+>   ("f :: forall a b. (a -> b) -> (a -> b)\nf = \\ x -> x", True) :
+>   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf = \\ x y z -> x y z", True) :
+>   ("f :: forall a b c. (a -> b) -> (b -> c) -> a -> c\nf x y z = x (y z)", True) :
+>   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf x y z = x y z", True) :
 >   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat", True) :
 >   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Suc = Suc", False) :
 >   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Zero = Zero\nf x = \\ y -> y", False) :
@@ -111,4 +117,5 @@
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   ("data One where A :: Two -> One\ndata Two where B :: One -> Two", True) :
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf Foo = Foo\nf Bar = Foo", False) :
+>   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   []

@@ -154,7 +154,7 @@ is a fresh variable, then returns $\alpha$.
 
 > matchAppTypes :: Type -> Type -> Contextual t Type
 > matchAppTypes sigma tau = do
->     alpha <- fresh "dom" (Nothing ::: Set)
+>     alpha <- fresh "_t" (Nothing ::: Set)
 >     unify sigma (tau --> TyVar alpha)
 >     return $ TyVar alpha
 
@@ -179,7 +179,7 @@ is a fresh variable, then returns $\alpha$.
 
 
 > infer :: Tm String String -> Contextual () (Term ::: Type)
-> infer t = do
+> infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t' <- scopeCheckTypes t
 >     ty <- withT t' inferType
 >     return (t' ::: ty)
@@ -231,36 +231,26 @@ is a fresh variable, then returns $\alpha$.
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
->     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
->     ty' <- simplifyTy <$> generalise sty
+>     sty     <- TyVar <$> fresh "sty" (Nothing ::: Set)
+>     pattys  <- mapM (checkPat (s ::: sty)) pats
+>     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
->     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
+>     return $ FunDecl s (Just ty') (map tmOf pattys)
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty ::: k <- inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
->     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
->     let pts = map (map tyOf) $ fst pattys
->     unless (all ((== length (head pts)) . length) pts) $ errArityMismatch
->     mapM unifyAll (transpose pts)
->     let ttys = map tyOf $ snd pattys
->     -- unifyAll ttys
->     let ty = foldr (-->) (head ttys) (head pts)
+>     pattys <- mapM (checkPat (s ::: sty)) pats
+>     let ty = tyOf (head pattys)
 >     ty' <- simplifyTy <$> generalise ty
->         -- "Inferred type " ++ show ty' ++ " for " ++ s ++ " is not " ++ show sty
->     sty' <- specialise sty
->     match ty' sty'
+>     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
+>         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
+>             specialise sty >>= match ty'
 >     modifyContext (:< Func s ty')
->     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
+>     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
-
-> unifyAll :: [Type] -> Contextual () ()
-> unifyAll []         = return ()
-> unifyAll [t]        = return ()
-> unifyAll (s:t:sts)  = unify s t >> unifyAll (t:sts)
 
 > generalise :: Type -> Contextual () Type
 > generalise t = do
@@ -274,7 +264,7 @@ is a fresh variable, then returns $\alpha$.
 >     help (g :< A (((a, n) := Just d ::: k))) t = help g (subst (a, n) d t)
 
 > checkPat :: String ::: Type -> Pat String String ->
->     Contextual () ([PatternTerm ::: Type], Pattern ::: Type)
+>     Contextual () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
 >     (ps, btys) <- checkPatTerms xs
@@ -283,7 +273,7 @@ is a fresh variable, then returns $\alpha$.
 >     let g' = Trivial -- nonsense
 >     let oty = foldr (-->) ty (map tyOf ps)
 >     unify oty sty
->     return (ps, Pat (fmap tmOf ps) g' t' ::: ty)
+>     return $ Pat (fmap tmOf ps) g' t' ::: oty
 
 > checkPatTerms :: [PatTerm String String] ->
 >     Contextual () ([PatternTerm ::: Type], [TmName ::: Type])
@@ -296,12 +286,12 @@ is a fresh variable, then returns $\alpha$.
 > checkPatTerm :: PatTerm String String ->
 >     Contextual () (PatternTerm ::: Type, [TmName ::: Type])
 > checkPatTerm (PatVar v) = do
->     nm <- fresh ("ty" ++ v) (Nothing ::: Set)
+>     nm <- fresh ("_ty" ++ v) (Nothing ::: Set)
 >     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
 >     ty <- lookupTmCon c
 >     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
 >     (pts', ptsBinds) <- checkPatTerms pts
->     nm <- fresh "cod" (Nothing ::: Set)
+>     nm <- fresh "_s" (Nothing ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
 >     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds)

@@ -24,7 +24,6 @@
 >     DuplicateTyCon     :: TyConName -> Err a x
 >     DuplicateTmCon     :: TmConName -> Err a x
 >     NonNumericVar      :: a -> Err a x
->     ArityMismatch      :: Err a x
 >     CannotUnify        :: UnifyMode -> Ty a -> Ty a -> Err a x
 >     Fail               :: String -> Err a x
 
@@ -45,7 +44,6 @@
 >     pretty (DuplicateTyCon t) _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a) _ = text $ "Type variable " ++ fst a ++ " is not numeric"
->     pretty ArityMismatch _ = text "Arity mismatch"
 >     pretty (CannotUnify md t u) _ = text ("Cannot " ++ show md)
 >         <+> prettyFst t <+> text "and" <+> prettyFst u
 >     pretty (Fail s) _ = text s
@@ -67,7 +65,6 @@
 > errDuplicateTyCon t       = throw (DuplicateTyCon t)
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
 > errNonNumericVar a        = throw (NonNumericVar a)
-> errArityMismatch          = throw ArityMismatch
 > errCannotUnify md t u     = throw (CannotUnify md t u)
                             
 
