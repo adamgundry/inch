@@ -30,14 +30,14 @@
 > lookupNumVar :: Bwd (TyName ::: Kind) -> String -> Contextual t TypeNum
 > lookupNumVar (g :< ((b, n) ::: k)) a
 >     | a == b && k == KindNum  = return $ NumVar (a, n)
->     | a == b                  = fail $ "Type variable " ++ a ++ " is not numeric"
+>     | a == b                  = errNonNumericVar (a, n)
 >     | otherwise               = lookupNumVar g a
 > lookupNumVar B0 a = getContext >>= seek
 >   where
 >     seek B0 = missingNumVar a
 >     seek (g :< A ((t, n) := _ ::: k))
 >         | a == t && k == KindNum = return $ NumVar (t, n)
->         | a == t = fail $ "Type variable " ++ a ++ " is not numeric"
+>         | a == t = errNonNumericVar (a, n)
 >     seek (g :< _) = seek g
 
 > lookupTmVar :: TmName -> Contextual t (Term ::: Type)
@@ -62,15 +62,15 @@
 > inferKind :: Bwd (TyName ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
 > inferKind g (TyVar a)    = (\ (b ::: k) -> TyVar b ::: k) <$> lookupTyVar g a
 > inferKind g (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
-> inferKind g (TyApp f s)  = do
+> inferKind g (TyApp f s)  =
+>   inLocation ("in type application " ++ show (prettyHigh (TyApp f s))) $ do
 >     f' ::: k  <- inferKind g f
 >     case k of
 >         KindArr k1 k2 -> do
 >             s' ::: l  <- inferKind g s
->             unless (k1 == l) $ fail $ "Kind domain mismatch: kind " ++ show l
->                                ++ " of " ++ show s ++ " is not " ++ show k1
+>             unless (k1 == l) $ errKindMismatch (s' ::: l) k1
 >             return $ TyApp f' s' ::: k2
->         _ -> fail $ "Kind mismatch: kind " ++ show k ++ " of " ++ show f ++ " is not an arrow"
+>         _ -> errKindNotArrow k
 > inferKind g Arr             = return $ Arr ::: Set ---> Set ---> Set
 > inferKind g (TyNum n)       = (\ n -> TyNum n ::: KindNum) <$> checkNumKind g n
 > inferKind g (Bind b a k t)  = do
@@ -234,7 +234,7 @@ is a fresh variable, then returns $\alpha$.
 >     sty <- TyVar <$> fresh "sty" (Nothing ::: Set)
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys
->     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
+>     unless (all ((== length (head pts)) . length) pts) $ errArityMismatch
 >     mapM unifyAll (transpose pts)
 >     let ttys = map tyOf $ snd pattys
 >     unifyAll ttys
@@ -250,7 +250,7 @@ is a fresh variable, then returns $\alpha$.
 >     unless (k == Set) $ errKindNotSet k
 >     pattys <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let pts = map (map tyOf) $ fst pattys
->     unless (all ((== length (head pts)) . length) pts) $ fail $ "Arity error in " ++ show s
+>     unless (all ((== length (head pts)) . length) pts) $ errArityMismatch
 >     mapM unifyAll (transpose pts)
 >     let ttys = map tyOf $ snd pattys
 >     -- unifyAll ttys
@@ -261,6 +261,8 @@ is a fresh variable, then returns $\alpha$.
 >     match ty' sty'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just ty') (map tmOf $ snd pattys))
+> checkFunDecl (FunDecl s _ []) =
+>   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
 
 > unifyAll :: [Type] -> Contextual () ()
 > unifyAll []         = return ()

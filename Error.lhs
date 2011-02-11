@@ -1,10 +1,12 @@
-> {-# LANGUAGE TypeSynonymInstances, FlexibleContexts, GADTs #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleContexts, GADTs, TypeOperators,
+>              NoMonomorphismRestriction #-}
 
 > module Error where
 
 > import qualified Control.Monad.Error as E
 > import Text.PrettyPrint.HughesPJ
 
+> import Kit
 > import Syntax
 > import PrettyPrinter
 
@@ -15,11 +17,14 @@
 >     MissingTmVar       :: String -> Err a x
 >     MissingTmCon       :: String -> Err a x
 >     KindTarget         :: Kind -> Err a x
->     KindNotSet         :: Kind -> Err a x
+>     KindNot            :: Kind -> String -> Err a x
+>     KindMismatch       :: Ty a ::: Kind -> Kind -> Err a x
 >     ConstructorTarget  :: Ty a -> Err a x
 >     ConUnderapplied    :: TmConName -> Int -> Int -> Err a x
 >     DuplicateTyCon     :: TyConName -> Err a x
 >     DuplicateTmCon     :: TmConName -> Err a x
+>     NonNumericVar      :: a -> Err a x
+>     ArityMismatch      :: Err a x
 >     Fail               :: String -> Err a x
 
 > instance Pretty Error where
@@ -29,29 +34,38 @@
 >     pretty (MissingTmVar a)       _ = text $ "Missing term variable " ++ a
 >     pretty (MissingTmCon a)       _ = text $ "Missing data constructor " ++ a
 >     pretty (KindTarget k)         _ = text "Kind" <+> prettyHigh k <+> text "doesn't target *"
->     pretty (KindNotSet k)         _ = text "Kind" <+> prettyHigh k <+> text "is not *"
+>     pretty (KindNot k s)          _ = text "Kind" <+> prettyHigh k <+> text "is not" <+> text s
+>     pretty (KindMismatch (t ::: k) l) _ = text "Kind" <+> prettyHigh k
+>         <+> text "of" <+> prettyFst t <+> text "is not" <+> prettyHigh l
 >     pretty (ConstructorTarget t)  _ = text "Type" <+> prettyFst t <+>
 >                                           text "doesn't target data type"
 >     pretty (ConUnderapplied c n m)  _ = text $ "Constructor " ++ c ++ " should have "
 >         ++ show n ++ " arguments, but has been given " ++ show m
 >     pretty (DuplicateTyCon t) _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
+>     pretty (NonNumericVar a) _ = text $ "Type variable " ++ fst a ++ " is not numeric"
+>     pretty ArityMismatch _ = text "Arity mismatch"
 >     pretty (Fail s) _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
 > throw e = E.throwError (e, [] :: [String])
 
-> missingTyVar a          = throw (MissingTyVar a)
-> missingNumVar a         = throw (MissingNumVar a)
-> missingTyCon a          = throw (MissingTyCon a)
-> missingTmVar a          = throw (MissingTmVar a)
-> missingTmCon a          = throw (MissingTmCon a)
-> errKindTarget k         = throw (KindTarget k)
-> errKindNotSet k         = throw (KindNotSet k)
-> errConstructorTarget t  = throw (ConstructorTarget t)
+> missingTyVar a            = throw (MissingTyVar a)
+> missingNumVar a           = throw (MissingNumVar a)
+> missingTyCon a            = throw (MissingTyCon a)
+> missingTmVar a            = throw (MissingTmVar a)
+> missingTmCon a            = throw (MissingTmCon a)
+> errKindTarget k           = throw (KindTarget k)
+> errKindNotSet k           = throw (KindNot k "*")
+> errKindNotArrow k         = throw (KindNot k "an arrow")
+> errKindMismatch tk l      = throw (KindMismatch tk l)
+> errConstructorTarget t    = throw (ConstructorTarget t)
 > errConUnderapplied c n m  = throw (ConUnderapplied c n m)
 > errDuplicateTyCon t       = throw (DuplicateTyCon t)
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
+> errNonNumericVar a        = throw (NonNumericVar a)
+> errArityMismatch          = throw ArityMismatch
+                            
 
 > type Error = Err TyName TmName
 > type ErrorData = (Error, [String])
