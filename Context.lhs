@@ -31,8 +31,16 @@
 >               |  Func   x (Ty a)
 >   deriving Show
 
-> type TyEnt a = a := Maybe (Ty a) ::: Kind
+> data TyDef a = Hole | Some (Ty a) | Fixed
+>   deriving (Show, Functor, Foldable)
 
+> defToMaybe :: TyDef a -> Maybe (Ty a)
+> defToMaybe (Some t)  = Just t
+> defToMaybe _         = Nothing
+
+> type TyEnt a = a := TyDef a ::: Kind
+
+> type TypeDef = TyDef TyName
 > type Entry = Ent TyName TmName
 > type TyEntry = TyEnt TyName
 > type Context = Bwd Entry
@@ -63,7 +71,7 @@ Fresh names
 >                 put st{nextFreshInt = succ beta}
 >                 return beta
 
-> fresh :: String -> Maybe Type ::: Kind -> Contextual t TyName
+> fresh :: String -> TypeDef ::: Kind -> Contextual t TyName
 > fresh a d = do  beta <- freshName
 >                 modifyContext (:< A ((a, beta) := d))
 >                 return (a, beta)
@@ -139,7 +147,7 @@ Data constructors
 >     return $ simplifyTy $ t >>= normalTyVar g
 >   where
 >     normalTyVar :: Context -> TyName -> Type
->     normalTyVar g a = maybe (TyVar a) (>>= normalTyVar g) $ seek g a
+>     normalTyVar g a = maybe (TyVar a) (>>= normalTyVar g) $ defToMaybe $ seek g a
 
 >     seek B0 a = error "normaliseType: erk"
 >     seek (g :< A (b := d ::: _)) a | a == b = d

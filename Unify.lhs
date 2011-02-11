@@ -63,7 +63,7 @@
 > instance FV a => FV (Ty a) where
 >     alpha <? t = any (alpha <?) t
 
-> instance FV a => FV (Maybe a) where
+> instance FV a => FV (TyDef a) where
 >     alpha <? t = any (alpha <?) t
 
 > instance FV Suffix where
@@ -81,50 +81,50 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var _        = TyVar
 
 
-> unify t u = unifyTypes Unify t u `inLoc` (do
+> unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- normaliseType t
 >                 u' <- normaliseType u
 >                 return $ "when unifying\n        " ++ show (prettyFst t')
 >                     ++ "\n    and\n        " ++ show (prettyFst u'))
->     
-> match = unifyTypes Match
 
-> unifyTypes :: UnifyMode -> Type -> Type -> Contextual t ()
+> unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes _ s t | s == t = return ()
-> unifyTypes _ Arr Arr = return ()
-> unifyTypes md (TyVar alpha) (TyVar beta) = onTop $
+> unifyTypes Arr Arr = return ()
+> unifyTypes (TyVar alpha) (TyVar beta) = onTop $
 >   \ (gamma := d ::: k) -> case
->           (gamma == alpha, gamma == beta, d, md) of
->           (True,   True,   _,         _)  ->  restore                                 
->           (True,   False,  Nothing,   _)  ->  replace ((alpha := Just (var k beta) ::: k) :> F0)
->           (False,  True,   Nothing,   Unify)  ->  replace ((beta := Just (var k alpha) ::: k) :> F0)
->           (False,  True,   Nothing,   Match)  ->  errCannotUnify Match (TyVar alpha) (TyVar beta)
->           (True,   False,  Just tau,  _)  ->  unifyTypes md (TyVar beta)   tau       >> restore   
->           (False,  True,   Just tau,  _)  ->  unifyTypes md (TyVar alpha)  tau       >> restore   
->           (False,  False,  _,         _)  ->  unifyTypes md (TyVar alpha)  (TyVar beta)  >> restore   
+>           (gamma == alpha, gamma == beta, d) of
+>           (True,   True,   _)  ->  restore                                 
+>           (True,   False,  Hole)      ->  replace ((alpha := Some (var k beta) ::: k) :> F0)
+>           (True,   False,  Fixed)     ->  errUnifyFixed alpha (TyVar beta)
+>           (False,  True,   Hole)      ->  replace ((beta := Some (var k alpha) ::: k) :> F0)
+>           (False,  True,   Fixed)     ->  errUnifyFixed beta (TyVar alpha)
 
-> unifyTypes md (TyCon c1) (TyCon c2)
+>           (True,   False,  Some tau)  ->  unifyTypes (TyVar beta)   tau       >> restore   
+>           (False,  True,   Some tau)  ->  unifyTypes (TyVar alpha)  tau       >> restore   
+>           (False,  False,  _)         ->  unifyTypes (TyVar alpha)  (TyVar beta)  >> restore   
+
+> unifyTypes (TyCon c1) (TyCon c2)
 >     | c1 == c2   = return ()
 >     | otherwise  = fail $ "Mismatched type constructors " ++ c1
 >                               ++ " and " ++ c2
 
-> unifyTypes md (TyApp f1 s1) (TyApp f2 s2) = unifyTypes md f1 f2 >> unifyTypes md s1 s2
+> unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
-> unifyTypes md (Bind b a k ty) tau = do
->     nm <- fresh a (Nothing ::: k)
->     unifyTypes md (unbind nm ty) tau
+> unifyTypes (Bind b a k ty) tau = do
+>     nm <- fresh a (Hole ::: k)
+>     unifyTypes (unbind nm ty) tau
 
-> unifyTypes md tau (Bind b a k ty) = do
->     nm <- fresh a (Nothing ::: k)
->     unifyTypes md tau (unbind nm ty)
+> unifyTypes tau (Bind b a k ty) = do
+>     nm <- fresh a (Hole ::: k)
+>     unifyTypes tau (unbind nm ty)
 
-> unifyTypes md (TyNum m)      (TyNum n)      = unifyNum m n
-> unifyTypes md (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
-> unifyTypes md (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n
+> unifyTypes (TyNum m)      (TyNum n)      = unifyNum m n
+> unifyTypes (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
+> unifyTypes (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n
 
-> unifyTypes md (TyVar alpha)  tau            =  startSolve alpha tau
-> unifyTypes Unify tau            (TyVar alpha)  =  startSolve alpha tau
-> unifyTypes md tau upsilon = errCannotUnify md tau upsilon
+> unifyTypes (TyVar alpha)  tau            =  startSolve alpha tau
+> unifyTypes tau            (TyVar alpha)  =  startSolve alpha tau
+> unifyTypes tau            upsilon = errCannotUnify tau upsilon
 
 
 > startSolve :: TyName -> Type -> Contextual t ()
@@ -147,7 +147,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > rigidHull (Bind b x k t) = return (Bind b x k t, F0)
 
 > constraintsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
-> constraintsToSuffix = fmap ((:= Nothing ::: KindNum) . fst)
+> constraintsToSuffix = fmap ((:= Hole ::: KindNum) . fst)
 
 > solveConstraints :: Fwd (TyName, TypeNum) -> Contextual t ()
 > solveConstraints = mapM_ (uncurry $ unifyNum . NumVar)
@@ -156,21 +156,22 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > solve :: TyName -> Suffix -> Type -> Contextual t ()
 > solve alpha _Xi tau = onTop $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
->     (gamma == alpha,  occurs,  d             ) of
->     (True,            True,    _             )  ->  fail "Occurrence detected!"
->     (True,            False,   Nothing       )  ->  replace (_Xi <+> ((alpha := Just tau ::: k) :> F0))
->     (True,            False,   Just upsilon  )  ->  modifyContext (<>< _Xi)
->                                                 >>  unifyTypes Unify upsilon tau
->                                                 >>  restore
->     (False,           True,    Nothing             )  ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
->                                                 >>  replace F0   
->     (False,           True,    Just upsilon  )  ->  do
->                 (upsilon', xs) <- rigidHull upsilon
->                 solve alpha (constraintsToSuffix xs <+> ((gamma := Just upsilon' ::: k) :> _Xi)) tau
->                 solveConstraints xs
->                 replace F0   
->     (False,           False,   _             )  ->  solve alpha _Xi tau
->                                                 >>  restore
+>     (gamma == alpha, occurs, d) of
+>     (True,   True,   _)             ->  fail "Occurrence detected!"
+>     (True,   False,  Hole)          ->  replace (_Xi <+> ((alpha := Some tau ::: k) :> F0))
+>     (True,   False,  Some upsilon)  ->  modifyContext (<>< _Xi)
+>                                         >>  unifyTypes upsilon tau
+>                                         >>  restore
+>     (True,   False,  Fixed)         ->  errUnifyFixed alpha tau
+>     (False,  True,   Hole)          ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
+>                                         >>  replace F0   
+>     (False,  True,   Some upsilon)  ->  do
+>         (upsilon', xs) <- rigidHull upsilon
+>         solve alpha (constraintsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
+>         solveConstraints xs
+>         replace F0
+>     (False,  False,  _)             ->  solve alpha _Xi tau
+>                                         >>  restore
 
 
 
@@ -179,6 +180,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > type NormalNum = NormNum TyName
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
+> unifyNum (NumConst 0) n = unifyZero Nothing =<< normaliseNum n
 > unifyNum m n = unifyZero Nothing =<< normaliseNum (m - n)
 
 > normaliseNum :: TypeNum -> Contextual t NormalNum
@@ -221,33 +223,34 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > unifyZero :: Maybe TyName -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
->   | isConstant e  = errCannotUnify Unify (numToType e) (numToType (normalConst 0))
+>   | isConstant e  = errCannotUnify (numToType e) (numToType (normalConst 0))
 >   | otherwise     = onTopNum $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
 >         Nothing  -> unifyZero _Psi e >> restore
 >         Just n   -> case d of
->             Just x   -> do
+>             Some x   -> do
 >                           modifyContext (<><| _Psi)
 >                           x' <- typeToNum x
 >                           unifyZero Nothing (substGExp (alpha, n) x' e)
 >                           restore
->             Nothing  | n `dividesCoeffs` e -> do
+>             Hole  | n `dividesCoeffs` e -> do
 >                           modifyContext (<><| _Psi)
->                           replace $ (alpha := Just (numToType (pivot (alpha, n) e)) ::: KindNum) :> F0
+>                           replace $ (alpha := Some (numToType (pivot (alpha, n) e)) ::: KindNum) :> F0
 >                      | (alpha, n) `notMaxCoeff` e -> do
 >                           modifyContext (<><| _Psi)
 >                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
 >                           unifyZero (Just beta) $ substGExp (alpha, n) p e
->                           replace $ (alpha := Just (numToType p) ::: KindNum) :> F0
+>                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
 >                      | numVariables e > 1 -> do
 >                           demandNothing _Psi
 >                           unifyZero (Just alpha) e
 >                           replace F0
 >                      | otherwise -> fail "No way!"
+>             Fixed -> errUnifyNumFixed alpha (simplifyNum $ reifyNum e)
 >   where
 >     _Gamma <><| Nothing     = _Gamma
->     _Gamma <><| Just alpha  = _Gamma :< A (alpha := Nothing ::: KindNum)
+>     _Gamma <><| Just alpha  = _Gamma :< A (alpha := Hole ::: KindNum)
 >
 >     demandNothing Nothing   = return ()
 >     demandNothing (Just _)  = error "demandNothing: invariants violated!"

@@ -153,25 +153,25 @@ is a fresh variable, then returns $\alpha$.
 
 > matchAppTypes :: Type -> Type -> Contextual t Type
 > matchAppTypes sigma tau = do
->     alpha <- fresh "_t" (Nothing ::: Set)
+>     alpha <- fresh "_t" (Hole ::: Set)
 >     unify sigma (tau --> TyVar alpha)
 >     return $ TyVar alpha
 
 
-> specialise :: Type -> Contextual t Type
-> specialise (TyApp f s)     = TyApp f <$> specialise s
-> specialise (Bind b x k t)  = do
->     beta <- fresh x (Nothing ::: k)
->     specialise (unbind beta t)
-> specialise t               = return t
+> specialise :: TypeDef -> Type -> Contextual t Type
+> specialise d (TyApp f s)     = TyApp f <$> specialise d s
+> specialise d (Bind b x k t)  = do
+>     beta <- fresh x (d ::: k)
+>     specialise d (unbind beta t)
+> specialise d t               = return t
 
 > inferType :: Contextual Term Type
 > inferType = getT >>= \ t -> case t of
->     TmVar x -> lookupTmVar x >>= specialise . tyOf >>= flip goUp F0
->     TmCon c -> lookupTmCon c >>= specialise >>= flip goUp F0
+>     TmVar x -> lookupTmVar x >>= specialise Hole . tyOf >>= flip goUp F0
+>     TmCon c -> lookupTmCon c >>= specialise Hole >>= flip goUp F0
 >     TmApp f s -> goAppLeft >> inferType
 >     Lam x t -> do
->         a <- fresh "a" (Nothing ::: Set)
+>         a <- fresh "a" (Hole ::: Set)
 >         goLam (TyVar a)
 >         inferType
 >     t :? ty -> goAnnotLeft >> inferType
@@ -230,7 +230,7 @@ is a fresh variable, then returns $\alpha$.
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty     <- TyVar <$> fresh "sty" (Nothing ::: Set)
+>     sty     <- TyVar <$> fresh "sty" (Hole ::: Set)
 >     pattys  <- mapM (checkPat (s ::: sty)) pats
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
@@ -245,7 +245,7 @@ is a fresh variable, then returns $\alpha$.
 >     ty' <- simplifyTy <$> generalise ty
 >     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
 >         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
->             specialise sty >>= match ty'
+>             specialise Fixed sty >>= unify ty'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
@@ -259,8 +259,8 @@ is a fresh variable, then returns $\alpha$.
 >     return t'
 >   where
 >     help (g :< Layer FunTop) t = (g, t)
->     help (g :< A (((a, n) := Nothing ::: k))) t = help g (Bind All a k (bind (a, n) t))
->     help (g :< A (((a, n) := Just d ::: k))) t = help g (subst (a, n) d t)
+>     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
+>     help (g :< A (((a, n) := _ ::: k))) t    = help g (Bind All a k (bind (a, n) t))
 
 > checkPat :: String ::: Type -> Pat String String ->
 >     Contextual () (Pattern ::: Type)
@@ -285,12 +285,12 @@ is a fresh variable, then returns $\alpha$.
 > checkPatTerm :: PatTerm String String ->
 >     Contextual () (PatternTerm ::: Type, [TmName ::: Type])
 > checkPatTerm (PatVar v) = do
->     nm <- fresh ("_ty" ++ v) (Nothing ::: Set)
+>     nm <- fresh ("_ty" ++ v) (Hole ::: Set)
 >     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
 >     ty <- lookupTmCon c
 >     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
 >     (pts', ptsBinds) <- checkPatTerms pts
->     nm <- fresh "_s" (Nothing ::: Set)
+>     nm <- fresh "_s" (Hole ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
 >     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds)

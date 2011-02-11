@@ -24,7 +24,9 @@
 >     DuplicateTyCon     :: TyConName -> Err a x
 >     DuplicateTmCon     :: TmConName -> Err a x
 >     NonNumericVar      :: a -> Err a x
->     CannotUnify        :: UnifyMode -> Ty a -> Ty a -> Err a x
+>     CannotUnify        :: Ty a -> Ty a -> Err a x
+>     UnifyFixed         :: a -> Ty a -> Err a x
+>     UnifyNumFixed      :: a -> TyNum a -> Err a x         
 >     Fail               :: String -> Err a x
 
 > instance Pretty Error where
@@ -44,8 +46,12 @@
 >     pretty (DuplicateTyCon t) _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a) _ = text $ "Type variable " ++ fst a ++ " is not numeric"
->     pretty (CannotUnify md t u) _ = text ("Cannot " ++ show md)
+>     pretty (CannotUnify t u) _ = text "Cannot unify"
 >         <+> prettyFst t <+> text "and" <+> prettyFst u
+>     pretty (UnifyFixed a t) _ = text "Cannot unify fixed variable" <+> text (fst a) 
+>         <+> text "with" <+> prettyFst t
+>     pretty (UnifyNumFixed a n) _ = text "Cannot modify fixed variable"
+>         <+> text (fst a) <+> text "to unify" <+> prettyFst n <+> text "with 0"
 >     pretty (Fail s) _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
@@ -65,7 +71,9 @@
 > errDuplicateTyCon t       = throw (DuplicateTyCon t)
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
 > errNonNumericVar a        = throw (NonNumericVar a)
-> errCannotUnify md t u     = throw (CannotUnify md t u)
+> errCannotUnify t u        = throw (CannotUnify t u)
+> errUnifyFixed a t         = throw (UnifyFixed a t)
+> errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
                             
 
 > type Error = Err TyName TmName
