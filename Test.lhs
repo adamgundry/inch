@@ -104,4 +104,5 @@
 >   "f :: forall b. (forall a. a) -> (b -> b)\nf x y = y" :
 >   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid :: forall a (n :: Num). Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs" :
 >   "data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)" :
+>   "data One where A :: Two -> One\ndata Two where B :: One -> Two" :
 >   []

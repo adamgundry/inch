@@ -40,15 +40,8 @@
 >         | a == t = fail $ "Type variable " ++ a ++ " is not numeric"
 >     seek (g :< _) = seek g
 
-> lookupTyCon :: String -> Contextual t (Type ::: Kind)
-> lookupTyCon a = getContext >>= seek
->   where
->     seek B0 = missingTyCon a
->     seek (g :< Data b k _) | a == b = return $ TyCon b ::: k
->     seek (g :< _) = seek g
-
-> lookupTm :: TmName -> Contextual t (Term ::: Type)
-> lookupTm x = getContext >>= seek
+> lookupTmVar :: TmName -> Contextual t (Term ::: Type)
+> lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = missingTmVar x
 >     seek (g :< Func y ty)                         | x == y = return $ TmVar y ::: ty
@@ -63,22 +56,12 @@
 >     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
 >                               | otherwise  = lookIn bs
 
-> lookupConName :: TmName -> Contextual t Type
-> lookupConName x = getContext >>= seek
->   where
->     seek B0 = missingTmCon x
->     seek (g :< Data d k cs) = seekIn cs `mplus` seek g
->     seek (g :< _) = seek g
->
->     seekIn [] = mzero
->     seekIn ((c ::: ty) : cs)  | x == c     = return ty
->                               | otherwise  = seekIn cs
 
 
 
 > inferKind :: Bwd (TyName ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
 > inferKind g (TyVar a)    = (\ (b ::: k) -> TyVar b ::: k) <$> lookupTyVar g a
-> inferKind g (TyCon c)    = lookupTyCon c
+> inferKind g (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
 > inferKind g (TyApp f s)  = do
 >     f' ::: k  <- inferKind g f
 >     case k of
@@ -185,8 +168,8 @@ is a fresh variable, then returns $\alpha$.
 
 > inferType :: Contextual Term Type
 > inferType = getT >>= \ t -> case t of
->     TmVar x -> lookupTm x >>= specialise . tyOf >>= flip goUp F0
->     TmCon c -> lookupConName c >>= specialise >>= flip goUp F0
+>     TmVar x -> lookupTmVar x >>= specialise . tyOf >>= flip goUp F0
+>     TmCon c -> lookupTmCon c >>= specialise >>= flip goUp F0
 >     TmApp f s -> goAppLeft >> inferType
 >     Lam x t -> do
 >         a <- fresh "a" (Nothing ::: Set)
@@ -220,14 +203,8 @@ is a fresh variable, then returns $\alpha$.
 > checkDataDecl :: DataDecl String String -> Contextual () DataDeclaration
 > checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
 >     unless (targetsSet k) $ errKindTarget k
->     modifyContext (:< Data t k [])
->     cs' <- mapM (checkConstructor t) cs
->     modifyContext (replaceData cs')
->     return (DataDecl t k cs')
->   where
->     replaceData cs' (_Gamma :< Data a l [])
->         | a == t && k == l = _Gamma :< Data a l cs'
->     replaceData cs' _Gamma = error "wrong thing on end of context"
+>     insertTyCon t k
+>     DataDecl t k <$> mapM (checkConstructor t) cs
 
 > targetsSet :: Kind -> Bool
 > targetsSet Set            = True
@@ -239,6 +216,7 @@ is a fresh variable, then returns $\alpha$.
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ errKindNotSet k
 >     unless (ty' `targets` t) $ errConstructorTarget ty'
+>     insertTmCon c ty'
 >     return (c ::: ty')
 
 > targets :: Eq a => Ty a -> TyConName -> Bool
@@ -326,7 +304,7 @@ is a fresh variable, then returns $\alpha$.
 >     nm <- fresh ("ty" ++ v) (Nothing ::: Set)
 >     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
 > checkPatTerm (PatCon c pts) = do
->     ty <- lookupConName c
+>     ty <- lookupTmCon c
 >     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
 >     (pts', ptsBinds) <- checkPatTerms pts
 >     nm <- fresh "cod" (Nothing ::: Set)

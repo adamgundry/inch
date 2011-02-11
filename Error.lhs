@@ -17,7 +17,9 @@
 >     KindTarget         :: Kind -> Err a x
 >     KindNotSet         :: Kind -> Err a x
 >     ConstructorTarget  :: Ty a -> Err a x
->     ConUnderapplied    :: String -> Int -> Int -> Err a x
+>     ConUnderapplied    :: TmConName -> Int -> Int -> Err a x
+>     DuplicateTyCon     :: TyConName -> Err a x
+>     DuplicateTmCon     :: TmConName -> Err a x
 >     Fail               :: String -> Err a x
 
 > instance Pretty Error where
@@ -32,6 +34,8 @@
 >                                           text "doesn't target data type"
 >     pretty (ConUnderapplied c n m)  _ = text $ "Constructor " ++ c ++ " should have "
 >         ++ show n ++ " arguments, but has been given " ++ show m
+>     pretty (DuplicateTyCon t) _ = text $ "Duplicate type constructor " ++ t
+>     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
 >     pretty (Fail s) _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
@@ -46,7 +50,8 @@
 > errKindNotSet k         = throw (KindNotSet k)
 > errConstructorTarget t  = throw (ConstructorTarget t)
 > errConUnderapplied c n m  = throw (ConUnderapplied c n m)
-
+> errDuplicateTyCon t       = throw (DuplicateTyCon t)
+> errDuplicateTmCon t       = throw (DuplicateTmCon t)
 
 > type Error = Err TyName TmName
 > type ErrorData = (Error, [String])
