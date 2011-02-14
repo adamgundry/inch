@@ -6,6 +6,7 @@
 > import qualified Control.Monad.Error as E
 > import Text.PrettyPrint.HughesPJ
 
+> import Type
 > import Kit
 > import Syntax
 > import PrettyPrinter

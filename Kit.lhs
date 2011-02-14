@@ -20,6 +20,14 @@
 >   where  unS Z      = x
 >          unS (S a)  = a
 
+> subst :: (Monad m, Eq a) => a -> m a -> m a -> m a
+> subst a t = (>>= f)
+>   where f b | a == b     = t
+>             | otherwise  = return b
+
+> wk :: (Functor m, Monad m) => (a -> m b) -> (S a -> m (S b))
+> wk g Z      = return Z
+> wk g (S a)  = fmap S (g a)
 
 > data a :=   b  = a :=   b
 >     deriving (Eq, Show, Functor, Foldable, Traversable)

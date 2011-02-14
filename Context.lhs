@@ -10,6 +10,7 @@
 > import qualified Data.Map as Map
 
 > import BwdFwd
+> import Type
 > import Syntax
 > import Kit
 > import Error
@@ -153,3 +154,44 @@ Data constructors
 >     seek B0 a = error "normaliseType: erk"
 >     seek (g :< A (b := d ::: _)) a | a == b = d
 >     seek (g :< _) a = seek g a
+
+
+
+
+> lookupTyVar :: Bwd (TyName ::: Kind) -> String -> Contextual t (TyName ::: Kind)
+> lookupTyVar (g :< ((b, n) ::: k)) a  | a == b     = return $ (a, n) ::: k
+>                                      | otherwise  = lookupTyVar g a
+> lookupTyVar B0 a = getContext >>= seek
+>   where
+>     seek B0 = missingTyVar a
+>     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ (t, n) ::: k
+>     seek (g :< _) = seek g
+
+> lookupNumVar :: Bwd (TyName ::: Kind) -> String -> Contextual t TypeNum
+> lookupNumVar (g :< ((b, n) ::: k)) a
+>     | a == b && k == KindNum  = return $ NumVar (a, n)
+>     | a == b                  = errNonNumericVar (a, n)
+>     | otherwise               = lookupNumVar g a
+> lookupNumVar B0 a = getContext >>= seek
+>   where
+>     seek B0 = missingNumVar a
+>     seek (g :< A ((t, n) := _ ::: k))
+>         | a == t && k == KindNum = return $ NumVar (t, n)
+>         | a == t = errNonNumericVar (a, n)
+>     seek (g :< _) = seek g
+
+> lookupTmVar :: TmName -> Contextual t (Term ::: Type)
+> lookupTmVar x = getContext >>= seek
+>   where
+>     seek B0 = missingTmVar x
+>     seek (g :< Func y ty)                         | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (LamBody (y ::: ty) ()))     | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (PatternTop (y ::: ty) bs))  | x == y = return $ TmVar y ::: ty
+>                                                   | otherwise = case lookIn bs of
+>                                                       Just tt  -> return tt
+>                                                       Nothing  -> seek g
+>     seek (g :< _) = seek g
+>
+>     lookIn [] = Nothing
+>     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
+>                               | otherwise  = lookIn bs

@@ -130,7 +130,7 @@
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nvtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\nvtail (Cons x xs) = xs", True) :
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nlie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). 0 <= m => a -> Vec m a -> Vec (m+1) a", True) :
->   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). 0 <= m => a -> Vec m a -> Vec (m+1) a\nhead :: forall a (m :: Num). m <= -1 => Vec m a -> a\nhead (Cons x xs) = x", True) :
+>   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). 0 <= m => a -> Vec m a -> Vec (m+1) a\nhead :: forall a (m :: Num). m <= -1 => Vec m a -> a\nhead (Cons x xs) = x", False) :
 >   []
 
 

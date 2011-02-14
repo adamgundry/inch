@@ -12,6 +12,7 @@
 > import qualified Text.ParserCombinators.Parsec.IndentParser.Token as IT
 
 
+> import Type
 > import Syntax
 > import Orphans
 > import Kit

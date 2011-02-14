@@ -7,6 +7,7 @@
 > import Prelude hiding (any, mapM_)
 
 > import BwdFwd
+> import Type
 > import Syntax
 > import Context
 > import Num
