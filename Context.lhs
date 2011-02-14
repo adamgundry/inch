@@ -26,9 +26,12 @@
 > type TermLayer = TmLayer TyName TmName
 
 
+> type TyEnt a = a := TyDef a ::: Kind
+
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
 >               |  Func   x (Ty a)
+>               |  Constraint (Pred a)
 >   deriving Show
 
 > data TyDef a = Hole | Some (Ty a) | Fixed
@@ -37,8 +40,6 @@
 > defToMaybe :: TyDef a -> Maybe (Ty a)
 > defToMaybe (Some t)  = Just t
 > defToMaybe _         = Nothing
-
-> type TyEnt a = a := TyDef a ::: Kind
 
 > type TypeDef = TyDef TyName
 > type Entry = Ent TyName TmName

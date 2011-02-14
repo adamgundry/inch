@@ -118,6 +118,9 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >     nm <- fresh a (Hole ::: k)
 >     unifyTypes tau (unbind nm ty)
 
+> unifyTypes (Qual p t) tau = modifyContext (:< Constraint p) >> unifyTypes t tau
+> unifyTypes tau (Qual p t) = modifyContext (:< Constraint p) >> unifyTypes tau t
+
 > unifyTypes (TyNum m)      (TyNum n)      = unifyNum m n
 > unifyTypes (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
 > unifyTypes (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n

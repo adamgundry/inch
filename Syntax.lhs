@@ -78,6 +78,15 @@
 > substNum a m (n1 :*: n2) = substNum a m n1 :*: substNum a m n2
 > substNum a m (Neg n) = Neg (substNum a m n)
 
+
+> data Pred a where
+>     (:<=:) :: TyNum a -> TyNum a -> Pred a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
+
+> bindPred :: (a -> TyNum b) -> Pred a -> Pred b
+> bindPred g (n :<=: m)  = (n >>= g) :<=: (m >>= g)
+
+
 > data Ty a where
 >     TyVar  :: a -> Ty a
 >     TyCon  :: TyConName -> Ty a
@@ -85,6 +94,7 @@
 >     Arr    :: Ty a
 >     TyNum  :: TyNum a -> Ty a
 >     Bind   :: Binder -> String -> Kind -> Ty (S a) -> Ty a
+>     Qual   :: Pred a -> Ty a -> Ty a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > instance Monad Ty where
@@ -94,32 +104,33 @@
 >     TyApp f s     >>= g = TyApp (f >>= g) (s >>= g) 
 >     Arr           >>= g = Arr
 >     TyNum n       >>= g = TyNum (n >>= (toNum . g))
->       where  toNum (TyNum n)  = n
->              toNum (TyVar a)  = NumVar a
->              toNum d          = error $ "toNum: bad!"
 >     Bind b x k t  >>= g = Bind b x k (t >>= wk g)
 >       where  wk g Z = TyVar Z
 >              wk g (S a) = fmap S (g a)
+>     Qual p t      >>= g = Qual (bindPred (toNum . g) p) (t >>= g)
+
+> toNum (TyNum n)  = n
+> toNum (TyVar a)  = NumVar a
+> toNum d          = error $ "toNum: bad!"
 
 
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
 
+> simplifyPred :: Pred a -> Pred a
+> simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
+
 > simplifyTy :: Ty a -> Ty a
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)
 > simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
 > simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
+> simplifyTy (Qual p t)      = Qual (simplifyPred p) (simplifyTy t)
 > simplifyTy t               = t
 
 > subst :: Eq a => a -> Ty a -> Ty a -> Ty a
-> subst a t (TyVar b) | a == b = t
->                     | otherwise = TyVar b
-> subst a t (TyCon c) = TyCon c
-> subst a t (TyApp f s) = TyApp (subst a t f) (subst a t s)
-> subst a t Arr = Arr
-> subst a (TyNum m) (TyNum n) = TyNum (substNum a m n)
-> subst a t (TyNum n) = TyNum n
-> subst a t (Bind b s k u) = Bind b s k (subst (S a) (fmap S t) u)
+> subst a t = (>>= f)
+>   where f b | a == b     = t
+>             | otherwise  = TyVar b
 
 > alphaConvert :: [(String, String)] -> Ty a -> Ty a
 > alphaConvert xys (TyApp f s) = TyApp (alphaConvert xys f)
@@ -132,6 +143,7 @@
 > args :: Ty a -> Int
 > args (TyApp (TyApp Arr s) t) = succ $ args t
 > args (Bind b x k t) = args t
+> args (Qual p t) = args t
 > args _ = 0
 
 
@@ -274,6 +286,7 @@
 > type Type             = Ty TyName
 > type Term             = Tm TyName TmName
 > type TypeNum          = TyNum TyName
+> type Predicate        = Pred TyName
 > type Con a            = TmConName ::: Ty a
 > type Constructor      = Con TyName
 > type Pattern          = Pat TyName TmName

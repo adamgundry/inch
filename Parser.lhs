@@ -94,14 +94,23 @@ Types
 >     reserved q
 >     aks <- many1 $ foo <$> quantifiedVar
 >     reservedOp "."
+>     mps <- optional $ try predicates
 >     t <- tyExp
->     return $ foldr (\ (a, k) t -> f a k (bind a t)) t $ join aks
+>     let t' = case mps of
+>                  Just ps  -> foldr Qual t ps
+>                  Nothing  -> t
+>     return $ foldr (\ (a, k) t -> f a k (bind a t)) t' $ join aks
 >   where
 >     foo :: ([as], k) -> [(as, k)]
 >     foo (as, k) = map (\ a -> (a, k)) as
 
 > quantifiedVar  =    parens ((,) <$> many1 tyVarName <* doubleColon <*> kind)
 >                <|>  (\ a -> ([a] , Set)) <$> tyVarName
+
+
+> predicates = (lePred `sepBy1` reservedOp ",") <* reservedOp "=>"
+
+> lePred = (:<=:) <$> tyNumTerm <* reservedOp "<=" <*> tyNumTerm
 
 
 
@@ -174,7 +183,7 @@ Programs
 
 
 > funDecl = do
->     mst <- optional $ try signature
+>     mst <- optional signature
 >     case mst of
 >         Just (s, t) -> FunDecl s (Just t) <$> many (patternFor s)
 >         Nothing -> do
@@ -200,7 +209,6 @@ Programs
 > patVarName = identLike True "pattern variable"
 
 > signature = I.lineFold $ do
->     s <- tmVarName
->     doubleColon
+>     s <- try $ tmVarName <* doubleColon
 >     t <- tyExp
 >     return (s, t)

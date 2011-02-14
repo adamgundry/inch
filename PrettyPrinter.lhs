@@ -61,6 +61,10 @@
 >     pretty (Neg n) = wrapDoc AppSize $
 >         text "-" <+> pretty n ArgSize
 
+> instance Pretty (Pred String) where
+>     pretty (n :<=: m) = wrapDoc AppSize $
+>         pretty n ArgSize <+> text "<=" <+> pretty m ArgSize
+
 > instance Pretty (Ty String) where
 >     pretty (TyVar a)                = pretty a
 >     pretty (TyCon c)                = pretty c
@@ -72,6 +76,7 @@
 >     pretty (TyNum n) = pretty n
 >     pretty (Bind b a k t) = prettyBind b (B0 :< (a, k)) $
 >                                 alphaConvert [(a, a ++ "'")] (unbind a t)
+>     pretty (Qual p t) = prettyQual (B0 :< p) t
 
 > prettyBind :: Binder -> Bwd (String, Kind) -> Ty String -> Size -> Doc
 > prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) $
@@ -85,6 +90,13 @@
 >     prettyRun l d ((a, k) : aks) | k == l = prettyRun l (d <+> text a) aks
 >     prettyRun Set  d aks = d <+> prettyBits aks
 >     prettyRun l    d aks = parens (d <+> text "::" <+> prettyHigh l) <+> prettyBits aks
+
+> prettyQual :: Bwd (Pred String) -> Ty String -> Size -> Doc
+> prettyQual ps (Qual p t) = prettyQual (ps :< p) t
+> prettyQual ps t = wrapDoc ArrSize $
+>     prettyPreds (trail ps) <+> text "=>" <+> pretty t ArrSize
+>   where
+>     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
 
 > instance Pretty (Tm String String) where
 >     pretty (TmVar x)  = pretty x

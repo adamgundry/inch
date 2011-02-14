@@ -76,6 +76,10 @@
 >     n <- freshName
 >     ty ::: l <- inferKind (g :< ((a, n) ::: k)) (unbind a t)
 >     return $ Bind b a k (bind (a, n) ty) ::: l
+> inferKind g (Qual p t) = do
+>     p' <- checkPredKind g p
+>     t' ::: k <- inferKind g t
+>     return (Qual p' t' ::: k)
 
 > checkNumKind :: Bwd (TyName ::: Kind) -> TyNum String -> Contextual t TypeNum
 > checkNumKind g (NumConst k) = return $ NumConst k
@@ -83,7 +87,8 @@
 > checkNumKind g (m :+: n) = (:+:) <$> checkNumKind g m <*> checkNumKind g n
 > checkNumKind g (Neg n) = Neg <$> checkNumKind g n
 
-
+> checkPredKind :: Bwd (TyName ::: Kind) -> Pred String -> Contextual t Predicate
+> checkPredKind g (n :<=: m) = (:<=:) <$> checkNumKind g n <*> checkNumKind g m
 
 
 > goLam :: Type -> Contextual Term ()
@@ -223,6 +228,7 @@ is a fresh variable, then returns $\alpha$.
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
 > targets (TyApp f s)               t = targets f t
 > targets (Bind b a k ty)           t = targets ty t
+> targets (Qual p ty)               t = targets ty t
 > targets _                         _ = False
 
 
@@ -261,6 +267,7 @@ is a fresh variable, then returns $\alpha$.
 >     help (g :< Layer FunTop) t = (g, t)
 >     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
 >     help (g :< A (((a, n) := _ ::: k))) t    = help g (Bind All a k (bind (a, n) t))
+>     help (g :< Constraint p) t = help g (Qual p t)
 
 > checkPat :: String ::: Type -> Pat String String ->
 >     Contextual () (Pattern ::: Type)
