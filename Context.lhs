@@ -1,9 +1,9 @@
-> {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators #-}
+> {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators, FlexibleContexts #-}
 
 > module Context where
 
 > import Control.Applicative
-> import Control.Monad.Error ()
+> import Control.Monad.Error
 > import Control.Monad.State
 > import Control.Monad.Writer
 > import Data.Foldable
@@ -80,13 +80,13 @@
 
 Fresh names
 
-> freshName :: Contextual t Int
+> freshName :: MonadState (ZipState t) m => m Int
 > freshName = do  st <- get
 >                 let beta = nextFreshInt st
 >                 put st{nextFreshInt = succ beta}
 >                 return beta
 
-> fresh :: String -> TypeDef ::: Kind -> Contextual t TyName
+> fresh :: MonadState (ZipState t) m => String -> TypeDef ::: Kind -> m TyName
 > fresh a d = do  beta <- freshName
 >                 modifyContext (:< A ((a, beta) := d))
 >                 return (a, beta)
@@ -94,10 +94,10 @@ Fresh names
 
 T values
 
-> getT :: Contextual t t
+> getT :: MonadState (ZipState t) m => m t
 > getT = gets tValue
 
-> putT :: t -> Contextual t ()
+> putT :: MonadState (ZipState t) m => t -> m ()
 > putT t = modify $ \ st -> st {tValue = t}
 
 > mapT :: (t -> s) -> (s -> t) -> Contextual s x -> Contextual t x
@@ -113,25 +113,27 @@ T values
 
 Context
 
-> getContext :: Contextual t Context
+> getContext :: MonadState (ZipState t) m => m Context
 > getContext = gets context
 >
-> putContext :: Context -> Contextual t ()
+> putContext :: MonadState (ZipState t) m => Context -> m ()
 > putContext _Gamma = modify $ \ st -> st{context = _Gamma}
 >
-> modifyContext :: (Context -> Context) -> Contextual t ()
+> modifyContext :: MonadState (ZipState t) m => (Context -> Context) -> m ()
 > modifyContext f = getContext >>= putContext . f
 
 
 Type constructors
 
-> insertTyCon :: TyConName -> Kind -> Contextual t ()
+> insertTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    TyConName -> Kind -> m ()
 > insertTyCon x k = do
 >     st <- get
 >     when (Map.member x (tyCons st)) $ errDuplicateTyCon x
 >     put st{tyCons = Map.insert x k (tyCons st)}
 
-> lookupTyCon :: TyConName -> Contextual t Kind
+> lookupTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    TyConName -> m Kind
 > lookupTyCon x = do
 >     tcs <- gets tyCons
 >     case Map.lookup x tcs of
@@ -141,13 +143,15 @@ Type constructors
 
 Data constructors
 
-> insertTmCon :: TmConName -> Type -> Contextual t ()
+> insertTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    TmConName -> Type -> m ()
 > insertTmCon x ty = do
 >     st <- get
 >     when (Map.member x (tmCons st)) $ errDuplicateTmCon x
 >     put st{tmCons = Map.insert x ty (tmCons st)}
 
-> lookupTmCon :: TmConName -> Contextual t Type
+> lookupTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                     TmConName -> m Type
 > lookupTmCon x = do
 >     tcs <- gets tmCons
 >     case Map.lookup x tcs of
@@ -190,7 +194,8 @@ Data constructors
 
 
 
-> lookupTyVar :: Bwd (TyName ::: Kind) -> String -> Contextual t (TyName ::: Kind)
+> lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    Bwd (TyName ::: Kind) -> String -> m (TyName ::: Kind)
 > lookupTyVar (g :< ((b, n) ::: k)) a  | a == b     = return $ (a, n) ::: k
 >                                      | otherwise  = lookupTyVar g a
 > lookupTyVar B0 a = getContext >>= seek
@@ -199,7 +204,8 @@ Data constructors
 >     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ (t, n) ::: k
 >     seek (g :< _) = seek g
 
-> lookupNumVar :: Bwd (TyName ::: Kind) -> String -> Contextual t TypeNum
+> lookupNumVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                     Bwd (TyName ::: Kind) -> String -> m TypeNum
 > lookupNumVar (g :< ((b, n) ::: k)) a
 >     | a == b && k == KindNum  = return $ NumVar (a, n)
 >     | a == b                  = errNonNumericVar (a, n)
@@ -212,7 +218,8 @@ Data constructors
 >         | a == t = errNonNumericVar (a, n)
 >     seek (g :< _) = seek g
 
-> lookupTmVar :: TmName -> Contextual t (Term ::: Type)
+> lookupTmVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    TmName -> m (Term ::: Type)
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = missingTmVar x

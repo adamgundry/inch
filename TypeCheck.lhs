@@ -1,4 +1,4 @@
-> {-# LANGUAGE GADTs, TypeOperators #-}
+> {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts #-}
 
 > module TypeCheck where
 
@@ -54,7 +54,7 @@
 > checkPredKind g (n :<=: m) = (:<=:) <$> checkNumKind g n <*> checkNumKind g m
 
 
-> goLam :: Type -> Contextual Term ()
+> goLam :: MonadState (ZipState Term) m => Type -> m ()
 > goLam tau = modify $ \ st@(St{tValue = Lam x t}) ->
 >     st {  tValue = unbind x t
 >        ,  context = context st :< Layer (LamBody (x ::: tau) ())
@@ -63,13 +63,13 @@
 
 |goAppLeft| descends left into an application.
 
-> goAppLeft :: Contextual Term ()
+> goAppLeft :: MonadState (ZipState Term) m => m ()
 > goAppLeft = modify $ \ st@(St{tValue = TmApp f s}) ->
 >     st {tValue = f, context = context st :< Layer (AppLeft () s)}
 
 
 
-> goAnnotLeft :: Contextual Term ()
+> goAnnotLeft :: MonadState (ZipState Term) m => m ()
 > goAnnotLeft = modify $ \ st@(St{tValue = t :? ty}) ->
 >     st {tValue = t, context = context st :< Layer (AnnotLeft () ty)}
 
@@ -85,30 +85,30 @@ is found.
 
 > goUp :: Type -> Suffix -> ContextualWriter [Predicate] Term Type
 > goUp tau _Xi = do
->     st@(St{tValue = t}) <- lift get
+>     st@(St{tValue = t}) <- get
 >     case context st of
 >       (es :< Layer l) ->
 >         case l of         
 >             AppLeft () a -> do
->                 lift $ put st{tValue = a,
+>                 put st{tValue = a,
 >                     context = es <>< _Xi :< Layer (AppRight (t ::: tau) ())}
 >                 inferType
 >             AppRight (f ::: sigma) () -> do
->                 lift $ put st{tValue = TmApp f t, context = es <>< _Xi}
+>                 put st{tValue = TmApp f t, context = es <>< _Xi}
 >                 tau' <- lift $ matchAppTypes sigma tau
 >                 goUp tau' F0
 >             LamBody (x ::: sigma) () -> do
->                 lift $ put st{tValue = Lam x (bind x t), context = es}
+>                 put st{tValue = Lam x (bind x t), context = es}
 >                 goUp (sigma --> tau) _Xi
 >             AnnotLeft () ty -> do
->                 lift $ put st{tValue = t :? ty, context = es <>< _Xi}
+>                 put st{tValue = t :? ty, context = es <>< _Xi}
 >                 lift $ unify ty tau
 >                 goUp ty F0
 >             PatternTop _ _ -> do
->                 lift $ put st{context = es <>< _Xi}
+>                 put st{context = es <>< _Xi}
 >                 return tau
 >       (es :< A e) -> do
->           lift $ put st{context = es}
+>           put st{context = es}
 >           goUp tau (e :> _Xi)
 >       B0 -> error (  "Ran out of context when going up from " 
 >                      ++ (show t) ++ " : " ++ (show tau))
@@ -134,16 +134,13 @@ is a fresh variable, then returns $\alpha$.
 > specialise (Qual p t)      = modifyContext (:< Constraint p) >> specialise t
 > specialise t               = return t
 
-> instantiate :: Type -> Contextual t (Type, [Predicate])
-> instantiate t = runWriterT (spec t)
->   where
->     spec :: Type -> ContextualWriter [Predicate] t Type
->     spec (TyApp f s)     = TyApp f <$> spec s
->     spec (Bind b x k t)  = do
->         beta <- lift $ fresh x (Hole ::: k)
->         spec (unbind beta t)
->     spec (Qual p t)      = tell [p] >> spec t
->     spec t               = return t
+> instantiate :: Type -> ContextualWriter [Predicate] t Type
+> instantiate (TyApp f s)     = TyApp f <$> instantiate s
+> instantiate (Bind b x k t)  = do
+>     beta <- fresh x (Hole ::: k)
+>     instantiate (unbind beta t)
+> instantiate (Qual p t)      = tell [p] >> instantiate t
+> instantiate t               = return t
 
 
 > solvePred :: Bool -> Predicate -> Contextual t Bool
@@ -199,30 +196,29 @@ is a fresh variable, then returns $\alpha$.
 
 
 > inferType :: ContextualWriter [Predicate] Term Type
-> inferType = lift getT >>= \ t -> case t of
+> inferType = getT >>= \ t -> case t of
 >     TmVar x -> do
->         (_ ::: sc) <- lift $ lookupTmVar x
->         (ty, cs) <- lift $ instantiate sc
->         tell cs
+>         sc  <- tyOf <$> lookupTmVar x
+>         ty  <- instantiate sc
 >         goUp ty F0
 >     TmCon c -> do
->         sc <- lift $ lookupTmCon c
->         (ty, cs) <- lift $ instantiate sc
->         tell cs
+>         sc  <- lookupTmCon c
+>         ty  <- instantiate sc
 >         goUp ty F0
->     TmApp f s -> lift goAppLeft >> inferType
+>     TmApp f s -> goAppLeft >> inferType
 >     Lam x t -> do
->         a <- lift $ fresh "a" (Hole ::: Set)
->         lift $ goLam (TyVar a)
+>         a <- fresh "a" (Hole ::: Set)
+>         goLam (TyVar a)
 >         inferType
->     t :? ty -> lift goAnnotLeft >> inferType
+>     t :? ty -> goAnnotLeft >> inferType
 
 
-> infer :: Tm String String -> Contextual () (Term ::: Type, [Predicate])
+> infer :: Tm String String -> ContextualWriter [Predicate] () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
->     t' <- scopeCheckTypes t
->     (ty, cs) <- withT t' $ runWriterT inferType
->     return (t' ::: ty, cs)
+>     t'  <- lift $ scopeCheckTypes t
+>     (ty, cs)  <- lift (withT t' $ runWriterT inferType)
+>     tell cs
+>     return (t' ::: ty)
 
 > scopeCheckTypes :: Tm String String -> Contextual () Term
 > scopeCheckTypes = traverseTypes (\ t -> tmOf <$> inferKind B0 t)
@@ -259,8 +255,8 @@ is a fresh variable, then returns $\alpha$.
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty     <- TyVar <$> fresh "sty" (Hole ::: Set)
->     (pattys, cs)  <- unzip <$> mapM (checkPat (s ::: sty)) pats
->     modifyContext (<><< map Constraint (concat cs))
+>     (pattys, cs)  <- runWriterT $ mapM (checkPat (s ::: sty)) pats
+>     modifyContext (<><< map Constraint cs)
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
@@ -269,11 +265,11 @@ is a fresh variable, then returns $\alpha$.
 >     modifyContext (:< Layer FunTop)
 >     sty ::: k <- inLocation ("in type " ++ show (prettyHigh st)) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
->     (pattys, cs) <- unzip <$> mapM (checkPat (s ::: sty)) pats
+>     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
->     modifyContext (<><< map Constraint (concat cs))
+>     modifyContext (<><< map Constraint cs)
 >     ty' <- simplifyTy <$> generalise ty
->     (ty'', cs') <- instantiate ty'
+>     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty
 >     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
 >         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
@@ -287,35 +283,34 @@ is a fresh variable, then returns $\alpha$.
 
 
 > checkPat :: String ::: Type -> Pat String String ->
->     Contextual () (Pattern ::: Type, [Predicate])
+>     ContextualWriter [Predicate] () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
->     (ps, btys, cs) <- checkPatTerms xs
+>     (ps, (btys, cs)) <- lift $ runWriterT $ checkPatTerms xs
+>     tell cs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
->     (t' ::: ty, cs') <- infer t
+>     t' ::: ty <- infer t
 >     let g' = Trivial -- nonsense
 >     let oty = foldr (-->) ty (map tyOf ps)
->     (sty', cs'') <- instantiate sty
->     unify oty sty'
->     return (Pat (fmap tmOf ps) g' t' ::: oty, cs ++ cs' ++ cs'')
+>     sty' <- instantiate sty
+>     lift $ unify oty sty'
+>     return $ Pat (fmap tmOf ps) g' t' ::: oty
 
-> checkPatTerms :: [PatTerm String String] ->
->     Contextual () ([PatternTerm ::: Type], [TmName ::: Type], [Predicate])
-> checkPatTerms [] = return ([], [], [])
-> checkPatTerms (pt : pts) = do
->     (pt', ptBinds, cs) <- checkPatTerm pt
->     (pts', ptsBinds, cs') <- checkPatTerms pts
->     return (pt' : pts', ptBinds ++ ptsBinds, cs ++ cs')
+> checkPatTerms = mapM checkPatTerm
 
 > checkPatTerm :: PatTerm String String ->
->     Contextual () (PatternTerm ::: Type, [TmName ::: Type], [Predicate])
+>     ContextualWriter ([TmName ::: Type], [Predicate]) () (PatternTerm ::: Type)
 > checkPatTerm (PatVar v) = do
 >     nm <- fresh ("_ty" ++ v) (Hole ::: Set)
->     return (PatVar v ::: TyVar nm, [v ::: TyVar nm], [])
+>     tell ([v ::: TyVar nm], [])
+>     return $ PatVar v ::: TyVar nm
 > checkPatTerm (PatCon c pts) = do
->     (ty, cs) <- instantiate =<< lookupTmCon c
+>     sc <- lookupTmCon c
+>     ty <- mapPatWriter $ instantiate sc
 >     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
->     (pts', ptsBinds, cs') <- checkPatTerms pts
+>     pts' <- checkPatTerms pts
 >     nm <- fresh "_s" (Hole ::: Set)
->     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
->     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds, cs ++ cs')
+>     lift $ unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
+>     return $ PatCon c (map tmOf pts') ::: TyVar nm
+>   where
+>     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
