@@ -6,7 +6,7 @@
 > import Parser
 > import PrettyPrinter
 > import Syntax
-> import TypeCheck
+> import ProgramCheck
 
 > test f = mapM_ (putStrLn . f)
 
