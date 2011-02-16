@@ -5,7 +5,7 @@ k        = \ x y -> x
 s x y z  = x z (y z)
 i        = s k k 
 app f s  = f s
-
+comp f g = \ x -> f (g x)
 
 -- Data types
 
@@ -38,11 +38,19 @@ vhead (VCons x xs) = x
 vtail :: forall (n :: Num) a. 0 <= n => Vec (n+1) a -> Vec n a
 vtail (VCons x xs) = xs
 
--- vtail2 :: forall (n :: Num) a. 0 <= n, 0 <= (n + 1) => Vec (n+2) a -> Vec n a
+vtail2 :: forall (n :: Num) a. 0 <= n, 0 <= (n + 1) => Vec (n+2) a -> Vec n a
 vtail2 (VCons x (VCons y xs)) = xs
 
--- twotails :: forall (n :: Num) a. 0 <= n => Vec (n+2) a -> Vec n a
--- twotails x = vtail (vtail x)
+vtail3 :: forall (n :: Num) a. 1 <= n => Vec n a -> Vec (n-1) a
+vtail3 (VCons x xs) = xs
+
+vtail4 :: forall (n :: Num) a. 1 <= n => Vec n a -> Vec (n-1) a
+vtail4 (VCons x xs) = xs
+
+twotails :: forall (n :: Num) a. 0 <= n, 0 <= (n+1) => Vec (n+2) a -> Vec n a
+twotails xs = vtail (vtail xs)
+
+thing = comp vtail vhead
 
 {-
 vappend :: forall (m n :: Num) a . 0 <= m, 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a

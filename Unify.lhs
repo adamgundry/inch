@@ -75,14 +75,6 @@
 >     alpha <? (a := d ::: k) = alpha <? a || alpha <? d
 
 
-Invariant: if a definition |a := Just d ::: KindNat| is in the
-context, then |d| must be of the form |TyNum n| for some |n|.
-
-> var :: Kind -> a -> Ty a
-> var KindNum  = TyNum . NumVar
-> var _        = TyVar
-
-
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- normaliseType t
 >                 u' <- normaliseType u

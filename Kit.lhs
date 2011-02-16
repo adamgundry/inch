@@ -2,6 +2,7 @@
 
 > module Kit where
 
+> import Control.Applicative
 > import Data.Foldable
 > import Data.Traversable
 > import Debug.Trace
@@ -55,3 +56,12 @@
 
 > mtrace :: Monad m => String -> m ()
 > mtrace s = trace s (return ()) >>= \ () -> return ()
+
+
+
+> newtype Id a = Id {unId :: a}
+>     deriving (Functor, Foldable, Traversable)
+
+> instance Applicative Id where
+>     pure = Id
+>     Id f <*> Id s = Id (f s)

@@ -28,6 +28,16 @@
 
 > type TermLayer = TmLayer TyName TmName
 
+> bindLayer :: (a -> Ty b) -> TmLayer a x -> TmLayer b x
+> bindLayer f (PatternTop (x ::: t) yts)  = PatternTop (x ::: (t >>= f)) $
+>                                            map (\ (y ::: t) -> y ::: (t >>= f)) yts
+> bindLayer f (AppLeft () tm)             = AppLeft () (bindTypes f tm)
+> bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: (ty >>= f)) ( )
+> bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: (ty >>= f)) ()
+> bindLayer f (AnnotLeft () ty)           = AnnotLeft () (ty >>= f)
+> bindLayer f FunTop                      = FunTop
+
+
 
 > type TyEnt a = a := TyDef a ::: Kind
 
@@ -145,6 +155,25 @@ Data constructors
 >         Nothing  -> missingTmCon x
 
 
+
+> normaliseContext :: Context -> Context
+> normaliseContext B0 = B0
+> normaliseContext (g :< A (a := Some t ::: k))  = normaliseContext g
+> normaliseContext (g :< a@(A _))                = normaliseContext g :< a
+> normaliseContext (g :< Constraint p)           =
+>     normaliseContext g :< Constraint (bindPred (toNum . seekTy g) p)
+> normaliseContext (g :< Func x ty) =
+>     normaliseContext g :< Func x (ty >>= seekTy g)
+> normaliseContext (g :< Layer l) =
+>     normaliseContext g :< Layer (bindLayer (seekTy g) l)
+
+
+
+> seekTy B0 a = error "seekTy: missing!"
+> seekTy (g :< A (b := d ::: k)) a | a == b = case d of
+>                                               Some t  -> t
+>                                               _       -> var k a
+> seekTy (g :< _) a = seekTy g a
 
 > normaliseType :: Type -> Contextual t Type
 > normaliseType t = do

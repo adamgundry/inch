@@ -30,3 +30,8 @@
 > trail :: Bwd a -> [a]
 > trail B0 = []
 > trail (xs :< x) = trail xs ++ [x]
+
+
+> (<><<) :: Bwd a -> [a] -> Bwd a
+> as <><< [] = as
+> as <><< (b:bs) = (as :< b) <><< bs

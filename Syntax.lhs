@@ -67,6 +67,13 @@
 > traverseTypes g (Lam x t) = Lam x <$> traverseTypes g t
 > traverseTypes g (t :? ty) = (:?) <$> traverseTypes g t <*> g ty
 
+> mapTypes :: (Ty a -> Ty b) -> Tm a x -> Tm b x
+> mapTypes f t = unId $ traverseTypes (Id . f) t
+
+> bindTypes :: (a -> Ty b) -> Tm a x -> Tm b x
+> bindTypes f = mapTypes (f =<<)
+
+
 
 
 > instance Bitraversable Tm where

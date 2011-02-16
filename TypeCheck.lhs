@@ -146,20 +146,20 @@ is a fresh variable, then returns $\alpha$.
 >     spec t               = return t
 
 
-> solvePred :: Predicate -> Contextual t ()
-> solvePred p = do
->     g <- getContext
->     -- mtrace $ "Solving " ++ show p ++ "\nin " ++ show g
+> solvePred :: Bool -> Predicate -> Contextual t Bool
+> solvePred try p = getContext >>= solvePredIn try p
+
+> solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
+> solvePredIn try p g = do
+>     -- mtrace $ "Solving " ++ show (bindPred (toNum . seekTy g) p) ++ "\nin " ++ show (normaliseContext g)
 >     m <- normalisePred p
 >     seekTruth g [] m
 >   where
->     seekTruth :: Context -> [NormalNum] -> NormalNum -> Contextual t ()
+>     seekTruth :: Context -> [NormalNum] -> NormalNum -> Contextual t Bool
 >     seekTruth B0 ns m = deduce m ns
 >     seekTruth (g :< Constraint q) ns m = do
 >         n <- normalisePred q
->         if n == m
->             then  return ()
->             else  seekTruth g (n:ns) m             
+>         seekTruth g (n:ns) m             
 >     seekTruth (g :< A (a := Some d ::: KindNum)) ns m = do
 >         dn <- typeToNum d
 >         seekTruth g (map (substNum a dn) ns) (substNum a dn m)
@@ -168,27 +168,33 @@ is a fresh variable, then returns $\alpha$.
 >         Nothing  -> seekTruth g ns m
 >     seekTruth (g :< _) ns m = seekTruth g ns m
 
->     deduce :: NormalNum -> [NormalNum] -> Contextual t ()
+>     deduce :: NormalNum -> [NormalNum] -> Contextual t Bool
 >     deduce m ns | Just k <- getConstant m =
->         if k >= 0  then  return ()
+>         if k >= 0  then  return True
 >                    else  fail $ "Impossible constraint 0 <= " ++ show k
->     deduce m ns | m `elem` ns = return ()
->                 | otherwise = fail $ "Could not solve constraint 0 <= " ++ show (prettyFst (simplifyNum $ reifyNum m))
+>     deduce m ns | m `elem` ns  = return True
+>                 | try          = return False
+>                 | otherwise    = fail $
+>       "Could not solve constraint 0 <= " ++ show (prettyFst (simplifyNum $ reifyNum m))
 
+> solvePreds try = mapM (solvePred try)
 
-> solvePreds = mapM solvePred
+> expandPred :: Predicate -> Contextual t Predicate
+> expandPred p = (\ g -> bindPred (toNum . seekTy g) p) <$> getContext
 
 > generalise :: Type -> Contextual t Type
 > generalise t = do
 >     g <- getContext
->     let (g', t') = help g t
+>     (g', t') <- help g t
 >     putContext g'
 >     return t'
 >   where
->     help (g :< Layer FunTop) t                  = (g, t)
+>     help (g :< Layer FunTop) t                  = return (g, t)
 >     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
 >     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
->     help (g :< Constraint p) t                  = help g (Qual p t)
+>     help (g :< Constraint p) t                  = do
+>         b <- solvePredIn True p g
+>         if b then help g t else help g (Qual p t)
 
 
 
@@ -212,12 +218,11 @@ is a fresh variable, then returns $\alpha$.
 >     t :? ty -> lift goAnnotLeft >> inferType
 
 
-> infer :: Tm String String -> Contextual () (Term ::: Type)
+> infer :: Tm String String -> Contextual () (Term ::: Type, [Predicate])
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t' <- scopeCheckTypes t
 >     (ty, cs) <- withT t' $ runWriterT inferType
->     solvePreds cs
->     return (t' ::: ty)
+>     return (t' ::: ty, cs)
 
 > scopeCheckTypes :: Tm String String -> Contextual () Term
 > scopeCheckTypes = traverseTypes (\ t -> tmOf <$> inferKind B0 t)
@@ -255,6 +260,7 @@ is a fresh variable, then returns $\alpha$.
 >     modifyContext (:< Layer FunTop)
 >     sty     <- TyVar <$> fresh "sty" (Hole ::: Set)
 >     (pattys, cs)  <- unzip <$> mapM (checkPat (s ::: sty)) pats
+>     modifyContext (<><< map Constraint (concat cs))
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
@@ -265,13 +271,14 @@ is a fresh variable, then returns $\alpha$.
 >     unless (k == Set) $ errKindNotSet k
 >     (pattys, cs) <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
->     ty' <- simplifyTy <$> generalise (foldr Qual ty $ concat cs)
+>     modifyContext (<><< map Constraint (concat cs))
+>     ty' <- simplifyTy <$> generalise ty
 >     (ty'', cs') <- instantiate ty'
 >     sty' <- specialise sty
 >     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
 >         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
 >             unify ty'' sty'
->     solvePreds cs'
+>     solvePreds False cs'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
@@ -285,12 +292,12 @@ is a fresh variable, then returns $\alpha$.
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
 >     (ps, btys, cs) <- checkPatTerms xs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
->     t' ::: ty <- infer t
+>     (t' ::: ty, cs') <- infer t
 >     let g' = Trivial -- nonsense
 >     let oty = foldr (-->) ty (map tyOf ps)
->     (sty', cs') <- instantiate sty
+>     (sty', cs'') <- instantiate sty
 >     unify oty sty'
->     return (Pat (fmap tmOf ps) g' t' ::: oty, cs)
+>     return (Pat (fmap tmOf ps) g' t' ::: oty, cs ++ cs' ++ cs'')
 
 > checkPatTerms :: [PatTerm String String] ->
 >     Contextual () ([PatternTerm ::: Type], [TmName ::: Type], [Predicate])

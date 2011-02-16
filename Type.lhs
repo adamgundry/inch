@@ -69,6 +69,13 @@
 > toNum (TyVar a)  = NumVar a
 > toNum d          = error $ "toNum: bad!"
 
+Invariant: if a definition |a := Just d ::: KindNat| is in the
+context, then |d| must be of the form |TyNum n| for some |n|.
+
+> var :: Kind -> a -> Ty a
+> var KindNum  = TyNum . NumVar
+> var _        = TyVar
+
 > simplifyTy :: Ty a -> Ty a
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)
 > simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
