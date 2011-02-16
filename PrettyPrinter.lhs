@@ -7,6 +7,7 @@
 > import Text.PrettyPrint.HughesPJ
 > import Data.Bifunctor
 
+> import TyNum
 > import Type
 > import BwdFwd hiding ((<+>))
 > import Syntax

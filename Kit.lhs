@@ -4,6 +4,15 @@
 
 > import Data.Foldable
 > import Data.Traversable
+> import Debug.Trace
+
+
+> type TyName           = (String, Int)
+> type TmName           = String
+> type TyConName        = String
+> type TmConName        = String
+
+
 
 > data S a where
 >     S :: a -> S a
@@ -42,3 +51,7 @@
 > tyOf :: a ::: b -> b
 > tyOf (_ ::: b) = b
 
+
+
+> mtrace :: Monad m => String -> m ()
+> mtrace s = trace s (return ()) >>= \ () -> return ()

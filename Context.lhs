@@ -5,11 +5,13 @@
 > import Control.Applicative
 > import Control.Monad.Error ()
 > import Control.Monad.State
+> import Control.Monad.Writer
 > import Data.Foldable
 > import Data.Monoid
 > import qualified Data.Map as Map
 
 > import BwdFwd
+> import TyNum
 > import Type
 > import Syntax
 > import Kit
@@ -62,7 +64,8 @@
 
 > initialState = St 0 () B0 Map.empty Map.empty
 
-> type Contextual t a = StateT (ZipState t) (Either ErrorData) a
+> type Contextual t a          = StateT (ZipState t) (Either ErrorData) a
+> type ContextualWriter w t a  = WriterT w (StateT (ZipState t) (Either ErrorData)) a
 
 
 Fresh names

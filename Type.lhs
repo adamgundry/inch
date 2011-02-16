@@ -7,16 +7,11 @@
 > import Data.Traversable
 
 > import Kit
+> import TyNum
 
 
-> type TyName           = (String, Int)
-> type TmName           = String
-> type TyConName        = String
-> type TmConName        = String
 
 > type Type             = Ty TyName
-> type TypeNum          = TyNum TyName
-> type Predicate        = Pred TyName
 
 
 
@@ -36,60 +31,7 @@
 
 
 
-> data TyNum a where
->     NumConst  :: Integer -> TyNum a
->     NumVar    :: a -> TyNum a
->     (:+:)     :: TyNum a -> TyNum a -> TyNum a
->     (:*:)     :: TyNum a -> TyNum a -> TyNum a
->     Neg       :: TyNum a -> TyNum a
->   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Monad TyNum where
->     return = NumVar
->     NumConst k  >>= f = NumConst k
->     NumVar a    >>= f = f a
->     m :+: n     >>= f = (m >>= f) :+: (n >>= f)
->     m :*: n     >>= f = (m >>= f) :*: (n >>= f)
->     Neg n       >>= f = Neg (n >>= f)
-
-> simplifyNum :: TyNum a -> TyNum a
-> simplifyNum (n :+: m) = case (simplifyNum n, simplifyNum m) of
->     (NumConst k,  NumConst l)  -> NumConst (k+l)
->     (NumConst 0,  m')          -> m'
->     (n',          NumConst 0)  -> n'
->     (n',          m')          -> n' :+: m'
-> simplifyNum (n :*: m) = case (simplifyNum n, simplifyNum m) of
->     (NumConst k,     NumConst l)     -> NumConst (k*l)
->     (NumConst 0,     m')             -> NumConst 0
->     (NumConst 1,     m')             -> m'
->     (NumConst (-1),  m')             -> Neg m'
->     (n',             NumConst 0)     -> NumConst 0
->     (n',             NumConst 1)     -> n'
->     (n',             NumConst (-1))  -> Neg n'
->     (n',             m')             -> n' :*: m'
-> simplifyNum (Neg n) = case simplifyNum n of
->     NumConst k  -> NumConst (-k)
->     n'          -> Neg n'
-> simplifyNum t = t
-
-> instance (Eq a, Show a) => Num (TyNum a) where
->     (+)          = (:+:)
->     (*)          = (:*:)
->     negate       = Neg
->     fromInteger  = NumConst
->     abs          = error "no abs"
->     signum       = error "no signum"
-
-
-> data Pred a where
->     (:<=:) :: TyNum a -> TyNum a -> Pred a
->   deriving (Eq, Show, Functor, Foldable, Traversable)
-
-> bindPred :: (a -> TyNum b) -> Pred a -> Pred b
-> bindPred g (n :<=: m)  = (n >>= g) :<=: (m >>= g)
-
-> simplifyPred :: Pred a -> Pred a
-> simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
 
 
 > data Binder where
@@ -155,3 +97,6 @@
 > targets (Bind b a k ty)           t = targets ty t
 > targets (Qual p ty)               t = targets ty t
 > targets _                         _ = False
+
+> numToType :: NormalNum -> Type
+> numToType  = TyNum . reifyNum

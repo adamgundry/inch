@@ -15,6 +15,7 @@
 >     ,  (*~)
 >     ,  pivot
 >     ,  substGExp
+>     ,  substNum
 >     ,  negateGExp
 >     ,  foldGExp
 >     ) where
@@ -85,7 +86,7 @@ constant, or the number of variables it contains.
 > isConstant _           = False
 
 > getConstant :: GExp () a -> Maybe Integer
-> getConstant (GExp [] [((), k)])  = Just k
+> getConstant (GExp [] ns)         = Just $ sum $ map snd ns
 > getConstant _                    = Nothing
 
 > numVariables :: GExp b a -> Int
@@ -154,6 +155,11 @@ The |substGExp| function substitutes a group expression for a variable
 > substGExp (alpha, n) d (GExp ws cs) =
 >     mapCoeffs (n *) d +~ (GExp (deleteIndex alpha ws) cs)
 
+
+> substNum ::  (Eq a, Eq b) => a -> GExp b a -> GExp b a -> GExp b a
+> substNum alpha d e = case lookupVariable alpha e of
+>     Just n   -> substGExp (alpha, n) d e
+>     Nothing  -> e
 
 
 > foldGExp :: (Integer -> a -> b -> b) -> (Integer -> b) -> GExp () a -> b

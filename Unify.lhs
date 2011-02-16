@@ -7,6 +7,7 @@
 > import Prelude hiding (any, mapM_)
 
 > import BwdFwd
+> import TyNum
 > import Type
 > import Syntax
 > import Context
@@ -96,9 +97,11 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >           (gamma == alpha, gamma == beta, d) of
 >           (True,   True,   _)  ->  restore                                 
 >           (True,   False,  Hole)      ->  replace ((alpha := Some (var k beta) ::: k) :> F0)
->           (True,   False,  Fixed)     ->  errUnifyFixed alpha (TyVar beta)
+>           (True,   False,  Fixed)     ->  solve beta ((alpha := Fixed ::: k) :> F0) (TyVar alpha)
+>                                       >>  replace F0
 >           (False,  True,   Hole)      ->  replace ((beta := Some (var k alpha) ::: k) :> F0)
->           (False,  True,   Fixed)     ->  errUnifyFixed beta (TyVar alpha)
+>           (False,  True,   Fixed)     ->  solve alpha ((beta := Fixed ::: k) :> F0) (TyVar beta)
+>                                       >>  replace F0
 
 >           (True,   False,  Some tau)  ->  unifyTypes (TyVar beta)   tau       >> restore   
 >           (False,  True,   Some tau)  ->  unifyTypes (TyVar alpha)  tau       >> restore   
@@ -111,6 +114,8 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
+
+> {-
 > unifyTypes (Bind b a k ty) tau = do
 >     nm <- fresh a (Hole ::: k)
 >     unifyTypes (unbind nm ty) tau
@@ -121,6 +126,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 
 > unifyTypes (Qual p t) tau = modifyContext (:< Constraint p) >> unifyTypes t tau
 > unifyTypes tau (Qual p t) = modifyContext (:< Constraint p) >> unifyTypes tau t
+> -}
 
 > unifyTypes (TyNum m)      (TyNum n)      = unifyNum m n
 > unifyTypes (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
@@ -129,6 +135,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > unifyTypes (TyVar alpha)  tau            =  startSolve alpha tau
 > unifyTypes tau            (TyVar alpha)  =  startSolve alpha tau
 > unifyTypes tau            upsilon = errCannotUnify tau upsilon
+
 
 
 > startSolve :: TyName -> Type -> Contextual t ()
@@ -167,41 +174,22 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >                                         >>  unifyTypes upsilon tau
 >                                         >>  restore
 >     (True,   False,  Fixed)         ->  errUnifyFixed alpha tau
->     (False,  True,   Hole)          ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
->                                         >>  replace F0   
 >     (False,  True,   Some upsilon)  ->  do
 >         (upsilon', xs) <- rigidHull upsilon
 >         solve alpha (constraintsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
 >         solveConstraints xs
 >         replace F0
+>     (False,  True,   _)             ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
+>                                         >>  replace F0   
 >     (False,  False,  _)             ->  solve alpha _Xi tau
 >                                         >>  restore
 
 
 
-
-> type NormNum a = GExp () a
-> type NormalNum = NormNum TyName
-
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (NumConst 0) n = unifyZero Nothing =<< normaliseNum n
-> unifyNum m n = unifyZero Nothing =<< normaliseNum (m - n)
+> unifyNum (NumConst 0) n = unifyZero F0 =<< normaliseNum n
+> unifyNum m n = unifyZero F0 =<< normaliseNum (m - n)
 
-> normaliseNum :: TypeNum -> Contextual t NormalNum
-> normaliseNum (NumConst k)  = return $ normalConst k
-> normaliseNum (NumVar a)    = return $ embedVar a
-> normaliseNum (m :+: n)     = (+~) <$> normaliseNum m <*> normaliseNum n
-> normaliseNum (m :*: n)     = do
->     m'  <- normaliseNum m
->     n'  <- normaliseNum n
->     case (getConstant m', getConstant n') of
->         (Just i,   Just j)   -> return $ normalConst (i * j)
->         (Just i,   Nothing)  -> return $ i *~ n'
->         (Nothing,  Just j)   -> return $ j *~ m'
->         (Nothing,  Nothing)  -> fail "Non-linear numeric expression"
-> normaliseNum (Neg n)       = negateGExp <$> normaliseNum n
-
-> normalConst k = mkGExp [] [((), k)]
 
 > typeToNum :: Type -> Contextual t NormalNum
 > typeToNum (TyNum n) = normaliseNum n
@@ -218,13 +206,7 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >     seek (g :< _) = seek g
 
 
-> numToType :: NormalNum -> Type
-> numToType  = TyNum . reifyNum
-
-> reifyNum :: NormalNum -> TypeNum
-> reifyNum = foldGExp (\ k n m -> NumConst k * NumVar n + m) NumConst
-
-> unifyZero :: Maybe TyName -> NormalNum -> Contextual t ()
+> unifyZero :: Suffix -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
 >   | isConstant e  = errCannotUnify (numToType e) (numToType (normalConst 0))
@@ -234,30 +216,27 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >         Nothing  -> unifyZero _Psi e >> restore
 >         Just n   -> case d of
 >             Some x   -> do
->                           modifyContext (<><| _Psi)
+>                           modifyContext (<>< _Psi)
 >                           x' <- typeToNum x
->                           unifyZero Nothing (substGExp (alpha, n) x' e)
+>                           unifyZero F0 (substGExp (alpha, n) x' e)
 >                           restore
->             Hole  | n `dividesCoeffs` e -> do
->                           modifyContext (<><| _Psi)
+>             Hole   | n `dividesCoeffs` e -> do
+>                           modifyContext (<>< _Psi)
 >                           replace $ (alpha := Some (numToType (pivot (alpha, n) e)) ::: KindNum) :> F0
->                      | (alpha, n) `notMaxCoeff` e -> do
->                           modifyContext (<><| _Psi)
+>                    | (alpha, n) `notMaxCoeff` e -> do
+>                           modifyContext (<>< _Psi)
 >                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
->                           unifyZero (Just beta) $ substGExp (alpha, n) p e
+>                           unifyZero ((beta := Hole ::: KindNum) :> F0) $ substGExp (alpha, n) p e
 >                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
->                      | numVariables e > 1 -> do
->                           demandNothing _Psi
->                           unifyZero (Just alpha) e
+>                    | numVariables e > 1 -> do
+>                           unifyZero ((alpha := Hole ::: KindNum) :> _Psi) e
 >                           replace F0
->                      | otherwise -> fail "No way!"
->             Fixed -> errUnifyNumFixed alpha (simplifyNum $ reifyNum e)
->   where
->     _Gamma <><| Nothing     = _Gamma
->     _Gamma <><| Just alpha  = _Gamma :< A (alpha := Hole ::: KindNum)
->
->     demandNothing Nothing   = return ()
->     demandNothing (Just _)  = error "demandNothing: invariants violated!"
+>                    | otherwise -> fail "No way!"
+>             Fixed  | numVariables e > 1 -> do
+>                           unifyZero ((alpha := Fixed ::: KindNum) :> _Psi) e
+>                           replace F0
+>                    | otherwise -> errUnifyNumFixed alpha $ reifyNum e
+
 
 
 We can insert a fresh variable into a unit thus:

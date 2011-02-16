@@ -1,4 +1,14 @@
 
+-- Combinators
+
+k        = \ x y -> x
+s x y z  = x z (y z)
+i        = s k k 
+app f s  = f s
+
+
+-- Data types
+
 data Bool where
   True :: Bool
   False :: Bool
@@ -13,25 +23,31 @@ data List :: * -> * where
 
 data Vec :: Num -> * -> * where
   VNil :: forall a. Vec 0 a
-  VCons :: forall (n :: Num) a . a -> Vec n a -> Vec (n+1) a
+  VCons :: forall (n :: Num) a . 0 <= n => a -> Vec n a -> Vec (n+1) a
 
 data UNat :: Num -> * where
   UZero :: UNat 0
   USuc :: forall (n :: Num). UNat n -> UNat (n+1)
 
 
+-- Vector kit
 
-vhead :: forall (n :: Num) a. Vec (n+1) a -> a
+vhead :: forall (n :: Num) a. 0 <= n => Vec (n+1) a -> a
 vhead (VCons x xs) = x
 
-vtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a
+vtail :: forall (n :: Num) a. 0 <= n => Vec (n+1) a -> Vec n a
 vtail (VCons x xs) = xs
 
+-- vtail2 :: forall (n :: Num) a. 0 <= n, 0 <= (n + 1) => Vec (n+2) a -> Vec n a
+vtail2 (VCons x (VCons y xs)) = xs
+
+-- twotails :: forall (n :: Num) a. 0 <= n => Vec (n+2) a -> Vec n a
+-- twotails x = vtail (vtail x)
+
 {-
-vappend :: forall (m n :: Num) a . Vec m a -> Vec n a -> Vec (m+n) a
+vappend :: forall (m n :: Num) a . 0 <= m, 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vappend VNil ys = ys
 vappend (VCons x xs) ys = VCons x (vappend xs ys)
-
 
 vrevapp :: forall (m n :: Num) a . Vec m a -> Vec n a -> Vec (m+n) a
 vrevapp VNil ys = ys
@@ -42,5 +58,10 @@ vec UZero    a = VNil
 vec (USuc m) a = VCons a (vec m a)
 -}
 
-wrong :: forall a. a
-wrong = vhead VNil
+
+one      = Suc Zero
+two      = Suc one
+three    = Suc two
+v123     = VCons one (VCons two (VCons three VNil))
+right    = vhead v123
+righter  = app vtail v123

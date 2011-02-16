@@ -12,6 +12,7 @@
 > import qualified Text.ParserCombinators.Parsec.IndentParser.Token as IT
 
 
+> import TyNum
 > import Type
 > import Syntax
 > import Orphans

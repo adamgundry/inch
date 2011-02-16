@@ -5,11 +5,14 @@
 > import Control.Applicative
 > import Control.Monad
 > import Control.Monad.State
+> import Control.Monad.Writer hiding (All)
 > import Data.List
 > import Data.Bitraversable
 
 > import BwdFwd
+> import TyNum
 > import Type
+> import Num
 > import Syntax
 > import Context
 > import Unify
@@ -80,32 +83,32 @@ The accumulator |acc| collects variable definitions that |tau| may depend
 on, and hence must be reinserted into the context once the new location
 is found.
 
-> goUp :: Type -> Suffix -> Contextual Term Type
+> goUp :: Type -> Suffix -> ContextualWriter [Predicate] Term Type
 > goUp tau _Xi = do
->     st@(St{tValue = t}) <- get
+>     st@(St{tValue = t}) <- lift get
 >     case context st of
 >       (es :< Layer l) ->
 >         case l of         
 >             AppLeft () a -> do
->                 put $ st {tValue = a,
+>                 lift $ put st{tValue = a,
 >                     context = es <>< _Xi :< Layer (AppRight (t ::: tau) ())}
 >                 inferType
 >             AppRight (f ::: sigma) () -> do
->                 put $ st {tValue = TmApp f t, context = es <>< _Xi}
->                 tau' <- matchAppTypes sigma tau
+>                 lift $ put st{tValue = TmApp f t, context = es <>< _Xi}
+>                 tau' <- lift $ matchAppTypes sigma tau
 >                 goUp tau' F0
 >             LamBody (x ::: sigma) () -> do
->                 put $ st {tValue = Lam x (bind x t), context = es}
+>                 lift $ put st{tValue = Lam x (bind x t), context = es}
 >                 goUp (sigma --> tau) _Xi
 >             AnnotLeft () ty -> do
->                 put $ st {tValue = t :? ty, context = es <>< _Xi}
->                 unify ty tau
+>                 lift $ put st{tValue = t :? ty, context = es <>< _Xi}
+>                 lift $ unify ty tau
 >                 goUp ty F0
 >             PatternTop _ _ -> do
->                 put $ st {context = es <>< _Xi}
+>                 lift $ put st{context = es <>< _Xi}
 >                 return tau
 >       (es :< A e) -> do
->           put $ st {context = es}
+>           lift $ put st{context = es}
 >           goUp tau (e :> _Xi)
 >       B0 -> error (  "Ran out of context when going up from " 
 >                      ++ (show t) ++ " : " ++ (show tau))
@@ -123,29 +126,97 @@ is a fresh variable, then returns $\alpha$.
 >     return $ TyVar alpha
 
 
-> specialise :: TypeDef -> Type -> Contextual t Type
-> specialise d (TyApp f s)     = TyApp f <$> specialise d s
-> specialise d (Bind b x k t)  = do
->     beta <- fresh x (d ::: k)
->     specialise d (unbind beta t)
-> specialise d t               = return t
+> specialise :: Type -> Contextual t Type
+> specialise (TyApp f s)     = TyApp f <$> specialise s
+> specialise (Bind b x k t)  = do
+>     beta <- fresh x (Fixed ::: k)
+>     specialise (unbind beta t)
+> specialise (Qual p t)      = modifyContext (:< Constraint p) >> specialise t
+> specialise t               = return t
 
-> inferType :: Contextual Term Type
-> inferType = getT >>= \ t -> case t of
->     TmVar x -> lookupTmVar x >>= specialise Hole . tyOf >>= flip goUp F0
->     TmCon c -> lookupTmCon c >>= specialise Hole >>= flip goUp F0
->     TmApp f s -> goAppLeft >> inferType
+> instantiate :: Type -> Contextual t (Type, [Predicate])
+> instantiate t = runWriterT (spec t)
+>   where
+>     spec :: Type -> ContextualWriter [Predicate] t Type
+>     spec (TyApp f s)     = TyApp f <$> spec s
+>     spec (Bind b x k t)  = do
+>         beta <- lift $ fresh x (Hole ::: k)
+>         spec (unbind beta t)
+>     spec (Qual p t)      = tell [p] >> spec t
+>     spec t               = return t
+
+
+> solvePred :: Predicate -> Contextual t ()
+> solvePred p = do
+>     g <- getContext
+>     -- mtrace $ "Solving " ++ show p ++ "\nin " ++ show g
+>     m <- normalisePred p
+>     seekTruth g [] m
+>   where
+>     seekTruth :: Context -> [NormalNum] -> NormalNum -> Contextual t ()
+>     seekTruth B0 ns m = deduce m ns
+>     seekTruth (g :< Constraint q) ns m = do
+>         n <- normalisePred q
+>         if n == m
+>             then  return ()
+>             else  seekTruth g (n:ns) m             
+>     seekTruth (g :< A (a := Some d ::: KindNum)) ns m = do
+>         dn <- typeToNum d
+>         seekTruth g (map (substNum a dn) ns) (substNum a dn m)
+>     seekTruth (g :< A (a := _ ::: KindNum)) ns m = case lookupVariable a m of
+>         Just _   -> deduce m ns
+>         Nothing  -> seekTruth g ns m
+>     seekTruth (g :< _) ns m = seekTruth g ns m
+
+>     deduce :: NormalNum -> [NormalNum] -> Contextual t ()
+>     deduce m ns | Just k <- getConstant m =
+>         if k >= 0  then  return ()
+>                    else  fail $ "Impossible constraint 0 <= " ++ show k
+>     deduce m ns | m `elem` ns = return ()
+>                 | otherwise = fail $ "Could not solve constraint 0 <= " ++ show (prettyFst (simplifyNum $ reifyNum m))
+
+
+> solvePreds = mapM solvePred
+
+> generalise :: Type -> Contextual t Type
+> generalise t = do
+>     g <- getContext
+>     let (g', t') = help g t
+>     putContext g'
+>     return t'
+>   where
+>     help (g :< Layer FunTop) t                  = (g, t)
+>     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
+>     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
+>     help (g :< Constraint p) t                  = help g (Qual p t)
+
+
+
+> inferType :: ContextualWriter [Predicate] Term Type
+> inferType = lift getT >>= \ t -> case t of
+>     TmVar x -> do
+>         (_ ::: sc) <- lift $ lookupTmVar x
+>         (ty, cs) <- lift $ instantiate sc
+>         tell cs
+>         goUp ty F0
+>     TmCon c -> do
+>         sc <- lift $ lookupTmCon c
+>         (ty, cs) <- lift $ instantiate sc
+>         tell cs
+>         goUp ty F0
+>     TmApp f s -> lift goAppLeft >> inferType
 >     Lam x t -> do
->         a <- fresh "a" (Hole ::: Set)
->         goLam (TyVar a)
+>         a <- lift $ fresh "a" (Hole ::: Set)
+>         lift $ goLam (TyVar a)
 >         inferType
->     t :? ty -> goAnnotLeft >> inferType
+>     t :? ty -> lift goAnnotLeft >> inferType
 
 
 > infer :: Tm String String -> Contextual () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t' <- scopeCheckTypes t
->     ty <- withT t' inferType
+>     (ty, cs) <- withT t' $ runWriterT inferType
+>     solvePreds cs
 >     return (t' ::: ty)
 
 > scopeCheckTypes :: Tm String String -> Contextual () Term
@@ -183,7 +254,7 @@ is a fresh variable, then returns $\alpha$.
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty     <- TyVar <$> fresh "sty" (Hole ::: Set)
->     pattys  <- mapM (checkPat (s ::: sty)) pats
+>     (pattys, cs)  <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
@@ -192,58 +263,52 @@ is a fresh variable, then returns $\alpha$.
 >     modifyContext (:< Layer FunTop)
 >     sty ::: k <- inLocation ("in type " ++ show (prettyHigh st)) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
->     pattys <- mapM (checkPat (s ::: sty)) pats
+>     (pattys, cs) <- unzip <$> mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
->     ty' <- simplifyTy <$> generalise ty
+>     ty' <- simplifyTy <$> generalise (foldr Qual ty $ concat cs)
+>     (ty'', cs') <- instantiate ty'
+>     sty' <- specialise sty
 >     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
 >         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
->             specialise Fixed sty >>= unify ty'
+>             unify ty'' sty'
+>     solvePreds cs'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
 
-> generalise :: Type -> Contextual () Type
-> generalise t = do
->     g <- getContext
->     let (g', t') = help g t
->     putContext g'
->     return t'
->   where
->     help (g :< Layer FunTop) t = (g, t)
->     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
->     help (g :< A (((a, n) := _ ::: k))) t    = help g (Bind All a k (bind (a, n) t))
->     help (g :< Constraint p) t = help g (Qual p t)
+
 
 > checkPat :: String ::: Type -> Pat String String ->
->     Contextual () (Pattern ::: Type)
+>     Contextual () (Pattern ::: Type, [Predicate])
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
->     (ps, btys) <- checkPatTerms xs
+>     (ps, btys, cs) <- checkPatTerms xs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
 >     t' ::: ty <- infer t
 >     let g' = Trivial -- nonsense
 >     let oty = foldr (-->) ty (map tyOf ps)
->     unify oty sty
->     return $ Pat (fmap tmOf ps) g' t' ::: oty
+>     (sty', cs') <- instantiate sty
+>     unify oty sty'
+>     return (Pat (fmap tmOf ps) g' t' ::: oty, cs)
 
 > checkPatTerms :: [PatTerm String String] ->
->     Contextual () ([PatternTerm ::: Type], [TmName ::: Type])
-> checkPatTerms [] = return ([], [])
+>     Contextual () ([PatternTerm ::: Type], [TmName ::: Type], [Predicate])
+> checkPatTerms [] = return ([], [], [])
 > checkPatTerms (pt : pts) = do
->     (pt', ptBinds) <- checkPatTerm pt
->     (pts', ptsBinds) <- checkPatTerms pts
->     return (pt' : pts', ptBinds ++ ptsBinds)
+>     (pt', ptBinds, cs) <- checkPatTerm pt
+>     (pts', ptsBinds, cs') <- checkPatTerms pts
+>     return (pt' : pts', ptBinds ++ ptsBinds, cs ++ cs')
 
 > checkPatTerm :: PatTerm String String ->
->     Contextual () (PatternTerm ::: Type, [TmName ::: Type])
+>     Contextual () (PatternTerm ::: Type, [TmName ::: Type], [Predicate])
 > checkPatTerm (PatVar v) = do
 >     nm <- fresh ("_ty" ++ v) (Hole ::: Set)
->     return (PatVar v ::: TyVar nm, [v ::: TyVar nm])
+>     return (PatVar v ::: TyVar nm, [v ::: TyVar nm], [])
 > checkPatTerm (PatCon c pts) = do
->     ty <- lookupTmCon c
+>     (ty, cs) <- instantiate =<< lookupTmCon c
 >     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
->     (pts', ptsBinds) <- checkPatTerms pts
+>     (pts', ptsBinds, cs') <- checkPatTerms pts
 >     nm <- fresh "_s" (Hole ::: Set)
 >     unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
->     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds)
+>     return (PatCon c (map tmOf pts') ::: TyVar nm, ptsBinds, cs ++ cs')
