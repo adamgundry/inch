@@ -8,26 +8,32 @@
 > import Syntax
 > import ProgramCheck
 
-> test f = mapM_ (putStrLn . f)
+> test :: (a -> Either String String)
+>             -> [a] -> Int -> Int -> String
+> test f [] yes no = "Passed " ++ show yes ++ " tests, failed " ++ show no ++ " tests."
+> test f (x:xs) yes no = case f x of
+>     Right s  -> "PASS: " ++ s ++ "\n" ++ test f xs (yes+1) no
+>     Left s   -> "FAIL: " ++ s ++ "\n" ++ test f xs yes (no+1)
+
+> runTest f xs yes no = putStrLn $ test f xs yes no
 
 
-> roundTrip :: String -> String
+> roundTrip :: String -> Either String String
 > roundTrip s = case I.parse program "roundTrip" s of
 >     Right prog  ->
 >         let s' = show $ prettyHigh prog in
 >         case I.parse program "roundTrip2" s' of
 >             Right prog'
->               | prog == prog'  ->
->                 "PASS:\n" ++ show (prettyHigh prog')
->               | otherwise      ->
->                 "FAIL: round trip mismatch:\n" ++ s ++ "\n" ++ s'
+>               | prog == prog'  -> Right $ show (prettyHigh prog')
+>               | otherwise      -> Left $ "Round trip mismatch:"
+>                     ++ "\n" ++ s ++ "\n" ++ s'
 >                     ++ "\n" ++ show (prettyHigh prog')
 >                     ++ "\n" ++ show prog ++ "\n" ++ show prog'
->             Left err ->
->                 "FAIL: round trip re-parse:\n" ++ s' ++ "\n" ++ show err
->     Left err -> "FAIL: initial parse:\n" ++ s ++ "\n" ++ show err
+>             Left err -> Left $ "Round trip re-parse:\n"
+>                                    ++ s' ++ "\n" ++ show err
+>     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> roundTripTest = test roundTrip roundTripTestData
+> roundTripTest = runTest roundTrip roundTripTestData 0 0
 
 > roundTripTestData = 
 >   "f = x" :
@@ -78,20 +84,24 @@
 
 
 
-> parseCheck :: (String, Bool) -> String
-> parseCheck (s, b) = (++ "\n") $ case I.parse program "parseCheck" s of
+> parseCheck :: (String, Bool) -> Either String String
+> parseCheck (s, b) = case I.parse program "parseCheck" s of
 >     Right p   -> case typeCheck p of
 >         Right (p', st)
->             | b      -> "PASS: accepted good program\n" ++ show (prettyProgram p')
->             | not b  -> "FAIL: accepted bad program\n" ++ show (prettyProgram p')
+>             | b      -> Right $ "Accepted good program:\n"
+>                                     ++ show (prettyProgram p') ++ "\n"
+>             | not b  -> Left $ "Accepted bad program:\n"
+>                                     ++ show (prettyProgram p') ++ "\n"
 >         Left err
->             | b      -> "FAIL: rejected good program:\n" ++ s ++ "\n" ++ show (prettyHigh err)
->             | not b  -> "PASS: rejected bad program:\n" ++ s ++ "\n" ++ show (prettyHigh err)
->     Left err  -> "FAIL: parse error:\n" ++ s ++ "\n" ++ show err
+>             | b      -> Left $ "Rejected good program:\n"
+>                             ++ s ++ "\n" ++ show (prettyHigh err) ++ "\n"
+>             | not b  -> Right $ "Rejected bad program:\n"
+>                             ++ s ++ "\n" ++ show (prettyHigh err) ++ "\n"
+>     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
 
 
-> parseCheckTest = test parseCheck parseCheckTestData
+> parseCheckTest = runTest parseCheck parseCheckTestData 0 0
 
 > parseCheckTestData = 
 >   ("f x = x", True) :
@@ -141,4 +151,4 @@
 
 > checkPrelude = do
 >     s <- readFile "Prelude.nhs"
->     putStrLn $ parseCheck (s, True)
+>     putStrLn $ test parseCheck [(s, True)] 0 0
