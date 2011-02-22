@@ -18,7 +18,11 @@
 > import Error
 
 
-> data TmLayer a x  =  PatternTop (x ::: Ty a) [x ::: Ty a]
+> data TmLayer a x  =  PatternTop  {  ptFun    :: x ::: Ty a
+>                                  ,  ptBinds  :: [x ::: Ty a]
+>                                  ,  ptPreds  :: [Pred a]
+>                                  ,  ptConstraints :: [Pred a]
+>                                  }
 >                   |  AppLeft () (Tm a x)
 >                   |  AppRight (Tm a x ::: Ty a) ()
 >                   |  LamBody (x ::: Ty a) ()
@@ -29,8 +33,11 @@
 > type TermLayer = TmLayer TyName TmName
 
 > bindLayer :: (a -> Ty b) -> TmLayer a x -> TmLayer b x
-> bindLayer f (PatternTop (x ::: t) yts)  = PatternTop (x ::: (t >>= f)) $
->                                            map (\ (y ::: t) -> y ::: (t >>= f)) yts
+> bindLayer f (PatternTop (x ::: t) yts ps cs) =
+>     PatternTop (x ::: (t >>= f))
+>         (map (\ (y ::: t) -> y ::: (t >>= f)) yts)
+>         (map (bindPred (toNum . f)) ps)
+>         (map (bindPred (toNum . f)) cs)
 > bindLayer f (AppLeft () tm)             = AppLeft () (bindTypes f tm)
 > bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: (ty >>= f)) ( )
 > bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: (ty >>= f)) ()

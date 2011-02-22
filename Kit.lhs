@@ -52,6 +52,9 @@
 > tyOf :: a ::: b -> b
 > tyOf (_ ::: b) = b
 
+> unzipAsc :: [(a ::: b)] -> ([a] ::: [b])
+> unzipAsc xs = map tmOf xs ::: map tyOf xs
+
 
 
 > mtrace :: Monad m => String -> m ()

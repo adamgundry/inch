@@ -110,9 +110,16 @@ Types
 >                <|>  (\ a -> ([a] , Set)) <$> tyVarName
 
 
-> predicates = (lePred `sepBy1` reservedOp ",") <* reservedOp "=>"
+> predicates = (predicate `sepBy1` reservedOp ",") <* reservedOp "=>"
 
-> lePred = (:<=:) <$> tyNumTerm <* reservedOp "<=" <*> tyNumTerm
+> predicate = do
+>     n   <- tyNumTerm
+>     op  <- lePred <|> eqPred
+>     m   <- tyNumTerm
+>     return $ op n m
+
+> lePred = reservedOp "<=" *> pure (:<=:)
+> eqPred = reservedOp "~" *> pure (:==:)
 
 
 

@@ -60,16 +60,16 @@
 
 > data Pred a where
 >     (:<=:) :: TyNum a -> TyNum a -> Pred a
+>     (:==:) :: TyNum a -> TyNum a -> Pred a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > bindPred :: (a -> TyNum b) -> Pred a -> Pred b
 > bindPred g (n :<=: m)  = (n >>= g) :<=: (m >>= g)
+> bindPred g (n :==: m)  = (n >>= g) :==: (m >>= g)
 
 > simplifyPred :: Pred a -> Pred a
 > simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
-
-> normalisePred :: (Applicative m, Monad m) => Predicate -> m NormalNum
-> normalisePred (m :<=: n) = normaliseNum (n :+: Neg m)
+> simplifyPred (m :==: n) = simplifyNum m :==: simplifyNum n
 
 
 > type NormNum a = GExp () a

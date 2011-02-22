@@ -79,8 +79,8 @@ location is found.
 >                 put st{tValue = t :? ty, context = es <>< _Xi}
 >                 lift $ unify ty tau
 >                 goUp ty F0
->             PatternTop _ _ -> do
->                 put st{context = es <>< _Xi}
+>             PatternTop _ _ _ _ -> do
+>                 put st{context = context st <>< _Xi}
 >                 return tau
 >       (es :< A e) -> do
 >           put st{context = es}
@@ -141,14 +141,17 @@ location is found.
 
 > solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
 > solvePredIn try p g = do
->     -- mtrace $ "Solving " ++ show (bindPred (toNum . seekTy g) p) ++ "\nin " ++ show (normaliseContext g)
->     m <- normalisePred p
->     seekTruth g [] m
+>     p' <- nicePred p
+>     mtrace $ "Solving " ++ show p' ++ "\nin " ++ show (expandContext g)
+>     case p of
+>         n :<=: m -> normaliseNum (m - n) >>= seekTruth g []
+>         n :==: m  | try        -> return False
+>                   | otherwise  -> unifyNum n m >> return True
 >   where
 >     seekTruth :: Context -> [NormalNum] -> NormalNum -> Contextual t Bool
 >     seekTruth B0 ns m = deduce m ns
->     seekTruth (g :< Constraint q) ns m = do
->         n <- normalisePred q
+>     seekTruth (g :< Constraint (i :<=: j)) ns m = do
+>         n <- normaliseNum $ j - i
 >         seekTruth g (n:ns) m             
 >     seekTruth (g :< A (a := Some d ::: KindNum)) ns m = do
 >         dn <- typeToNum d

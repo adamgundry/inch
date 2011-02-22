@@ -72,7 +72,7 @@
 >     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
 >         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
 >             unify ty'' sty'
->     solvePreds False cs'
+>     inLocation ("when solving predicates") $ solvePreds False cs'
 >     modifyContext (:< Func s ty')
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
@@ -84,31 +84,41 @@
 >     ContextualWriter [Predicate] () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
->     (ps, (btys, cs)) <- lift $ runWriterT $ checkPatTerms xs
->     tell cs
->     modifyContext (:< Layer (PatternTop (s ::: sty) btys))
->     t' ::: ty <- infer t
->     let g' = Trivial -- nonsense
->     let oty = foldr (-->) ty (map tyOf ps)
->     sty' <- instantiate sty
->     lift $ unify oty sty'
->     return $ Pat (fmap tmOf ps) g' t' ::: oty
+>     (xs', (bs, ps)) <- lift $ runWriterT $ checkPatTerms xs
+>     modifyContext (:< Layer (PatternTop (s ::: sty) bs ps []))
+>     t' ::: tty  <- infer t
+>     sty'        <- instantiate sty
+>     let  xtms ::: xtys  = unzipAsc xs'
+>          ty             = xtys /-> tty
+>     lift $ unify ty sty'
+>     cs <- lift extractPatConstraints
+>     mtrace $ "checkPat extracted constraints: " ++ show cs
+>     return $ Pat xtms Trivial t' ::: ty
 
-> checkPatTerms = mapM checkPatTerm
+> extractPatConstraints :: Contextual t [Predicate]
+> extractPatConstraints = getContext >>= flip help []
+>   where
+>     help (g :< Layer (PatternTop _ _ _ cs)) h = putContext (g <><< h) >> return cs
+>     help (g :< a) h = help g (a : h)
+
 
 > checkPatTerm :: PatTerm String String ->
 >     ContextualWriter ([TmName ::: Type], [Predicate]) () (PatternTerm ::: Type)
 > checkPatTerm (PatVar v) = do
->     nm <- fresh ("_ty" ++ v) (Hole ::: Set)
->     tell ([v ::: TyVar nm], [])
->     return $ PatVar v ::: TyVar nm
+>     vty <- TyVar <$> fresh ("_ty" ++ v) (Hole ::: Set)
+>     tell ([v ::: vty], [])
+>     return $ PatVar v ::: vty
 > checkPatTerm (PatCon c pts) = do
->     sc <- lookupTmCon c
->     ty <- mapPatWriter $ instantiate sc
->     unless (length pts == args ty) $ errConUnderapplied c (args ty) (length pts)
->     pts' <- checkPatTerms pts
->     nm <- fresh "_s" (Hole ::: Set)
->     lift $ unify ty $ foldr (-->) (TyVar nm) (map tyOf pts')
->     return $ PatCon c (map tmOf pts') ::: TyVar nm
+>     sc   <- lookupTmCon c
+>     cty  <- mapPatWriter $ instantiate sc
+>     unless (length pts == args cty) $
+>         errConUnderapplied c (args cty) (length pts)
+>     ptms ::: ptys  <- unzipAsc <$> checkPatTerms pts
+>     cod            <- TyVar <$> fresh "_cod" (Hole ::: Set)
+>     lift $ unify cty $ ptys /-> cod
+>     return $ PatCon c ptms ::: cod
 >   where
 >     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
+
+
+> checkPatTerms = mapM checkPatTerm

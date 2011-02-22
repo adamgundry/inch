@@ -36,9 +36,9 @@
 >             modifyContext (:< xD)
 >         B0 -> fail $ "onTop: ran out of context"
 
-> onTopNum ::  (TyEntry -> Contextual t Extension)
+> onTopNum ::  (Predicate, Contextual t ()) -> (TyEntry -> Contextual t Extension)
 >             -> Contextual t ()
-> onTopNum f = do
+> onTopNum (p, m) f = do
 >     _Gamma :< vD <- getContext
 >     putContext _Gamma
 >     case vD of
@@ -47,7 +47,9 @@
 >             case m of
 >                 Replace _Xi  -> modifyContext (<>< _Xi)
 >                 Restore      -> modifyContext (:< vD)
->         _ -> onTopNum f >> modifyContext (:< vD)
+>         Layer pt@(PatternTop _ _ _ _) ->
+>             modifyContext (:< Layer (pt{ptConstraints = p : ptConstraints pt})) >> m
+>         _ -> onTopNum (p, m) f >> modifyContext (:< vD)
 
 > restore :: Contextual t Extension
 > restore = return Restore
@@ -76,13 +78,13 @@
 
 
 > unify t u = unifyTypes t u `inLoc` (do
->                 t' <- normaliseType t
->                 u' <- normaliseType u
+>                 t' <- niceType t
+>                 u' <- niceType u
 >                 return $ "when unifying\n        " ++ show (prettyFst t')
 >                     ++ "\n    and\n        " ++ show (prettyFst u'))
 
 > unifyTypes :: Type -> Type -> Contextual t ()
-> -- unifyTypes _ s t | s == t = return ()
+> -- unifyTypes s t | s == t = return ()
 > unifyTypes Arr Arr = return ()
 > unifyTypes (TyVar alpha) (TyVar beta) = onTop $
 >   \ (gamma := d ::: k) -> case
@@ -202,7 +204,7 @@
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
 >   | isConstant e  = errCannotUnify (numToType e) (numToType (normalConst 0))
->   | otherwise     = onTopNum $
+>   | otherwise     = onTopNum (reifyNum e :==: NumConst 0, modifyContext (<>< _Psi)) $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
 >         Nothing  -> unifyZero _Psi e >> restore

@@ -48,6 +48,7 @@
 
 > checkPredKind :: Bwd (TyName ::: Kind) -> Pred String -> Contextual t Predicate
 > checkPredKind g (n :<=: m) = (:<=:) <$> checkNumKind g n <*> checkNumKind g m
+> checkPredKind g (n :==: m) = (:==:) <$> checkNumKind g n <*> checkNumKind g m
 
 
 > scopeCheckTypes :: Tm String String -> Contextual () Term

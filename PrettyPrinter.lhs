@@ -66,6 +66,8 @@
 > instance Pretty (Pred String) where
 >     pretty (n :<=: m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> text "<=" <+> pretty m ArgSize
+>     pretty (n :==: m) = wrapDoc AppSize $
+>         pretty n ArgSize <+> text "~" <+> pretty m ArgSize
 
 > instance Pretty (Ty String) where
 >     pretty (TyVar a)                = pretty a

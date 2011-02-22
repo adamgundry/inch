@@ -73,3 +73,13 @@ three    = Suc two
 v123     = VCons one (VCons two (VCons three VNil))
 right    = vhead v123
 righter  = app vtail v123
+
+
+
+data Vec2 :: Num -> * -> * where
+  VNil2   :: forall a (n :: Num) . n ~ 0 => Vec2 n a
+  VCons2  :: forall a (n m :: Num) . 0 <= n, m ~ (n+1) => a -> Vec2 n a -> Vec2 m a
+
+vid :: forall (n :: Num) a . Vec2 n a -> Vec2 n a
+vid VNil2 = VNil2
+-- vid (VCons2 x xs) = VCons2 x xs
