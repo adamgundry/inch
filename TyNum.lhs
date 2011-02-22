@@ -12,6 +12,10 @@
 > type TypeNum          = TyNum TyName
 > type Predicate        = Pred TyName
 
+> type STypeNum         = TyNum String
+> type SPredicate       = Pred String
+
+
 
 > data TyNum a where
 >     NumConst  :: Integer -> TyNum a

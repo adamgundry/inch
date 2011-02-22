@@ -64,7 +64,7 @@
 > instance FV TyName where
 >     (<?) = (==)
 
-> instance FV a => FV (Ty a) where
+> instance FV a => FV (Ty k a) where
 >     alpha <? t = any (alpha <?) t
 
 > instance FV a => FV (TyDef a) where
@@ -86,20 +86,22 @@
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
 > unifyTypes Arr Arr = return ()
-> unifyTypes (TyVar alpha) (TyVar beta) = onTop $
+> unifyTypes (TyVar KindNum alpha) (TyVar KindNum beta) = unifyNum (NumVar alpha) (NumVar beta)
+> unifyTypes (TyVar ka alpha) (TyVar kb beta) | ka /= kb   = fail "Kind mismatch in unify"
+>                                             | otherwise  = onTop $
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha, gamma == beta, d) of
 >           (True,   True,   _)  ->  restore                                 
 >           (True,   False,  Hole)      ->  replace ((alpha := Some (var k beta) ::: k) :> F0)
->           (True,   False,  Fixed)     ->  solve beta ((alpha := Fixed ::: k) :> F0) (TyVar alpha)
+>           (True,   False,  Fixed)     ->  solve beta ((alpha := Fixed ::: k) :> F0) (TyVar ka alpha)
 >                                       >>  replace F0
 >           (False,  True,   Hole)      ->  replace ((beta := Some (var k alpha) ::: k) :> F0)
->           (False,  True,   Fixed)     ->  solve alpha ((beta := Fixed ::: k) :> F0) (TyVar beta)
+>           (False,  True,   Fixed)     ->  solve alpha ((beta := Fixed ::: k) :> F0) (TyVar kb beta)
 >                                       >>  replace F0
 
->           (True,   False,  Some tau)  ->  unifyTypes (TyVar beta)   tau       >> restore   
->           (False,  True,   Some tau)  ->  unifyTypes (TyVar alpha)  tau       >> restore   
->           (False,  False,  _)         ->  unifyTypes (TyVar alpha)  (TyVar beta)  >> restore   
+>           (True,   False,  Some tau)  ->  unifyTypes (TyVar kb beta)   tau       >> restore   
+>           (False,  True,   Some tau)  ->  unifyTypes (TyVar ka alpha)  tau       >> restore   
+>           (False,  False,  _)         ->  unifyTypes (TyVar ka alpha)  (TyVar kb beta)  >> restore   
 
 > unifyTypes (TyCon c1) (TyCon c2)
 >     | c1 == c2   = return ()
@@ -122,13 +124,13 @@
 > unifyTypes tau (Qual p t) = modifyContext (:< Constraint p) >> unifyTypes tau t
 > -}
 
-> unifyTypes (TyNum m)      (TyNum n)      = unifyNum m n
-> unifyTypes (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
-> unifyTypes (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n
+> unifyTypes (TyNum m)      (TyNum n)              = unifyNum m n
+> unifyTypes (TyNum m)      (TyVar KindNum a)      = unifyNum m (NumVar a)
+> unifyTypes (TyVar KindNum a)      (TyNum n)      = unifyNum (NumVar a) n
 
-> unifyTypes (TyVar alpha)  tau            =  startSolve alpha tau
-> unifyTypes tau            (TyVar alpha)  =  startSolve alpha tau
-> unifyTypes tau            upsilon = errCannotUnify tau upsilon
+> unifyTypes (TyVar k alpha)  tau              =  startSolve alpha tau
+> unifyTypes tau              (TyVar k alpha)  =  startSolve alpha tau
+> unifyTypes tau              upsilon = errCannotUnify tau upsilon
 
 
 
@@ -140,7 +142,7 @@
 >     return ()
 
 > rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
-> rigidHull (TyVar a)              = return (TyVar a, F0)
+> rigidHull (TyVar k a)            = return (TyVar k a, F0)
 > rigidHull (TyCon c)              = return (TyCon c, F0)
 > rigidHull (TyApp f s)            = do  (f',      xs  )  <- rigidHull f
 >                                        (s',  ys  )  <- rigidHull s
@@ -186,8 +188,8 @@
 
 
 > typeToNum :: Type -> Contextual t NormalNum
-> typeToNum (TyNum n) = normaliseNum n
-> typeToNum (TyVar a) = lookupNormNumVar a
+> typeToNum (TyNum n)          = normaliseNum n
+> typeToNum (TyVar KindNum a)  = lookupNormNumVar a
 > typeToNum t = fail $ "Bad type in numeric constraint: " ++ show t
 
 > lookupNormNumVar :: TyName -> Contextual t NormalNum

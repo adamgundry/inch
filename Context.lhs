@@ -18,30 +18,30 @@
 > import Error
 
 
-> data TmLayer a x  =  PatternTop  {  ptFun    :: x ::: Ty a
->                                  ,  ptBinds  :: [x ::: Ty a]
+> data TmLayer a x  =  PatternTop  {  ptFun    :: x ::: Ty Kind a
+>                                  ,  ptBinds  :: [x ::: Ty Kind a]
 >                                  ,  ptPreds  :: [Pred a]
 >                                  ,  ptConstraints :: [Pred a]
 >                                  }
->                   |  AppLeft () (Tm a x)
->                   |  AppRight (Tm a x ::: Ty a) ()
->                   |  LamBody (x ::: Ty a) ()
->                   |  AnnotLeft () (Ty a)
+>                   |  AppLeft () (Tm Kind a x)
+>                   |  AppRight (Tm Kind a x ::: Ty Kind a) ()
+>                   |  LamBody (x ::: Ty Kind a) ()
+>                   |  AnnotLeft () (Ty Kind a)
 >                   |  FunTop
 >     deriving (Eq, Show)
 
 > type TermLayer = TmLayer TyName TmName
 
-> bindLayer :: (a -> Ty b) -> TmLayer a x -> TmLayer b x
+> bindLayer :: (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
 > bindLayer f (PatternTop (x ::: t) yts ps cs) =
->     PatternTop (x ::: (t >>= f))
->         (map (\ (y ::: t) -> y ::: (t >>= f)) yts)
->         (map (bindPred (toNum . f)) ps)
->         (map (bindPred (toNum . f)) cs)
+>     PatternTop (x ::: bindTy f t)
+>         (map (\ (y ::: t) -> y ::: bindTy f t) yts)
+>         (map (bindPred (toNum . f KindNum)) ps)
+>         (map (bindPred (toNum . f KindNum)) cs)
 > bindLayer f (AppLeft () tm)             = AppLeft () (bindTypes f tm)
-> bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: (ty >>= f)) ( )
-> bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: (ty >>= f)) ()
-> bindLayer f (AnnotLeft () ty)           = AnnotLeft () (ty >>= f)
+> bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: bindTy f ty) ()
+> bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: bindTy f ty) ()
+> bindLayer f (AnnotLeft () ty)           = AnnotLeft () (bindTy f ty)
 > bindLayer f FunTop                      = FunTop
 
 
@@ -50,14 +50,14 @@
 
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
->               |  Func   x (Ty a)
+>               |  Func   x (Ty Kind a)
 >               |  Constraint (Pred a)
 >   deriving Show
 
-> data TyDef a = Hole | Some (Ty a) | Fixed
+> data TyDef a = Hole | Some (Ty Kind a) | Fixed
 >   deriving (Show, Functor, Foldable)
 
-> defToMaybe :: TyDef a -> Maybe (Ty a)
+> defToMaybe :: TyDef a -> Maybe (Ty Kind a)
 > defToMaybe (Some t)  = Just t
 > defToMaybe _         = Nothing
 
@@ -97,6 +97,9 @@ Fresh names
 > fresh a d = do  beta <- freshName
 >                 modifyContext (:< A ((a, beta) := d))
 >                 return (a, beta)
+
+> unknownTyVar :: (Functor m, MonadState (ZipState t) m) => String ::: Kind -> m Type
+> unknownTyVar (s ::: k) = TyVar k <$> fresh s (Hole ::: k)
 
 
 T values
@@ -181,15 +184,15 @@ Data constructors
 > expandContext (g :< Constraint p)           =
 >     expandContext g :< Constraint (bindPred (toNum . seekTy g) p)
 > expandContext (g :< Func x ty) =
->     expandContext g :< Func x (ty >>= seekTy g)
+>     expandContext g :< Func x (bindTy (\ _ -> seekTy g) ty)
 > expandContext (g :< Layer l) =
->     expandContext g :< Layer (bindLayer (seekTy g) l)
+>     expandContext g :< Layer (bindLayer (\ _ -> seekTy g) l)
 
 > expandType :: Context -> Type -> Type
-> expandType g t = t >>= expandTyVar g
+> expandType g t = bindTy (expandTyVar g) t
 >   where
->     expandTyVar :: Context -> TyName -> Type
->     expandTyVar g a = maybe (TyVar a) (>>= expandTyVar g) $ defToMaybe $ seek g a
+>     expandTyVar :: Context -> Kind -> TyName -> Type
+>     expandTyVar g k a = maybe (TyVar k a) (bindTy (expandTyVar g)) $ defToMaybe $ seek g a
 
 >     seek B0 a = error "expandType: erk"
 >     seek (g :< A (b := d ::: _)) a | a == b = d

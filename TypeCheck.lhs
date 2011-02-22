@@ -70,8 +70,8 @@ location is found.
 >             AppRight (f ::: sigma) () -> do
 >                 put st{tValue = TmApp f t, context = es <>< _Xi}
 >                 alpha <- fresh "_t" (Hole ::: Set)
->                 lift $ unify sigma (tau --> TyVar alpha)
->                 goUp (TyVar alpha) F0
+>                 lift $ unify sigma (tau --> TyVar Set alpha)
+>                 goUp (TyVar Set alpha) F0
 >             LamBody (x ::: sigma) () -> do
 >                 put st{tValue = Lam x (bind x t), context = es}
 >                 goUp (sigma --> tau) _Xi
@@ -103,12 +103,12 @@ location is found.
 >     TmApp f s -> goAppLeft >> inferType
 >     Lam x t -> do
 >         a <- fresh "a" (Hole ::: Set)
->         goLam (TyVar a)
+>         goLam (TyVar Set a)
 >         inferType
 >     t :? ty -> goAnnotLeft >> inferType
 
 
-> infer :: Tm String String -> ContextualWriter [Predicate] () (Term ::: Type)
+> infer :: STerm -> ContextualWriter [Predicate] () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t'        <- lift $ scopeCheckTypes t
 >     (ty, cs)  <- lift (withT t' $ runWriterT inferType)
@@ -181,7 +181,7 @@ location is found.
 >     return t'
 >   where
 >     help (g :< Layer FunTop) t                  = return (g, t)
->     help (g :< A (((a, n) := Some d ::: k))) t  = help g (subst (a, n) d t)
+>     help (g :< A (((a, n) := Some d ::: k))) t  = help g (substTy (a, n) d t)
 >     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
 >     help (g :< Constraint p) t                  = do
 >         b <- solvePredIn True p g

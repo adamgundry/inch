@@ -13,15 +13,15 @@
 > import Type
 
 
-> data Tm a x where
->     TmVar  :: x -> Tm a x
->     TmCon  :: TmConName -> Tm a x
->     TmApp  :: Tm a x -> Tm a x -> Tm a x
->     Lam    :: String -> Tm a (S x) -> Tm a x
->     (:?)   :: Tm a x -> Ty a -> Tm a x
+> data Tm k a x where
+>     TmVar  :: x -> Tm k a x
+>     TmCon  :: TmConName -> Tm k a x
+>     TmApp  :: Tm k a x -> Tm k a x -> Tm k a x
+>     Lam    :: String -> Tm k a (S x) -> Tm k a x
+>     (:?)   :: Tm k a x -> Ty k a -> Tm k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Monad (Tm a) where
+> instance Monad (Tm k a) where
 >     return = TmVar
 >     TmVar x    >>= g = g x
 >     TmCon c    >>= g = TmCon c
@@ -30,22 +30,22 @@
 >     (t :? ty)  >>= g = (t >>= g) :? ty
 
 
-> data DataDecl a x where
->     DataDecl  :: TyConName -> Kind -> [TmConName ::: Ty a] -> DataDecl a x
+> data DataDecl k a x where
+>     DataDecl  :: TyConName -> Kind -> [TmConName ::: Ty k a] -> DataDecl k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 
-> data FunDecl a x where
->     FunDecl   :: x -> Maybe (Ty a) -> [Pat a x] -> FunDecl a x
+> data FunDecl k a x where
+>     FunDecl   :: x -> Maybe (Ty k a) -> [Pat k a x] -> FunDecl k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data Decl a x where
->     DD :: DataDecl a x  -> Decl a x
->     FD :: FunDecl a x   -> Decl a x
+> data Decl k a x where
+>     DD :: DataDecl k a x  -> Decl k a x
+>     FD :: FunDecl k a x   -> Decl k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data Pat a x where
->     Pat :: [PatTerm a x] -> Guard a x -> Tm a x -> Pat a x
+> data Pat k a x where
+>     Pat :: [PatTerm a x] -> Guard a x -> Tm k a x -> Pat k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data PatTerm a x where
@@ -60,73 +60,73 @@
 
 
 
-> traverseTypes :: Applicative f => (Ty a -> f (Ty b)) -> Tm a x -> f (Tm b x)
+> traverseTypes :: Applicative f => (Ty k a -> f (Ty l b)) -> Tm k a x -> f (Tm l b x)
 > traverseTypes g (TmVar x) = pure $ TmVar x
 > traverseTypes g (TmCon c) = pure $ TmCon c
 > traverseTypes g (TmApp f s) = TmApp <$> traverseTypes g f <*> traverseTypes g s
 > traverseTypes g (Lam x t) = Lam x <$> traverseTypes g t
 > traverseTypes g (t :? ty) = (:?) <$> traverseTypes g t <*> g ty
 
-> mapTypes :: (Ty a -> Ty b) -> Tm a x -> Tm b x
+> mapTypes :: (Ty k a -> Ty l b) -> Tm k a x -> Tm l b x
 > mapTypes f t = unId $ traverseTypes (Id . f) t
 
-> bindTypes :: (a -> Ty b) -> Tm a x -> Tm b x
-> bindTypes f = mapTypes (f =<<)
+> bindTypes :: (Kind -> a -> Ty Kind b) -> Tm Kind a x -> Tm Kind b x
+> bindTypes f = mapTypes (bindTy f)
 
 
 
 
-> instance Bitraversable Tm where
+> instance Bitraversable (Tm k) where
 >     bitraverse f g (TmVar x)    = TmVar <$> g x
 >     bitraverse f g (TmCon c)    = pure (TmCon c)
 >     bitraverse f g (TmApp t s)  = TmApp <$> bitraverse f g t <*> bitraverse f g s
 >     bitraverse f g (Lam x t)    = Lam x <$> bitraverse f (traverse g) t
 >     bitraverse f g (t :? ty)    = (:?) <$> bitraverse f g t <*> traverse f ty
 
-> instance Bifunctor Tm where
+> instance Bifunctor (Tm k) where
 >     bimap = bimapDefault
 
-> instance Bifoldable Tm where
+> instance Bifoldable (Tm k) where
 >     bifoldMap = bifoldMapDefault
 
-> instance Bitraversable DataDecl where
+> instance Bitraversable (DataDecl k) where
 >     bitraverse f g (DataDecl x k cs) =
 >         DataDecl x k <$> traverse (traverse (traverse f)) cs
 
-> instance Bifunctor DataDecl where
+> instance Bifunctor (DataDecl k) where
 >     bimap = bimapDefault
 
-> instance Bifoldable DataDecl where
+> instance Bifoldable (DataDecl k) where
 >     bifoldMap = bifoldMapDefault
 
-> instance Bitraversable FunDecl where
+> instance Bitraversable (FunDecl k) where
 >     bitraverse f g (FunDecl x mt ps) =
 >         FunDecl <$> g x <*> traverse (traverse f) mt <*> traverse (bitraverse f g) ps
 
-> instance Bifunctor FunDecl where
+> instance Bifunctor (FunDecl k) where
 >     bimap = bimapDefault
 
-> instance Bifoldable FunDecl where
+> instance Bifoldable (FunDecl k) where
 >     bifoldMap = bifoldMapDefault
 
-> instance Bitraversable Decl where
+> instance Bitraversable (Decl k) where
 >     bitraverse f g (DD d) = DD <$> bitraverse f g d
 >     bitraverse f g (FD d) = FD <$> bitraverse f g d
 
-> instance Bifunctor Decl where
+> instance Bifunctor (Decl k) where
 >     bimap = bimapDefault
 
-> instance Bifoldable Decl where
+> instance Bifoldable (Decl k) where
 >     bifoldMap = bifoldMapDefault
 
-> instance Bitraversable Pat where
+> instance Bitraversable (Pat k) where
 >     bitraverse f g (Pat pts r t) =
 >         Pat <$> traverse (bitraverse f g) pts <*> bitraverse f g r <*> bitraverse f g t
 
-> instance Bifunctor Pat where
+> instance Bifunctor (Pat k) where
 >     bimap = bimapDefault
 
-> instance Bifoldable Pat where
+> instance Bifoldable (Pat k) where
 >     bifoldMap = bifoldMapDefault
 
 > instance Bitraversable PatTerm where
@@ -149,19 +149,27 @@
 >     bifoldMap = bifoldMapDefault
 
 
-> type Prog a x         = [Decl a x]
-> type Con a            = TmConName ::: Ty a
+> type Prog k a x       = [Decl k a x]
+> type Con k a          = TmConName ::: Ty k a
 
-> type Term             = Tm TyName TmName
-> type Constructor      = Con TyName
-> type Pattern          = Pat TyName TmName
+> type Term             = Tm Kind TyName TmName
+> type Constructor      = Con Kind TyName
+> type Pattern          = Pat Kind TyName TmName
 > type PatternTerm      = PatTerm TyName TmName
-> type Declaration      = Decl TyName TmName
-> type DataDeclaration  = DataDecl TyName TmName
-> type FunDeclaration   = FunDecl TyName TmName
-> type Program          = Prog TyName TmName
+> type Declaration      = Decl Kind TyName TmName
+> type DataDeclaration  = DataDecl Kind TyName TmName
+> type FunDeclaration   = FunDecl Kind TyName TmName
+> type Program          = Prog Kind TyName TmName
 
+> type STerm             = Tm () String String
+> type SConstructor      = Con () String
+> type SPattern          = Pat () String String
+> type SPatternTerm      = PatTerm String String
+> type SDeclaration      = Decl () String String
+> type SDataDeclaration  = DataDecl () String String
+> type SFunDeclaration   = FunDecl () String String
+> type SProgram          = Prog () String String
 
-> patToTm :: PatTerm a x -> Tm a x
+> patToTm :: PatTerm a x -> Tm k a x
 > patToTm (PatVar a)     = TmVar a
 > patToTm (PatCon a ps)  = foldl1 TmApp (TmCon a : map patToTm ps)

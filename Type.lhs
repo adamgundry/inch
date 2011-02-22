@@ -1,5 +1,5 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
->              GADTs #-}
+>              GADTs, TypeOperators #-}
 
 > module Type where
 
@@ -11,8 +11,9 @@
 
 
 
-> type Type             = Ty TyName
+> type Type             = Ty Kind TyName
 
+> type SType            = Ty () String
 
 
 > data Kind where
@@ -41,52 +42,61 @@
 
 
 
-> data Ty a where
->     TyVar  :: a -> Ty a
->     TyCon  :: TyConName -> Ty a
->     TyApp  :: Ty a -> Ty a -> Ty a
->     Arr    :: Ty a
->     TyNum  :: TyNum a -> Ty a
->     Bind   :: Binder -> String -> Kind -> Ty (S a) -> Ty a
->     Qual   :: Pred a -> Ty a -> Ty a
+> data Ty k a where
+>     TyVar  :: k -> a -> Ty k a
+>     TyCon  :: TyConName -> Ty k a
+>     TyApp  :: Ty k a -> Ty k a -> Ty k a
+>     Arr    :: Ty k a
+>     TyNum  :: TyNum a -> Ty k a
+>     Bind   :: Binder -> String -> Kind -> Ty k (S a) -> Ty k a
+>     Qual   :: Pred a -> Ty k a -> Ty k a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> instance Monad Ty where
->     return = TyVar
->     TyVar a       >>= g = g a
->     TyCon c       >>= g = TyCon c
->     TyApp f s     >>= g = TyApp (f >>= g) (s >>= g) 
->     Arr           >>= g = Arr
->     TyNum n       >>= g = TyNum (n >>= (toNum . g))
->     Qual p t      >>= g = Qual (bindPred (toNum . g) p) (t >>= g)
->     Bind b x k t  >>= g = Bind b x k (t >>= wk g)
+> bindTy :: (Kind -> a -> Ty Kind b) -> Ty Kind a -> Ty Kind b
+> bindTy g (TyVar k a)     = g k a
+> bindTy g (TyCon c)       = TyCon c
+> bindTy g (TyApp f s)     = TyApp (bindTy g f) (bindTy g s)
+> bindTy g Arr             = Arr
+> bindTy g (TyNum n)       = TyNum (n >>= (toNum . g KindNum))
+> bindTy g (Qual p t)      = Qual (bindPred (toNum . g KindNum) p) (bindTy g t)
+> bindTy g (Bind b x k t)  = Bind b x k (bindTy (wkKind g) t)
+
+> substTy :: Eq a => a -> Ty Kind a -> Ty Kind a -> Ty Kind a
+> substTy a t = bindTy f
+>   where f k b  | a == b     = t
+>                | otherwise  = TyVar k b
+
+
+> wkKind :: (k -> a -> Ty k b) -> (k -> S a -> Ty k (S b))
+> wkKind g k Z      = TyVar k Z
+> wkKind g k (S a)  = fmap S (g k a)
 
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
 
-> (/->) :: Foldable f => f (Ty a) -> Ty a -> Ty a
+> (/->) :: Foldable f => f (Ty k a) -> Ty k a -> Ty k a
 > ts /-> t = Data.Foldable.foldr (-->) t ts
 
-> toNum :: Ty a -> TyNum a
-> toNum (TyNum n)  = n
-> toNum (TyVar a)  = NumVar a
-> toNum d          = error $ "toNum: bad!"
+> toNum :: Ty Kind a -> TyNum a
+> toNum (TyNum n)          = n
+> toNum (TyVar KindNum a)  = NumVar a
+> toNum d                  = error $ "toNum: bad!"
 
 Invariant: if a definition |a := Just d ::: KindNat| is in the
 context, then |d| must be of the form |TyNum n| for some |n|.
 
-> var :: Kind -> a -> Ty a
+> var :: Kind -> a -> Ty Kind a
 > var KindNum  = TyNum . NumVar
-> var _        = TyVar
+> var k        = TyVar k
 
-> simplifyTy :: Ty a -> Ty a
+> simplifyTy :: Ty k a -> Ty k a
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)
 > simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
 > simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
 > simplifyTy (Qual p t)      = Qual (simplifyPred p) (simplifyTy t)
 > simplifyTy t               = t
 
-> alphaConvert :: [(String, String)] -> Ty a -> Ty a
+> alphaConvert :: [(String, String)] -> Ty k a -> Ty k a
 > alphaConvert xys (TyApp f s) = TyApp (alphaConvert xys f)
 >                                      (alphaConvert xys s)
 > alphaConvert xys (Bind b a k t) = case lookup a xys of
@@ -94,13 +104,13 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 >     Nothing  -> Bind b a k (alphaConvert xys t)
 > alphaConvert xys t = t
 
-> args :: Ty a -> Int
+> args :: Ty k a -> Int
 > args (TyApp (TyApp Arr s) t) = succ $ args t
 > args (Bind b x k t) = args t
 > args (Qual p t) = args t
 > args _ = 0
 
-> targets :: Eq a => Ty a -> TyConName -> Bool
+> targets :: Eq a => Ty k a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
 > targets (TyApp f s)               t = targets f t

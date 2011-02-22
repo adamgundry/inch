@@ -26,21 +26,21 @@
 
 > typeCheck p = runStateT (checkProg p) initialState
 
-> checkProg :: Prog String String -> Contextual () Program
+> checkProg :: SProgram -> Contextual () Program
 > checkProg = mapM checkDecl 
 
-> checkDecl :: Decl String String -> Contextual () Declaration
+> checkDecl :: SDeclaration -> Contextual () Declaration
 > checkDecl (DD d) = DD <$> checkDataDecl d
 > checkDecl (FD f) = FD <$> checkFunDecl f
 >     
 
-> checkDataDecl :: DataDecl String String -> Contextual () DataDeclaration
+> checkDataDecl :: SDataDeclaration -> Contextual () DataDeclaration
 > checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
 >     unless (targetsSet k) $ errKindTarget k
 >     insertTyCon t k
 >     DataDecl t k <$> mapM (checkConstructor t) cs
 
-> checkConstructor :: TyConName -> Con String -> Contextual () Constructor
+> checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation ("in constructor " ++ c) $ do
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ errKindNotSet k
@@ -48,11 +48,11 @@
 >     insertTmCon c ty'
 >     return (c ::: ty')
 
-> checkFunDecl :: FunDecl String String -> Contextual () FunDeclaration
+> checkFunDecl :: SFunDeclaration -> Contextual () FunDeclaration
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty     <- TyVar <$> fresh "sty" (Hole ::: Set)
+>     sty           <- unknownTyVar $ "sty" ::: Set
 >     (pattys, cs)  <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     modifyContext (<><< map Constraint cs)
 >     ty'     <- simplifyTy <$> generalise sty
@@ -80,7 +80,7 @@
 
 
 
-> checkPat :: String ::: Type -> Pat String String ->
+> checkPat :: String ::: Type -> SPattern ->
 >     ContextualWriter [Predicate] () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
@@ -102,10 +102,10 @@
 >     help (g :< a) h = help g (a : h)
 
 
-> checkPatTerm :: PatTerm String String ->
+> checkPatTerm :: SPatternTerm ->
 >     ContextualWriter ([TmName ::: Type], [Predicate]) () (PatternTerm ::: Type)
 > checkPatTerm (PatVar v) = do
->     vty <- TyVar <$> fresh ("_ty" ++ v) (Hole ::: Set)
+>     vty <- unknownTyVar $ "_ty" ++ v ::: Set
 >     tell ([v ::: vty], [])
 >     return $ PatVar v ::: vty
 > checkPatTerm (PatCon c pts) = do
@@ -114,7 +114,7 @@
 >     unless (length pts == args cty) $
 >         errConUnderapplied c (args cty) (length pts)
 >     ptms ::: ptys  <- unzipAsc <$> checkPatTerms pts
->     cod            <- TyVar <$> fresh "_cod" (Hole ::: Set)
+>     cod            <- unknownTyVar $ "_cod" ::: Set
 >     lift $ unify cty $ ptys /-> cod
 >     return $ PatCon c ptms ::: cod
 >   where

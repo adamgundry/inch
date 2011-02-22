@@ -12,24 +12,24 @@
 > import Syntax
 > import PrettyPrinter
 
-> data Err a x where
->     MissingTyVar       :: String -> Err a x
->     MissingNumVar      :: String -> Err a x
->     MissingTyCon       :: String -> Err a x
->     MissingTmVar       :: String -> Err a x
->     MissingTmCon       :: String -> Err a x
->     KindTarget         :: Kind -> Err a x
->     KindNot            :: Kind -> String -> Err a x
->     KindMismatch       :: Ty a ::: Kind -> Kind -> Err a x
->     ConstructorTarget  :: Ty a -> Err a x
->     ConUnderapplied    :: TmConName -> Int -> Int -> Err a x
->     DuplicateTyCon     :: TyConName -> Err a x
->     DuplicateTmCon     :: TmConName -> Err a x
->     NonNumericVar      :: a -> Err a x
->     CannotUnify        :: Ty a -> Ty a -> Err a x
->     UnifyFixed         :: a -> Ty a -> Err a x
->     UnifyNumFixed      :: a -> TyNum a -> Err a x         
->     Fail               :: String -> Err a x
+> data Err k a x where
+>     MissingTyVar       :: String -> Err k a x
+>     MissingNumVar      :: String -> Err k a x
+>     MissingTyCon       :: String -> Err k a x
+>     MissingTmVar       :: String -> Err k a x
+>     MissingTmCon       :: String -> Err k a x
+>     KindTarget         :: k -> Err k a x
+>     KindNot            :: k -> String -> Err k a x
+>     KindMismatch       :: Ty k a ::: k -> k -> Err k a x
+>     ConstructorTarget  :: Ty k a -> Err k a x
+>     ConUnderapplied    :: TmConName -> Int -> Int -> Err k a x
+>     DuplicateTyCon     :: TyConName -> Err k a x
+>     DuplicateTmCon     :: TmConName -> Err k a x
+>     NonNumericVar      :: a -> Err k a x
+>     CannotUnify        :: Ty k a -> Ty k a -> Err k a x
+>     UnifyFixed         :: a -> Ty k a -> Err k a x
+>     UnifyNumFixed      :: a -> TyNum a -> Err k a x         
+>     Fail               :: String -> Err k a x
 
 > instance Pretty Error where
 >     pretty (MissingTyVar a)       _ = text $ "Missing type variable " ++ a
@@ -78,7 +78,7 @@
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
                             
 
-> type Error = Err TyName TmName
+> type Error = Err Kind TyName TmName
 > type ErrorData = (Error, [String])
 
 > instance E.Error ErrorData where

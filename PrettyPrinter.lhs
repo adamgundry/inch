@@ -69,8 +69,8 @@
 >     pretty (n :==: m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> text "~" <+> pretty m ArgSize
 
-> instance Pretty (Ty String) where
->     pretty (TyVar a)                = pretty a
+> instance Pretty (Ty k String) where
+>     pretty (TyVar k a)              = pretty a
 >     pretty (TyCon c)                = pretty c
 >     pretty (TyApp (TyApp Arr s) t)  = wrapDoc ArrSize $ 
 >         pretty s AppSize <+> text "->" <+> pretty t ArrSize
@@ -82,7 +82,7 @@
 >                                 alphaConvert [(a, a ++ "'")] (unbind a t)
 >     pretty (Qual p t) = prettyQual (B0 :< p) t
 
-> prettyBind :: Binder -> Bwd (String, Kind) -> Ty String -> Size -> Doc
+> prettyBind :: Binder -> Bwd (String, Kind) -> Ty k String -> Size -> Doc
 > prettyBind b bs (Bind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) $
 >     alphaConvert [(a, a ++ "'")] (unbind a t)
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
@@ -95,14 +95,14 @@
 >     prettyRun Set  d aks = d <+> prettyBits aks
 >     prettyRun l    d aks = parens (d <+> text "::" <+> prettyHigh l) <+> prettyBits aks
 
-> prettyQual :: Bwd (Pred String) -> Ty String -> Size -> Doc
+> prettyQual :: Bwd (Pred String) -> Ty k String -> Size -> Doc
 > prettyQual ps (Qual p t) = prettyQual (ps :< p) t
 > prettyQual ps t = wrapDoc ArrSize $
 >     prettyPreds (trail ps) <+> text "=>" <+> pretty t ArrSize
 >   where
 >     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
 
-> instance Pretty (Tm String String) where
+> instance Pretty (Tm k String String) where
 >     pretty (TmVar x)  = pretty x
 >     pretty (TmCon s)  = pretty s
 >     pretty (TmApp f s)   = wrapDoc AppSize $
@@ -111,30 +111,30 @@
 >     pretty (t :? ty)  = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
-> prettyLam :: Doc -> Tm String String -> Size -> Doc
+> prettyLam :: Doc -> Tm k String String -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) (unbind x t)
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
-> instance Pretty (Decl String String) where
+> instance Pretty (Decl k String String) where
 >     pretty (DD d) = pretty d 
 >     pretty (FD f) = pretty f
 
-> instance Pretty (DataDecl String String) where
+> instance Pretty (DataDecl k String String) where
 >     pretty (DataDecl n k cs) _ = hang (text "data" <+> prettyHigh n
 >         <+> (if k /= Set then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
 >             vcat (map prettyHigh cs)
 
-> instance Pretty (FunDecl String String) where
+> instance Pretty (FunDecl k String String) where
 >     pretty (FunDecl n Nothing ps) _ = vcat (map ((prettyHigh n <+>) . prettyHigh) ps)
 >     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyHigh n <+> text "::" <+> prettyHigh ty) : map ((prettyHigh n <+>) . prettyHigh) ps
 
 
-> instance Pretty (Con String) where
+> instance Pretty (Con k String) where
 >     pretty (s ::: ty) _ = prettyHigh s <+> text "::" <+> prettyHigh ty
 
-> instance Pretty (Pat String String) where
+> instance Pretty (Pat k String String) where
 >     pretty (Pat vs Trivial e) _ = hsep (map prettyLow vs) <+> text "="
 >                                       <+> prettyHigh e
 
@@ -143,5 +143,5 @@
 
 
 
-> instance Pretty (Prog String String) where
+> instance Pretty (Prog k String String) where
 >     pretty p _ = vcat (intersperse (text " ") $ map prettyHigh p)

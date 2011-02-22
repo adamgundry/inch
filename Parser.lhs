@@ -78,7 +78,7 @@ Types
 > tyExpArr   = tyBit `chainr1` tyArrow
 > tyArrow    = reservedOp "->" >> return (-->)
 > tyBit      = tyBob `chainl1` pure TyApp
-> tyBob      =    TyVar <$> tyVarName
+> tyBob      =    TyVar () <$> tyVarName
 >            <|>  TyCon <$> tyConName
 >            <|>  TyNum <$> try tyNumTerm
 >            <|>  parens (reservedOp "->" *> pure Arr <|> tyExp)

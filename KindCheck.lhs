@@ -18,8 +18,8 @@
 > import PrettyPrinter
 
 
-> inferKind :: Bwd (TyName ::: Kind) -> Ty String -> Contextual t (Type ::: Kind)
-> inferKind g (TyVar a)    = (\ (b ::: k) -> TyVar b ::: k) <$> lookupTyVar g a
+> inferKind :: Bwd (TyName ::: Kind) -> SType -> Contextual t (Type ::: Kind)
+> inferKind g (TyVar _ a)  = (\ (b ::: k) -> TyVar k b ::: k) <$> lookupTyVar g a
 > inferKind g (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
 > inferKind g (TyApp f s)  = do
 >     f' ::: k  <- inferKind g f
@@ -51,5 +51,5 @@
 > checkPredKind g (n :==: m) = (:==:) <$> checkNumKind g n <*> checkNumKind g m
 
 
-> scopeCheckTypes :: Tm String String -> Contextual () Term
+> scopeCheckTypes :: STerm -> Contextual () Term
 > scopeCheckTypes = traverseTypes (\ t -> tmOf <$> inferKind B0 t)
