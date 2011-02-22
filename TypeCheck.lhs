@@ -117,22 +117,23 @@ location is found.
 
 
 
+> inst :: TypeDef -> Type -> ContextualWriter [Predicate] t Type
+> inst d (TyApp f s)     = TyApp f <$> inst d s
+> inst d (Bind b x k t)  = do
+>     beta <- fresh x (d ::: k)
+>     inst d (unbind beta t)
+> inst d (Qual p t)      = tell [p] >> inst d t
+> inst d t               = return t
+
 
 > specialise :: Type -> Contextual t Type
-> specialise (TyApp f s)     = TyApp f <$> specialise s
-> specialise (Bind b x k t)  = do
->     beta <- fresh x (Fixed ::: k)
->     specialise (unbind beta t)
-> specialise (Qual p t)      = modifyContext (:< Constraint p) >> specialise t
-> specialise t               = return t
+> specialise t = do
+>     (ty, cs) <- runWriterT (inst Fixed t)
+>     modifyContext (<><< map Constraint cs)
+>     return ty
 
 > instantiate :: Type -> ContextualWriter [Predicate] t Type
-> instantiate (TyApp f s)     = TyApp f <$> instantiate s
-> instantiate (Bind b x k t)  = do
->     beta <- fresh x (Hole ::: k)
->     instantiate (unbind beta t)
-> instantiate (Qual p t)      = tell [p] >> instantiate t
-> instantiate t               = return t
+> instantiate = inst Hole
 
 
 > solvePred :: Bool -> Predicate -> Contextual t Bool
@@ -168,8 +169,6 @@ location is found.
 
 > solvePreds try = mapM (solvePred try)
 
-> expandPred :: Predicate -> Contextual t Predicate
-> expandPred p = (\ g -> bindPred (toNum . seekTy g) p) <$> getContext
 
 > generalise :: Type -> Contextual t Type
 > generalise t = do

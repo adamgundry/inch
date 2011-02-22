@@ -64,6 +64,9 @@
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
 
+> (/->) :: Foldable f => f (Ty a) -> Ty a -> Ty a
+> ts /-> t = Data.Foldable.foldr (-->) t ts
+
 > toNum :: Ty a -> TyNum a
 > toNum (TyNum n)  = n
 > toNum (TyVar a)  = NumVar a

@@ -160,38 +160,53 @@ Data constructors
 
 
 
-> normaliseContext :: Context -> Context
-> normaliseContext B0 = B0
-> normaliseContext (g :< A (a := Some t ::: k))  = normaliseContext g
-> normaliseContext (g :< a@(A _))                = normaliseContext g :< a
-> normaliseContext (g :< Constraint p)           =
->     normaliseContext g :< Constraint (bindPred (toNum . seekTy g) p)
-> normaliseContext (g :< Func x ty) =
->     normaliseContext g :< Func x (ty >>= seekTy g)
-> normaliseContext (g :< Layer l) =
->     normaliseContext g :< Layer (bindLayer (seekTy g) l)
-
-
-
 > seekTy B0 a = error "seekTy: missing!"
 > seekTy (g :< A (b := d ::: k)) a | a == b = case d of
 >                                               Some t  -> t
 >                                               _       -> var k a
 > seekTy (g :< _) a = seekTy g a
 
-> normaliseType :: Type -> Contextual t Type
-> normaliseType t = do
->     g <- getContext
->     return $ simplifyTy $ t >>= normalTyVar g
->   where
->     normalTyVar :: Context -> TyName -> Type
->     normalTyVar g a = maybe (TyVar a) (>>= normalTyVar g) $ defToMaybe $ seek g a
 
->     seek B0 a = error "normaliseType: erk"
+> expandContext :: Context -> Context
+> expandContext B0 = B0
+> expandContext (g :< A (a := Some t ::: k))  = expandContext g
+> expandContext (g :< a@(A _))                = expandContext g :< a
+> expandContext (g :< Constraint p)           =
+>     expandContext g :< Constraint (bindPred (toNum . seekTy g) p)
+> expandContext (g :< Func x ty) =
+>     expandContext g :< Func x (ty >>= seekTy g)
+> expandContext (g :< Layer l) =
+>     expandContext g :< Layer (bindLayer (seekTy g) l)
+
+> expandType :: Context -> Type -> Type
+> expandType g t = t >>= expandTyVar g
+>   where
+>     expandTyVar :: Context -> TyName -> Type
+>     expandTyVar g a = maybe (TyVar a) (>>= expandTyVar g) $ defToMaybe $ seek g a
+
+>     seek B0 a = error "expandType: erk"
 >     seek (g :< A (b := d ::: _)) a | a == b = d
 >     seek (g :< _) a = seek g a
 
+> expandNum :: Context -> TypeNum -> TypeNum
+> expandNum g n = n >>= expandNumVar g
+>   where
+>     expandNumVar :: Context -> TyName -> TypeNum
+>     expandNumVar g a = maybe (NumVar a) ((>>= expandNumVar g) . toNum) $ defToMaybe $ seek g a
 
+>     seek B0 a = error "expandPredicate: erk"
+>     seek (g :< A (b := d ::: KindNum)) a | a == b = d
+>     seek (g :< _) a = seek g a
+
+> expandPred :: Context -> Predicate -> Predicate
+> expandPred g (n :<=: m) = expandNum g n :<=: expandNum g m
+> expandPred g (n :==: m) = expandNum g n :==: expandNum g m
+
+> niceType :: Type -> Contextual t Type
+> niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext
+
+> nicePred :: Predicate -> Contextual t Predicate
+> nicePred p = (\ g -> simplifyPred (expandPred g p)) <$> getContext
 
 
 > lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
@@ -223,12 +238,13 @@ Data constructors
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = missingTmVar x
->     seek (g :< Func y ty)                         | x == y = return $ TmVar y ::: ty
->     seek (g :< Layer (LamBody (y ::: ty) ()))     | x == y = return $ TmVar y ::: ty
->     seek (g :< Layer (PatternTop (y ::: ty) bs))  | x == y = return $ TmVar y ::: ty
->                                                   | otherwise = case lookIn bs of
->                                                       Just tt  -> return tt
->                                                       Nothing  -> seek g
+>     seek (g :< Func y ty)                      | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (LamBody (y ::: ty) ()))  | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (PatternTop (y ::: ty) bs ps cs))
+>         | x == y = return $ TmVar y ::: ty
+>         | otherwise = case lookIn bs of
+>             Just tt  -> return tt
+>             Nothing  -> seek g
 >     seek (g :< _) = seek g
 >
 >     lookIn [] = Nothing
