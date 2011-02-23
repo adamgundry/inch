@@ -20,6 +20,7 @@
 > import Kit
 > import Error
 > import PrettyPrinter
+> import PrettyContext
 > import KindCheck
 > import TypeCheck
 
@@ -61,16 +62,17 @@
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty ::: k <- inLocation ("in type " ++ show (prettyHigh st)) $ inferKind B0 st
+>     sty ::: k <- inLocation ("in type " ++ render st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 >     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
 >     modifyContext (<><< map Constraint cs)
+>     getContext >>= mtrace . ("checkFunDecl context: " ++) . render
 >     ty' <- simplifyTy <$> generalise ty
 >     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty
->     inLocation ("when matching inferred type\n        " ++ show (prettyFst ty')
->         ++ "\n    against given type\n        " ++ show (prettyFst sty)) $
+>     inLocation ("when matching inferred type\n        " ++ render ty'
+>         ++ "\n    against given type\n        " ++ render sty) $
 >             unify ty'' sty'
 >     inLocation ("when solving predicates") $ solvePreds False cs'
 >     modifyContext (:< Func s ty')

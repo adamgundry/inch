@@ -80,8 +80,8 @@
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- niceType t
 >                 u' <- niceType u
->                 return $ "when unifying\n        " ++ show (prettyFst t')
->                     ++ "\n    and\n        " ++ show (prettyFst u'))
+>                 return $ "when unifying\n        " ++ show (prettyHigh t')
+>                     ++ "\n    and\n        " ++ show (prettyHigh u'))
 
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()

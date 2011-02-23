@@ -40,8 +40,8 @@
 >     pretty (KindTarget k)         _ = text "Kind" <+> prettyHigh k <+> text "doesn't target *"
 >     pretty (KindNot k s)          _ = text "Kind" <+> prettyHigh k <+> text "is not" <+> text s
 >     pretty (KindMismatch (t ::: k) l) _ = text "Kind" <+> prettyHigh k
->         <+> text "of" <+> prettyFst t <+> text "is not" <+> prettyHigh l
->     pretty (ConstructorTarget t)  _ = text "Type" <+> prettyFst t <+>
+>         <+> text "of" <+> prettyHigh t <+> text "is not" <+> prettyHigh l
+>     pretty (ConstructorTarget t)  _ = text "Type" <+> prettyHigh t <+>
 >                                           text "doesn't target data type"
 >     pretty (ConUnderapplied c n m)  _ = text $ "Constructor " ++ c ++ " should have "
 >         ++ show n ++ " arguments, but has been given " ++ show m
@@ -49,11 +49,11 @@
 >     pretty (DuplicateTmCon t) _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a) _ = text $ "Type variable " ++ fst a ++ " is not numeric"
 >     pretty (CannotUnify t u) _ = text "Cannot unify"
->         <+> prettyFst t <+> text "and" <+> prettyFst u
+>         <+> prettyHigh t <+> text "and" <+> prettyHigh u
 >     pretty (UnifyFixed a t) _ = text "Cannot unify fixed variable" <+> text (fst a) 
->         <+> text "with" <+> prettyFst t
+>         <+> text "with" <+> prettyHigh t
 >     pretty (UnifyNumFixed a n) _ = text "Cannot modify fixed variable"
->         <+> text (fst a) <+> text "to unify" <+> prettyFst n <+> text "with 0"
+>         <+> text (fst a) <+> text "to unify" <+> prettyHigh n <+> text "with 0"
 >     pretty (Fail s) _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
@@ -86,7 +86,7 @@
 >     strMsg s  = (Fail s, [])
 
 > instance Pretty ErrorData where
->     pretty (e, ss) _ = hang (prettyHigh e) 4 (vcat $ reverse $ map prettyHigh ss)
+>     pretty (e, ss) _ = hang (prettyHigh e) 4 (vcat $ reverse $ map text ss)
 
 
 

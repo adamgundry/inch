@@ -20,6 +20,7 @@
 > import Kit
 > import Error
 > import PrettyPrinter
+> import PrettyContext
 > import KindCheck
 
 
@@ -142,7 +143,7 @@ location is found.
 > solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
 > solvePredIn try p g = do
 >     p' <- nicePred p
->     mtrace $ "Solving " ++ show p' ++ "\nin " ++ show (expandContext g)
+>     mtrace $ "solvePredIn: solving " ++ render p' ++ " in " ++ render (expandContext g)
 >     case p of
 >         n :<=: m -> normaliseNum (m - n) >>= seekTruth g []
 >         n :==: m  | try        -> return False
@@ -168,7 +169,7 @@ location is found.
 >     deduce m ns | m `elem` ns  = return True
 >                 | try          = return False
 >                 | otherwise    = fail $
->       "Could not solve constraint 0 <= " ++ show (prettyFst (simplifyNum $ reifyNum m))
+>       "Could not solve constraint 0 <= " ++ render m
 
 > solvePreds try = mapM (solvePred try)
 
