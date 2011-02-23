@@ -23,7 +23,13 @@
 >     (:+:)     :: TyNum a -> TyNum a -> TyNum a
 >     (:*:)     :: TyNum a -> TyNum a -> TyNum a
 >     Neg       :: TyNum a -> TyNum a
->   deriving (Eq, Show, Functor, Foldable, Traversable)
+>   deriving (Show, Functor, Foldable, Traversable)
+
+> instance Ord a => Eq (TyNum a) where
+>     n == m = case (normaliseNum n, normaliseNum m) of
+>         (Just n',  Just m')  -> n' == m'
+>         (Nothing,  Nothing)  -> n == m
+>         _                    -> False
 
 > instance Monad TyNum where
 >     return = NumVar
@@ -38,6 +44,8 @@
 >     (NumConst k,  NumConst l)  -> NumConst (k+l)
 >     (NumConst 0,  m')          -> m'
 >     (n',          NumConst 0)  -> n'
+>     (n' :+: NumConst k, NumConst l) | k == -l    -> n'
+>                                     | otherwise  -> n' :+: NumConst (k+l)
 >     (n',          m')          -> n' :+: m'
 > simplifyNum (n :*: m) = case (simplifyNum n, simplifyNum m) of
 >     (NumConst k,     NumConst l)     -> NumConst (k*l)
@@ -53,7 +61,7 @@
 >     n'          -> Neg n'
 > simplifyNum t = t
 
-> instance (Eq a, Show a) => Num (TyNum a) where
+> instance (Ord a, Show a) => Num (TyNum a) where
 >     (+)          = (:+:)
 >     (*)          = (:*:)
 >     negate       = Neg
@@ -79,7 +87,7 @@
 > type NormNum a = GExp () a
 > type NormalNum = NormNum TyName
 
-> normaliseNum :: (Applicative m, Monad m) => TypeNum -> m NormalNum
+> normaliseNum :: (Ord a, Applicative m, Monad m) => TyNum a -> m (NormNum a)
 > normaliseNum (NumConst k)  = return $ normalConst k
 > normaliseNum (NumVar a)    = return $ embedVar a
 > normaliseNum (m :+: n)     = (+~) <$> normaliseNum m <*> normaliseNum n

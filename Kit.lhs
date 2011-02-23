@@ -18,7 +18,7 @@
 > data S a where
 >     S :: a -> S a
 >     Z :: S a
->   deriving (Eq, Show, Functor, Foldable, Traversable)
+>   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 > bind :: (Functor f, Eq a) => a -> f a -> f (S a)
 > bind x = fmap inS

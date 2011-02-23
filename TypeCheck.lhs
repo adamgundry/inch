@@ -143,7 +143,7 @@ location is found.
 > solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
 > solvePredIn try p g = do
 >     p' <- nicePred p
->     mtrace $ "solvePredIn: solving " ++ render p' ++ " in " ++ render (expandContext g)
+>     mtrace $ "solvePredIn: solving " ++ render p' ++ " in\n" ++ render (expandContext g)
 >     case p of
 >         n :<=: m -> normaliseNum (m - n) >>= seekTruth g []
 >         n :==: m  | try        -> return False

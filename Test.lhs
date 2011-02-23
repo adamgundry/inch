@@ -32,13 +32,13 @@
 > roundTrip :: String -> Either String String
 > roundTrip s = case I.parse program "roundTrip" s of
 >     Right prog  ->
->         let s' = show $ prettyHigh prog in
+>         let s' = show $ vcatPretty prog in
 >         case I.parse program "roundTrip2" s' of
 >             Right prog'
->               | prog == prog'  -> Right $ show (prettyHigh prog')
+>               | prog == prog'  -> Right $ show (vcatPretty prog')
 >               | otherwise      -> Left $ "Round trip mismatch:"
 >                     ++ "\n" ++ s ++ "\n" ++ s'
->                     ++ "\n" ++ show (prettyHigh prog')
+>                     ++ "\n" ++ show (vcatPretty prog')
 >                     ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err -> Left $ "Round trip re-parse:\n"
 >                                    ++ s' ++ "\n" ++ show err
@@ -147,7 +147,7 @@
 >   -- ("f :: forall b. (forall a. a) -> (b -> b)\nf x y = y", True) :
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nhead :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   ("data Vec :: Num -> * -> * where\n Nil :: forall a. Vec 0 a\n Cons :: forall a (m :: Num). a -> Vec m a -> Vec (m+1) a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
->   ("data Vec :: Num -> * -> * where\n Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n Cons :: forall a (m n :: Num). n ~ (m + 1) => a -> Vec m a -> Vec n a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   ("data Vec :: Num -> * -> * where\n Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n Cons :: forall a (m n :: Num). m <= 0, n ~ (m + 1) => a -> Vec m a -> Vec n a\nappend :: forall a (m n :: Num) . Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   ("data One where A :: Two -> One\ndata Two where B :: One -> Two", True) :
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :

@@ -87,7 +87,7 @@ Types
 > tyNum        = tyNumTerm `chainr1` tyPlusMinus
 > tyPlusMinus  = reservedOp "+" *> return (+) <|> specialOp "-" *> return (-)
 > tyNumTerm    =    NumVar <$> numVarName
->              <|>  NumConst <$> integer
+>              <|>  NumConst <$> try integer
 >              <|>  Neg <$> (specialOp "-" *> tyNumTerm)
 >              <|>  parens tyNum
 > 

@@ -67,8 +67,12 @@
 > instance PrettyVar a => Pretty (TyNum a) where
 >     pretty (NumConst k)  = const $ integer k
 >     pretty (NumVar a)    = const $ prettyVar a
+>     pretty (m :+: NumConst k) | k < 0 = wrapDoc AppSize $ 
+>         pretty m ArgSize <+> text "-" <+> integer (-k)
 >     pretty (m :+: Neg n) = wrapDoc AppSize $ 
 >         pretty m ArgSize <+> text "-" <+> pretty n ArgSize
+>     pretty (Neg m :+: n) = wrapDoc AppSize $ 
+>         pretty n ArgSize <+> text "-" <+> pretty m ArgSize
 >     pretty (m :+: n) = wrapDoc AppSize $ 
 >         pretty m ArgSize <+> text "+" <+> pretty n ArgSize
 >     pretty (m :*: n) = wrapDoc AppSize $ 
@@ -162,5 +166,7 @@
 > instance Pretty a => Pretty (Bwd a) where
 >     pretty bs _ = fsep $ punctuate (text ",") (map prettyHigh (trail bs))
 
-> instance Pretty a => Pretty [a] where
->     pretty xs _ = fsep $ punctuate (text ",") (map prettyHigh xs)
+
+
+> fsepPretty xs  = fsep . punctuate (text ",") . map prettyHigh $ xs
+> vcatPretty xs  = vcat . intersperse (text " ") . map prettyHigh $ xs
