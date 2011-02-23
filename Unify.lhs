@@ -3,6 +3,7 @@
 > module Unify where
 
 > import Control.Applicative
+> import Control.Monad hiding (mapM_)
 > import Data.Foldable 
 > import Prelude hiding (any, mapM_)
 
@@ -16,6 +17,7 @@
 > import Kit
 > import Error
 > import PrettyPrinter
+> import PrettyContext
 
 > data Extension = Restore | Replace Suffix
 
@@ -26,30 +28,31 @@
 >     case c of
 >         _Gamma :< A alphaD -> do
 >             putContext _Gamma
->             m <- f alphaD
->             case m of
->                 Replace _Xi  -> modifyContext (<>< _Xi)
->                 Restore      -> modifyContext (:< A alphaD)
+>             ext (A alphaD) =<< f alphaD
 >         _Gamma :< xD -> do
 >             putContext _Gamma
 >             onTop f
 >             modifyContext (:< xD)
 >         B0 -> fail $ "onTop: ran out of context"
 
-> onTopNum ::  (Predicate, Contextual t ()) -> (TyEntry -> Contextual t Extension)
->             -> Contextual t ()
-> onTopNum (p, m) f = do
->     _Gamma :< vD <- getContext
->     putContext _Gamma
->     case vD of
->         A (a := d ::: KindNum) -> do
->             m <- f (a := d ::: KindNum)
->             case m of
->                 Replace _Xi  -> modifyContext (<>< _Xi)
->                 Restore      -> modifyContext (:< vD)
->         Layer pt@(PatternTop _ _ _ _) ->
->             modifyContext (:< Layer (pt{ptConstraints = p : ptConstraints pt})) >> m
->         _ -> onTopNum (p, m) f >> modifyContext (:< vD)
+> onTopNum ::  (Predicate, Contextual t ()) ->
+>                  (Predicate -> Contextual t ()) ->
+>                  (TyEntry -> Contextual t Extension) ->
+>                  Contextual t ()
+> onTopNum (p, m) h f = do
+>   g <- getContext
+>   case g of
+>     _Gamma :< xD -> do  
+>       putContext _Gamma
+>       case xD of
+>         A (a := d ::: KindNum) -> ext xD =<< f (a := d ::: KindNum)
+>         Layer pt@(PatternTop _ _ _ cs) -> do
+>             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
+>             m
+>         Constraint c -> h c >> modifyContext (:< xD)
+>         _ -> onTopNum (p, m) h f >> modifyContext (:< xD)
+>     B0 -> inLocation ("when solving " ++ render p) $
+>               fail $ "onTopNum: ran out of context"
 
 > restore :: Contextual t Extension
 > restore = return Restore
@@ -57,6 +60,9 @@
 > replace :: Suffix -> Contextual t Extension
 > replace = return . Replace
 
+> ext :: Entry -> Extension -> Contextual t ()
+> ext xD (Replace _Xi)  = modifyContext (<>< _Xi)
+> ext xD Restore        = modifyContext (:< xD)
 
 > class FV a where
 >     (<?) :: TyName -> a -> Bool
@@ -206,7 +212,9 @@
 > unifyZero _Psi e
 >   | isIdentity e  = return ()
 >   | isConstant e  = errCannotUnify (numToType e) (numToType (normalConst 0))
->   | otherwise     = onTopNum (reifyNum e :==: NumConst 0, modifyContext (<>< _Psi)) $
+>   | otherwise     = onTopNum
+>     (reifyNum e :==: NumConst 0, modifyContext (<>< _Psi))
+>     (\ p -> unifyZero _Psi =<< rewriteNumBy e p) $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
 >         Nothing  -> unifyZero _Psi e >> restore
@@ -224,14 +232,24 @@
 >                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
 >                           unifyZero ((beta := Hole ::: KindNum) :> F0) $ substGExp (alpha, n) p e
 >                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
->                    | numVariables e > 1 -> do
+>                    | numVariables e > fwdLength _Psi + 1 -> do
 >                           unifyZero ((alpha := Hole ::: KindNum) :> _Psi) e
 >                           replace F0
 >                    | otherwise -> fail "No way!"
->             Fixed  | numVariables e > 1 -> do
+>             Fixed  | numVariables e > fwdLength _Psi + 1 -> do
 >                           unifyZero ((alpha := Fixed ::: KindNum) :> _Psi) e
 >                           replace F0
 >                    | otherwise -> errUnifyNumFixed alpha $ reifyNum e
+
+
+> rewriteNumBy :: NormalNum -> Predicate -> Contextual t NormalNum
+> rewriteNumBy e (NumVar a :==: n) = do
+>     i <- normaliseNum n
+>     return $ substNum a i e
+> rewriteNumBy e (n :==: NumVar a) = do
+>     i <- normaliseNum n
+>     return $ substNum a i e
+> rewriteNumBy e p = return e
 
 
 

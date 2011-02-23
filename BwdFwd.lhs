@@ -35,3 +35,9 @@
 > (<><<) :: Bwd a -> [a] -> Bwd a
 > as <><< [] = as
 > as <><< (b:bs) = (as :< b) <><< bs
+
+> fwdLength :: Fwd a -> Int
+> fwdLength = help 0
+>   where
+>     help i F0 = i
+>     help i (_ :> fs) = help (i+1) fs

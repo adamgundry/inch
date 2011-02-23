@@ -142,8 +142,7 @@ location is found.
 
 > solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
 > solvePredIn try p g = do
->     p' <- nicePred p
->     mtrace $ "solvePredIn: solving " ++ render p' ++ " in\n" ++ render (expandContext g)
+>     mtrace $ "solvePredIn: solving " ++ render p ++ " in\n" ++ render g
 >     case p of
 >         n :<=: m -> normaliseNum (m - n) >>= seekTruth g []
 >         n :==: m  | try        -> return False
@@ -181,7 +180,7 @@ location is found.
 >     putContext g'
 >     return t'
 >   where
->     help (g :< Layer FunTop) t                  = return (g, t)
+>     help g@(_ :< Layer _) t                       = return (g, t)
 >     help (g :< A (((a, n) := Some d ::: k))) t  = help g (substTy (a, n) d t)
 >     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
 >     help (g :< Constraint p) t                  = do

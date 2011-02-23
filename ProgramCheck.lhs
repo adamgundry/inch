@@ -57,7 +57,7 @@
 >     (pattys, cs)  <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     modifyContext (<><< map Constraint cs)
 >     ty'     <- simplifyTy <$> generalise sty
->     modifyContext (:< Func s ty')
+>     modifyContext $ (:< Func s ty') . dropToDecl
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
@@ -67,7 +67,7 @@
 >     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
 >     modifyContext (<><< map Constraint cs)
->     getContext >>= mtrace . ("checkFunDecl context: " ++) . render
+>     mtrace . ("checkFunDecl context: " ++) . render =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
 >     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty
@@ -75,11 +75,15 @@
 >         ++ "\n    against given type\n        " ++ render sty) $
 >             unify ty'' sty'
 >     inLocation ("when solving predicates") $ solvePreds False cs'
->     modifyContext (:< Func s ty')
+>     modifyContext $ (:< Func s ty') . dropToDecl
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
 
+
+> dropToDecl :: Context -> Context
+> dropToDecl (g :< Layer FunTop)  = g
+> dropToDecl (g :< e)             = dropToDecl g
 
 
 > checkPat :: String ::: Type -> SPattern ->
