@@ -69,8 +69,10 @@
 >     modifyContext (<><< map Constraint cs)
 >     mtrace . ("checkFunDecl context: " ++) . render =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
+>     mtrace $ "checkFunDecl ty': " ++ render ty'
 >     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty
+>     mtrace . ("checkFunDecl pre-match: " ++) . render =<< getContext
 >     inLocation ("when matching inferred type\n        " ++ render ty'
 >         ++ "\n    against given type\n        " ++ render sty) $
 >             unify ty'' sty'
@@ -92,13 +94,15 @@
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
 >     (xs', (bs, ps)) <- lift $ runWriterT $ checkPatTerms xs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) bs ps []))
->     t' ::: tty  <- infer t
->     sty'        <- instantiate sty
+>     (t' ::: tty, cs)  <- lift $ runWriterT $ infer t
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> tty
+>     sty'        <- instantiate sty
 >     lift $ unify ty sty'
->     cs <- lift extractPatConstraints
->     mtrace $ "checkPat extracted constraints: " ++ show cs
+>     cs' <- lift extractPatConstraints
+>     mtrace . ("checkPat context: " ++) . show . prettyHigh =<< getContext
+>     mtrace $ "checkPat given: " ++ show (fsepPretty ps)
+>     mtrace $ "checkPat wanted: " ++ show (fsepPretty (cs ++ cs'))
 >     return $ Pat xtms Trivial t' ::: ty
 
 > extractPatConstraints :: Contextual t [Predicate]
