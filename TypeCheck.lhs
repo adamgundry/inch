@@ -163,13 +163,13 @@ location is found.
 >     seekTruth hs p (g :< _) = seekTruth hs p g
 
 >     findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
->     findRewrite a hs = listToMaybe $ concatMap (toRewrite a) hs
+>     findRewrite a hs = join $ listToMaybe $ map (toRewrite a) hs
 
->     toRewrite :: TyName -> NormalPredicate -> [NormalNum]
+>     toRewrite :: TyName -> NormalPredicate -> Maybe NormalNum
 >     toRewrite a (IsZero n) = case lookupVariable a n of
->         Just i | i `dividesCoeffs` n  -> [pivot (a, i) n]
->         _                             -> []
->     toRewrite a (IsPos _) = []
+>         Just i | i `dividesCoeffs` n  -> Just $ pivot (a, i) n
+>         _                             -> Nothing
+>     toRewrite a (IsPos _) = Nothing
 
 >     deduce :: [NormalPredicate] -> NormalPredicate -> Contextual t (Maybe NormalPredicate)
 >     deduce hs (IsZero n)  | isZero n                 = return Nothing
@@ -183,33 +183,19 @@ location is found.
 >         fail $ "Could not deduce " ++ render p ++ " from [" ++ show (fsepPretty hs)
 >                                              ++ "] in context\n" ++ render g
 
-> {-
->     deduce ns m | Just k <- getConstant m =
->         if k >= 0  then  return True
->                    else  fail $ "Impossible constraint 0 <= " ++ show k
->     deduce ns m | m `elem` ns  = return True
->                 | try          = return False
->                 | otherwise    = fail $
->       "Could not solve constraint 0 <= " ++ render m
-> -}
-
 > solvePreds :: Bool -> [NormalPredicate] -> [NormalPredicate] ->
 >                   Contextual t [Maybe NormalPredicate]
 > solvePreds try hyps = mapM (solvePred try hyps)
 
 
-> generalise :: Type -> Contextual t Type
-> generalise t = do
+> generalise :: [NormalPredicate] -> Type -> Contextual t Type
+> generalise ps t = do
+>     ps' <- map reifyPred . catMaybes <$> solvePreds True [] ps
 >     g <- getContext
->     (g', t') <- help g t
+>     (g', t') <- help g (ps' /=> t)
 >     putContext g'
 >     return t'
 >   where
->     help g@(_ :< Layer _) t                       = return (g, t)
->     help (g :< A (((a, n) := Some d ::: k))) t  = help g (substTy (a, n) d t)
->     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
->     help (g :< Constraint p) t                  = do
->         mp <- solvePredIn True [] p g
->         case mp of
->             Just p'  -> help g (Qual (reifyPred p') t)
->             Nothing  -> help g t
+>     help g@(_ :< Layer _)                 t = return (g, t)
+>     help (g :< A ((an := Some d ::: k)))  t = help g (substTy an d t)
+>     help (g :< A ((an := _ ::: k)))       t = help g (Bind All (fst an) k (bind an t))

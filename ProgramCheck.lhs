@@ -56,8 +56,7 @@
 >     modifyContext (:< Layer FunTop)
 >     sty           <- unknownTyVar $ "sty" ::: Set
 >     (pattys, cs)  <- runWriterT $ mapM (checkPat (s ::: sty)) pats
->     modifyContext (<><< map Constraint cs)
->     ty'     <- simplifyTy <$> generalise sty
+>     ty'           <- simplifyTy <$> generalise cs sty
 >     modifyContext $ (:< Func s ty') . dropToDecl
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
@@ -67,9 +66,8 @@
 >     unless (k == Set) $ errKindNotSet k
 >     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
->     modifyContext (<><< map Constraint cs)
 >     -- mtrace . ("checkFunDecl context: " ++) . render =<< getContext
->     ty' <- simplifyTy <$> generalise ty
+>     ty' <- simplifyTy <$> generalise cs ty
 >     -- mtrace $ "checkFunDecl ty': " ++ render ty'
 >     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty

@@ -77,6 +77,9 @@
 > (/->) :: Foldable f => f (Ty k a) -> Ty k a -> Ty k a
 > ts /-> t = Data.Foldable.foldr (-->) t ts
 
+> (/=>) :: Foldable f => f (Pred a) -> Ty k a -> Ty k a
+> ps /=> t = Data.Foldable.foldr Qual t ps
+
 > toNum :: Ty Kind a -> TyNum a
 > toNum (TyNum n)          = n
 > toNum (TyVar KindNum a)  = NumVar a
