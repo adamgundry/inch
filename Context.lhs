@@ -20,8 +20,8 @@
 
 > data TmLayer a x  =  PatternTop  {  ptFun    :: x ::: Ty Kind a
 >                                  ,  ptBinds  :: [x ::: Ty Kind a]
->                                  ,  ptPreds  :: [Pred a]
->                                  ,  ptConstraints :: [Pred a]
+>                                  ,  ptPreds  :: [NormPred a]
+>                                  ,  ptConstraints :: [NormPred a]
 >                                  }
 >                   |  AppLeft () (Tm Kind a x)
 >                   |  AppRight (Tm Kind a x ::: Ty Kind a) ()
@@ -32,12 +32,12 @@
 
 > type TermLayer = TmLayer TyName TmName
 
-> bindLayer :: (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
+> bindLayer :: (Ord a, Ord b) => (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
 > bindLayer f (PatternTop (x ::: t) yts ps cs) =
 >     PatternTop (x ::: bindTy f t)
 >         (map (\ (y ::: t) -> y ::: bindTy f t) yts)
->         (map (bindPred (toNum . f KindNum)) ps)
->         (map (bindPred (toNum . f KindNum)) cs)
+>         (map (bindNormPred (normalNum . toNum . f KindNum)) ps)
+>         (map (bindNormPred (normalNum . toNum . f KindNum)) cs)
 > bindLayer f (AppLeft () tm)             = AppLeft () (bindTypes f tm)
 > bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: bindTy f ty) ()
 > bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: bindTy f ty) ()
@@ -51,7 +51,7 @@
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
 >               |  Func   x (Ty Kind a)
->               |  Constraint (Pred a)
+>               |  Constraint (NormPred a)
 >   deriving Show
 
 > data TyDef a = Hole | Some (Ty Kind a) | Fixed
@@ -182,7 +182,7 @@ Data constructors
 > expandContext (g :< A (a := Some t ::: k))  = expandContext g
 > expandContext (g :< a@(A _))                = expandContext g :< a
 > expandContext (g :< Constraint p)           =
->     expandContext g :< Constraint (bindPred (toNum . seekTy g) p)
+>     expandContext g :< Constraint (bindNormPred (normalNum . toNum . seekTy g) p)
 > expandContext (g :< Func x ty) =
 >     expandContext g :< Func x (bindTy (\ _ -> seekTy g) ty)
 > expandContext (g :< Layer l) =

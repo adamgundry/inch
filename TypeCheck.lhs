@@ -7,6 +7,7 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import Data.List
+> import Data.Maybe
 > import Data.Bitraversable
 
 > import BwdFwd
@@ -58,7 +59,7 @@ The accumulator |_Xi| collects variable definitions that |tau| may
 depend on, and hence must be reinserted into the context once the new
 location is found.
 
-> goUp :: Type -> Suffix -> ContextualWriter [Predicate] Term Type
+> goUp :: Type -> Suffix -> ContextualWriter [NormalPredicate] Term Type
 > goUp tau _Xi = do
 >     st@(St{tValue = t}) <- get
 >     case context st of
@@ -91,7 +92,7 @@ location is found.
 
 
 
-> inferType :: ContextualWriter [Predicate] Term Type
+> inferType :: ContextualWriter [NormalPredicate] Term Type
 > inferType = getT >>= \ t -> case t of
 >     TmVar x -> do
 >         sc  <- tyOf <$> lookupTmVar x
@@ -109,7 +110,7 @@ location is found.
 >     t :? ty -> goAnnotLeft >> inferType
 
 
-> infer :: STerm -> ContextualWriter [Predicate] () (Term ::: Type)
+> infer :: STerm -> ContextualWriter [NormalPredicate] () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t'        <- lift $ scopeCheckTypes t
 >     (ty, cs)  <- lift (withT t' $ runWriterT inferType)
@@ -118,12 +119,12 @@ location is found.
 
 
 
-> inst :: TypeDef -> Type -> ContextualWriter [Predicate] t Type
+> inst :: TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
 > inst d (TyApp f s)     = TyApp f <$> inst d s
 > inst d (Bind b x k t)  = do
 >     beta <- fresh x (d ::: k)
 >     inst d (unbind beta t)
-> inst d (Qual p t)      = tell [p] >> inst d t
+> inst d (Qual p t)      = lift (normalisePred p) >>= tell . (: []) >> inst d t
 > inst d t               = return t
 
 
@@ -133,44 +134,68 @@ location is found.
 >     modifyContext (<><< map Constraint cs)
 >     return ty
 
-> instantiate :: Type -> ContextualWriter [Predicate] t Type
+> instantiate :: Type -> ContextualWriter [NormalPredicate] t Type
 > instantiate = inst Hole
 
 
-> solvePred :: Bool -> Predicate -> Contextual t Bool
-> solvePred try p = getContext >>= solvePredIn try p
+> solvePred :: Bool -> [NormalPredicate] -> NormalPredicate ->
+>     Contextual t (Maybe NormalPredicate)
+> solvePred try hyps p = getContext >>= solvePredIn try hyps p
 
-> solvePredIn :: Bool -> Predicate -> Context -> Contextual t Bool
-> solvePredIn try p g = do
->     mtrace $ "solvePredIn: solving " ++ render p ++ " in\n" ++ render g
->     case p of
->         n :<=: m -> normaliseNum (m - n) >>= seekTruth g []
->         n :==: m  | try        -> return False
->                   | otherwise  -> unifyNum n m >> return True
+> solvePredIn :: Bool -> [NormalPredicate] -> NormalPredicate -> Context ->
+>     Contextual t (Maybe NormalPredicate)
+> solvePredIn try hyps p g = do
+>     mtrace $ "solvePredIn: solving " ++ render p -- ++ " in\n" ++ render g ++ "\ngiven ["
+>              -- ++ show (fsepPretty hyps) ++ "]"
+>     seekTruth hyps p g
 >   where
->     seekTruth :: Context -> [NormalNum] -> NormalNum -> Contextual t Bool
->     seekTruth B0 ns m = deduce m ns
->     seekTruth (g :< Constraint (i :<=: j)) ns m = do
->         n <- normaliseNum $ j - i
->         seekTruth g (n:ns) m             
->     seekTruth (g :< A (a := Some d ::: KindNum)) ns m = do
+>     seekTruth :: [NormalPredicate] -> NormalPredicate -> Context ->
+>         Contextual t (Maybe NormalPredicate)
+>     seekTruth hs p B0                                      = deduce hs p
+>     seekTruth hs p (g :< Constraint h)                     = seekTruth (h:hs) p g
+>     seekTruth hs p (g :< A (a := Some d ::: KindNum))      = do
 >         dn <- typeToNum d
->         seekTruth g (map (substNum a dn) ns) (substNum a dn m)
->     seekTruth (g :< A (a := _ ::: KindNum)) ns m = case lookupVariable a m of
->         Just _   -> deduce m ns
->         Nothing  -> seekTruth g ns m
->     seekTruth (g :< _) ns m = seekTruth g ns m
+>         seekTruth (map (substNormPred a dn) hs) (substNormPred a dn p) g
+>     seekTruth hs p (g :< A (a := _ ::: KindNum)) = case findRewrite a hs of
+>         Just n   -> seekTruth (map (substNormPred a n) hs) (substNormPred a n p) g
+>         Nothing  | a <? p     -> deduce hs p
+>                  | otherwise  -> seekTruth (filter (not . (a <?)) hs) p g
+>     seekTruth hs p (g :< _) = seekTruth hs p g
 
->     deduce :: NormalNum -> [NormalNum] -> Contextual t Bool
->     deduce m ns | Just k <- getConstant m =
+>     findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
+>     findRewrite a hs = listToMaybe $ concatMap (toRewrite a) hs
+
+>     toRewrite :: TyName -> NormalPredicate -> [NormalNum]
+>     toRewrite a (IsZero n) = case lookupVariable a n of
+>         Just i | i `dividesCoeffs` n  -> [pivot (a, i) n]
+>         _                             -> []
+>     toRewrite a (IsPos _) = []
+
+>     deduce :: [NormalPredicate] -> NormalPredicate -> Contextual t (Maybe NormalPredicate)
+>     deduce hs (IsZero n)  | isZero n                 = return Nothing
+>     deduce hs (IsPos n)   | Just k <- getConstant n  = 
+>         if k >= 0  then  return Nothing
+>                    else  fail $ "Impossible constraint 0 <= " ++ show k
+>     deduce hs p  | p `elem` hs  = return Nothing
+>                  | try          = return $ Just p
+>                  | otherwise    = do
+>         g <- getContext
+>         fail $ "Could not deduce " ++ render p ++ " from [" ++ show (fsepPretty hs)
+>                                              ++ "] in context\n" ++ render g
+
+> {-
+>     deduce ns m | Just k <- getConstant m =
 >         if k >= 0  then  return True
 >                    else  fail $ "Impossible constraint 0 <= " ++ show k
->     deduce m ns | m `elem` ns  = return True
+>     deduce ns m | m `elem` ns  = return True
 >                 | try          = return False
 >                 | otherwise    = fail $
 >       "Could not solve constraint 0 <= " ++ render m
+> -}
 
-> solvePreds try = mapM (solvePred try)
+> solvePreds :: Bool -> [NormalPredicate] -> [NormalPredicate] ->
+>                   Contextual t [Maybe NormalPredicate]
+> solvePreds try hyps = mapM (solvePred try hyps)
 
 
 > generalise :: Type -> Contextual t Type
@@ -184,5 +209,7 @@ location is found.
 >     help (g :< A (((a, n) := Some d ::: k))) t  = help g (substTy (a, n) d t)
 >     help (g :< A (((a, n) := _ ::: k))) t       = help g (Bind All a k (bind (a, n) t))
 >     help (g :< Constraint p) t                  = do
->         b <- solvePredIn True p g
->         if b then help g t else help g (Qual p t)
+>         mp <- solvePredIn True [] p g
+>         case mp of
+>             Just p'  -> help g (Qual (reifyPred p') t)
+>             Nothing  -> help g t

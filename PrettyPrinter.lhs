@@ -39,7 +39,7 @@
 > render x = renderStyle style{lineLength=80} (prettyHigh x)
 
 
-> class PrettyVar a where
+> class Ord a => PrettyVar a where
 >     prettyVar :: a -> Doc
 >     injectVar :: String -> a
 
@@ -159,6 +159,8 @@
 > instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm a x) where
 >     pretty p = pretty (patToTm p)
 
+> instance (PrettyVar a, Show a, Ord a) => Pretty (NormPred a) where
+>     pretty p = pretty (reifyPred p)
 
 > instance Pretty NormalNum where
 >     pretty n _ = prettyHigh $ simplifyNum $ reifyNum n

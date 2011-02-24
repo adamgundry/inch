@@ -1,6 +1,7 @@
 > module Orphans where
 
 > import Control.Applicative
+> import Control.Monad.Error
 > import Control.Monad.State
 > import Text.ParserCombinators.Parsec
 
@@ -15,3 +16,7 @@
 > instance Alternative (GenParser s a) where
 >    empty = mzero
 >    (<|>) = mplus
+
+> instance Error a => Applicative (Either a) where
+>     pure = return
+>     (<*>) = ap

@@ -8,6 +8,7 @@
 
 > import Kit
 > import Num
+> import Orphans
 
 > type TypeNum          = TyNum TyName
 > type Predicate        = Pred TyName
@@ -83,8 +84,11 @@
 > simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
 > simplifyPred (m :==: n) = simplifyNum m :==: simplifyNum n
 
+
+
 > type NormNum a = NExp a
 > type NormalNum = NormNum TyName
+
 
 > normaliseNum :: (Ord a, Applicative m, Monad m) => TyNum a -> m (NormNum a)
 > normaliseNum (NumConst k)  = return $ mkConstant k
@@ -101,9 +105,33 @@
 > normaliseNum (Neg n)       = negateNExp <$> normaliseNum n
 
 
-> reifyNum :: NormalNum -> TypeNum
+> reifyNum :: (Ord a, Show a) => NormNum a -> TyNum a
 > reifyNum = simplifyNum . foldNExp (\ k n m -> NumConst k * NumVar n + m) NumConst
 
 > normalNum :: Ord a => TyNum a -> NormNum a
 > normalNum n = either error id $ normaliseNum n
 
+
+
+> data NormPred a where
+>     IsPos   :: NormNum a -> NormPred a
+>     IsZero  :: NormNum a -> NormPred a
+>   deriving (Eq, Show, Functor, Foldable, Traversable)
+
+> bindNormPred :: (Eq a, Eq b) => (a -> NormNum b) -> NormPred a -> NormPred b
+> bindNormPred g (IsPos n)   = IsPos   (bindNExp g n)
+> bindNormPred g (IsZero n)  = IsZero  (bindNExp g n)
+
+> substNormPred :: Eq a => a -> NormNum a -> NormPred a -> NormPred a
+> substNormPred a n (IsPos m)   = IsPos   $ substNum a n m
+> substNormPred a n (IsZero m)  = IsZero  $ substNum a n m
+
+> reifyPred :: (Ord a, Show a) => NormPred a -> Pred a
+> reifyPred (IsPos n) = NumConst 0 :<=: reifyNum n
+> reifyPred (IsZero n) = reifyNum n :==: NumConst 0
+
+> type NormalPredicate = NormPred TyName
+
+> normalisePred :: (Ord a, Applicative m, Monad m) => Pred a -> m (NormPred a)
+> normalisePred (m :<=: n) = IsPos <$> normaliseNum (n :+: Neg m)
+> normalisePred (m :==: n) = IsZero <$> normaliseNum (n :+: Neg m)

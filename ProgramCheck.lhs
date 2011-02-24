@@ -7,6 +7,7 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import Data.List
+> import Data.Maybe
 > import Data.Bitraversable
 
 > import BwdFwd
@@ -67,16 +68,16 @@
 >     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
 >     modifyContext (<><< map Constraint cs)
->     mtrace . ("checkFunDecl context: " ++) . render =<< getContext
+>     -- mtrace . ("checkFunDecl context: " ++) . render =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
->     mtrace $ "checkFunDecl ty': " ++ render ty'
+>     -- mtrace $ "checkFunDecl ty': " ++ render ty'
 >     (ty'', cs') <- runWriterT $ instantiate ty'
 >     sty' <- specialise sty
->     mtrace . ("checkFunDecl pre-match: " ++) . render =<< getContext
+>     -- mtrace . ("checkFunDecl pre-match: " ++) . render =<< getContext
 >     inLocation ("when matching inferred type\n        " ++ render ty'
 >         ++ "\n    against given type\n        " ++ render sty) $
 >             unify ty'' sty'
->     inLocation ("when solving predicates") $ solvePreds False cs'
+>     inLocation ("when solving predicates") $ solvePreds False [] cs'
 >     modifyContext $ (:< Func s ty') . dropToDecl
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 > checkFunDecl (FunDecl s _ []) =
@@ -89,7 +90,7 @@
 
 
 > checkPat :: String ::: Type -> SPattern ->
->     ContextualWriter [Predicate] () (Pattern ::: Type)
+>     ContextualWriter [NormalPredicate] () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
 >     (xs', (bs, ps)) <- lift $ runWriterT $ checkPatTerms xs
@@ -99,13 +100,25 @@
 >          ty             = xtys /-> tty
 >     sty'        <- instantiate sty
 >     lift $ unify ty sty'
->     cs' <- lift extractPatConstraints
->     mtrace . ("checkPat context: " ++) . show . prettyHigh =<< getContext
->     mtrace $ "checkPat given: " ++ show (fsepPretty ps)
->     mtrace $ "checkPat wanted: " ++ show (fsepPretty (cs ++ cs'))
+>     cs'   <- lift extractPatConstraints
+>     cs''  <- lift $ unifySolvePreds ps (cs ++ cs')
+>     ks    <- lift $ solvePreds True ps cs''
+>     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
+>     -- mtrace $ "checkPat given: " ++ show (fsepPretty ps)
+>     -- mtrace $ "checkPat wanted: " ++ show (fsepPretty (cs ++ cs'))
+>     tell (catMaybes ks)
 >     return $ Pat xtms Trivial t' ::: ty
 
-> extractPatConstraints :: Contextual t [Predicate]
+> unifySolvePreds :: [NormalPredicate] -> [NormalPredicate] ->
+>     Contextual t [NormalPredicate]
+> unifySolvePreds hs ps = catMaybes <$> mapM (unifySolvePred hs) ps
+
+> unifySolvePred :: [NormalPredicate] -> NormalPredicate ->
+>     Contextual t (Maybe NormalPredicate)
+> unifySolvePred [] (IsZero n) = unifyZero F0 n >> return Nothing
+> unifySolvePred hs p = return $ Just p
+
+> extractPatConstraints :: Contextual t [NormalPredicate]
 > extractPatConstraints = getContext >>= flip help []
 >   where
 >     help (g :< Layer (PatternTop _ _ _ cs)) h = putContext (g <><< h) >> return cs
@@ -113,7 +126,7 @@
 
 
 > checkPatTerm :: SPatternTerm ->
->     ContextualWriter ([TmName ::: Type], [Predicate]) () (PatternTerm ::: Type)
+>     ContextualWriter ([TmName ::: Type], [NormalPredicate]) () (PatternTerm ::: Type)
 > checkPatTerm (PatVar v) = do
 >     vty <- unknownTyVar $ "_ty" ++ v ::: Set
 >     tell ([v ::: vty], [])

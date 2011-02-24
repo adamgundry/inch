@@ -5,6 +5,7 @@
 > import Control.Applicative
 > import Control.Monad hiding (mapM_)
 > import Data.Foldable 
+> import Data.Maybe
 > import Prelude hiding (any, mapM_)
 
 > import BwdFwd
@@ -35,8 +36,8 @@
 >             modifyContext (:< xD)
 >         B0 -> fail $ "onTop: ran out of context"
 
-> onTopNum ::  (Predicate, Contextual t ()) ->
->                  (Predicate -> Contextual t ()) ->
+> onTopNum ::  (NormalPredicate, Contextual t ()) ->
+>                  (NormalPredicate -> Contextual t ()) ->
 >                  (TyEntry -> Contextual t Extension) ->
 >                  Contextual t ()
 > onTopNum (p, m) h f = do
@@ -46,7 +47,7 @@
 >       putContext _Gamma
 >       case xD of
 >         A (a := d ::: KindNum) -> ext xD =<< f (a := d ::: KindNum)
->         Layer pt@(PatternTop _ _ _ cs) -> do
+>         Layer pt@(PatternTop _ _ (_:_) cs) -> do
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
 >             m
 >         Constraint c -> h c >> modifyContext (:< xD)
@@ -81,6 +82,13 @@
 
 > instance FV TyEntry where
 >     alpha <? (a := d ::: k) = alpha <? a || alpha <? d
+
+> instance FV NormalNum where
+>     alpha <? n = isJust $ lookupVariable alpha n
+
+> instance FV NormalPredicate where
+>     alpha <? IsPos n   = alpha <? n
+>     alpha <? IsZero n  = alpha <? n
 
 
 > unify t u = unifyTypes t u `inLoc` (do
@@ -203,17 +211,17 @@
 >   where
 >     seek B0 = fail $ "Missing numeric variable " ++ show a
 >     seek (g :< A (b := _ ::: k))
->         | a == b && k == KindNum = return $ embedVar a
+>         | a == b && k == KindNum = return $ mkVar a
 >         | a == b = fail $ "Type variable " ++ show a ++ " is not numeric"
 >     seek (g :< _) = seek g
 
 
 > unifyZero :: Suffix -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
->   | isIdentity e  = return ()
->   | isConstant e  = errCannotUnify (numToType e) (numToType (normalConst 0))
+>   | isZero e      = return ()
+>   | isConstant e  = errCannotUnify (numToType e) (TyNum (NumConst 0))
 >   | otherwise     = onTopNum
->     (reifyNum e :==: NumConst 0, modifyContext (<>< _Psi))
+>     (IsZero e, modifyContext (<>< _Psi))
 >     (\ p -> unifyZero _Psi =<< rewriteNumBy e p) $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
@@ -222,7 +230,7 @@
 >             Some x   -> do
 >                           modifyContext (<>< _Psi)
 >                           x' <- typeToNum x
->                           unifyZero F0 (substGExp (alpha, n) x' e)
+>                           unifyZero F0 (substNExp (alpha, n) x' e)
 >                           restore
 >             Hole   | n `dividesCoeffs` e -> do
 >                           modifyContext (<>< _Psi)
@@ -230,7 +238,7 @@
 >                    | (alpha, n) `notMaxCoeff` e -> do
 >                           modifyContext (<>< _Psi)
 >                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
->                           unifyZero ((beta := Hole ::: KindNum) :> F0) $ substGExp (alpha, n) p e
+>                           unifyZero ((beta := Hole ::: KindNum) :> F0) $ substNExp (alpha, n) p e
 >                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
 >                    | numVariables e > fwdLength _Psi + 1 -> do
 >                           unifyZero ((alpha := Hole ::: KindNum) :> _Psi) e
@@ -242,13 +250,7 @@
 >                    | otherwise -> errUnifyNumFixed alpha $ reifyNum e
 
 
-> rewriteNumBy :: NormalNum -> Predicate -> Contextual t NormalNum
-> rewriteNumBy e (NumVar a :==: n) = do
->     i <- normaliseNum n
->     return $ substNum a i e
-> rewriteNumBy e (n :==: NumVar a) = do
->     i <- normaliseNum n
->     return $ substNum a i e
+> rewriteNumBy :: NormalNum -> NormalPredicate -> Contextual t NormalNum
 > rewriteNumBy e p = return e
 
 
@@ -259,4 +261,4 @@ We can insert a fresh variable into a unit thus:
 > insertFreshVar d = do
 >     n <- freshName
 >     let beta = ("beta", n)
->     return (d +~ embedVar beta, beta)
+>     return (d +~ mkVar beta, beta)
