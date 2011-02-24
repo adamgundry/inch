@@ -83,26 +83,27 @@
 > simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
 > simplifyPred (m :==: n) = simplifyNum m :==: simplifyNum n
 
-
-> type NormNum a = GExp () a
+> type NormNum a = NExp a
 > type NormalNum = NormNum TyName
 
 > normaliseNum :: (Ord a, Applicative m, Monad m) => TyNum a -> m (NormNum a)
-> normaliseNum (NumConst k)  = return $ normalConst k
-> normaliseNum (NumVar a)    = return $ embedVar a
+> normaliseNum (NumConst k)  = return $ mkConstant k
+> normaliseNum (NumVar a)    = return $ mkVar a
 > normaliseNum (m :+: n)     = (+~) <$> normaliseNum m <*> normaliseNum n
 > normaliseNum (m :*: n)     = do
 >     m'  <- normaliseNum m
 >     n'  <- normaliseNum n
 >     case (getConstant m', getConstant n') of
->         (Just i,   Just j)   -> return $ normalConst (i * j)
+>         (Just i,   Just j)   -> return $ mkConstant (i * j)
 >         (Just i,   Nothing)  -> return $ i *~ n'
 >         (Nothing,  Just j)   -> return $ j *~ m'
 >         (Nothing,  Nothing)  -> fail "Non-linear numeric expression"
-> normaliseNum (Neg n)       = negateGExp <$> normaliseNum n
-
-> normalConst k = mkGExp [] [((), k)]
+> normaliseNum (Neg n)       = negateNExp <$> normaliseNum n
 
 
 > reifyNum :: NormalNum -> TypeNum
-> reifyNum = simplifyNum . foldGExp (\ k n m -> NumConst k * NumVar n + m) NumConst
+> reifyNum = simplifyNum . foldNExp (\ k n m -> NumConst k * NumVar n + m) NumConst
+
+> normalNum :: Ord a => TyNum a -> NormNum a
+> normalNum n = either error id $ normaliseNum n
+

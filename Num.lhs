@@ -1,8 +1,11 @@
+> {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+
 > module Num
->     (  GExp()
->     ,  mkGExp
->     ,  embedVar
->     ,  isIdentity
+>     (  NExp()
+>     ,  mkNExp
+>     ,  mkVar
+>     ,  mkConstant
+>     ,  isZero
 >     ,  isConstant
 >     ,  getConstant
 >     ,  numVariables
@@ -14,10 +17,11 @@
 >     ,  (-~)
 >     ,  (*~)
 >     ,  pivot
->     ,  substGExp
+>     ,  bindNExp
+>     ,  substNExp
 >     ,  substNum
->     ,  negateGExp
->     ,  foldGExp
+>     ,  negateNExp
+>     ,  foldNExp
 >     ) where
 
 > import Data.Foldable (Foldable, find)
@@ -25,13 +29,12 @@
 > import Data.Ord (comparing)
 > import Data.Traversable (Traversable)
 
-A group expression is represented as a |GExp| value with lists of
-coefficients for the variables and constants; we maintain the
-invariants that each variable or base unit occurs at most once, and
-has a non-zero coefficient.
+A numeric expression is represented as a list of coefficients for the
+variables and a constant; we maintain the invariants that each
+variable occurs at most once, and has a non-zero coefficient.
 
-> data GExp b a = GExp [(a, Integer)] [(b, Integer)]
->     deriving Show
+> data NExp a = NExp [(a, Integer)] Integer
+>     deriving (Functor, Foldable, Traversable, Show)
 
 Unfortunately, there is no way to make the |Functor|, |Foldable| and
 |Traversable| instances maintain the invariant, because it would
@@ -40,13 +43,12 @@ typeclass constraints. Rather than inventing our own typeclasses, we
 will manually ensure that we only call these methods with injective
 functions.
 
-
-To help maintain the invariant, we will use the |mkGExp| smart
+To help maintain the invariant, we will use the |mkNExp| smart
 constructor, which takes two arbitrary lists and combines the powers
 of identical variables and base units.
 
-> mkGExp :: (Eq a, Eq b) => [(a, Integer)] -> [(b, Integer)] -> GExp b a
-> mkGExp vs bs = GExp (help vs []) (help bs [])
+> mkNExp :: Eq a => [(a, Integer)] -> Integer -> NExp a
+> mkNExp vs b = NExp (help vs []) b
 >   where
 >     help :: Eq a => [(a, Integer)] -> [(a, Integer)] -> [(a, Integer)]
 >     help []             ys = ys
@@ -58,17 +60,19 @@ of identical variables and base units.
 
 
 We can also make a group expression consisting of a single variable
-using |embedVar|.
+using |mkVar|, and a single constant using |mkConst|.
 
-> embedVar :: (Eq a, Eq b) => a -> GExp b a
-> embedVar a = mkGExp [(a, 1)] []
+> mkVar :: Eq a => a -> NExp a
+> mkVar a = mkNExp [(a, 1)] 0
+
+> mkConstant :: Integer -> NExp a
+> mkConstant = NExp []
 
 
-Dimensions are compared for equality by sorting the lists:
+Numeric expressions are compared for equality by sorting the lists:
 
-> instance (Ord a, Ord b) => Eq (GExp b a) where
->   GExp vs1 bs1 == GExp vs2 bs2  = (sortFst vs1 == sortFst vs2)
->                                 && (sortFst bs1 == sortFst bs2)
+> instance Ord a => Eq (NExp a) where
+>   NExp xs k == NExp ys l = (sortFst xs == sortFst ys) && k == l
 >     where
 >       sortFst :: Ord b => [(b, c)] -> [(b, c)]
 >       sortFst = sortBy (comparing fst)
@@ -77,100 +81,103 @@ Dimensions are compared for equality by sorting the lists:
 We provide utility functions to determine if a dimension is a unit or
 constant, or the number of variables it contains.
 
-> isIdentity :: GExp b a -> Bool
-> isIdentity (GExp [] [])  = True
-> isIdentity _             = False
+> isZero :: NExp a -> Bool
+> isZero (NExp [] 0)  = True
+> isZero _            = False
 
-> isConstant :: GExp b a -> Bool
-> isConstant (GExp [] _)  = True
+> isConstant :: NExp a -> Bool
+> isConstant (NExp [] _)  = True
 > isConstant _           = False
 
-> getConstant :: GExp () a -> Maybe Integer
-> getConstant (GExp [] ns)         = Just $ sum $ map snd ns
-> getConstant _                    = Nothing
+> getConstant :: NExp a -> Maybe Integer
+> getConstant (NExp [] n)  = Just n
+> getConstant _            = Nothing
 
-> numVariables :: GExp b a -> Int
-> numVariables (GExp vs _) = length vs
+> numVariables :: NExp a -> Int
+> numVariables (NExp vs _) = length vs
 
 
 We also need versions of |find| and |lookup| that work on the list of
 variables.
 
-> findVariable :: ((a, Integer) -> Bool) -> GExp b a -> Maybe (a, Integer)
-> findVariable p (GExp vs _) = find p vs
+> findVariable :: ((a, Integer) -> Bool) -> NExp a -> Maybe (a, Integer)
+> findVariable p (NExp vs _) = find p vs
 
-> lookupVariable :: Eq a => a -> GExp b a -> Maybe Integer
-> lookupVariable a (GExp vs _) = lookup a vs
+> lookupVariable :: Eq a => a -> NExp a -> Maybe Integer
+> lookupVariable a (NExp vs _) = lookup a vs
 
 
 The |dividesCoeffs| function determines if an integer divides
 all the coefficients of atoms in a dimension.
 
-> dividesCoeffs :: Integer -> GExp b a -> Bool
-> n `dividesCoeffs` (GExp vs bs) = dividesAll vs && dividesAll bs
+> dividesCoeffs :: Integer -> NExp a -> Bool
+> n `dividesCoeffs` (NExp vs b) = dividesAll vs && divides b
 >   where
->     dividesAll :: [(a, Integer)] -> Bool
->     dividesAll = all ((0 ==) . (`mod` n) . snd)
+>     divides     = (0 ==) . (`mod` n)
+>     dividesAll  = all (divides . snd)
 
 
 The |notMaxCoeff| function determines if the power of a variable is
 less than the power of at least one other variable in a dimension.
 
-> notMaxCoeff :: Eq a => (a, Integer) -> GExp b a -> Bool
-> notMaxCoeff (alpha, n) (GExp vs _) = any bigger vs
+> notMaxCoeff :: Eq a => (a, Integer) -> NExp a -> Bool
+> notMaxCoeff (alpha, n) (NExp vs _) = any bigger vs
 >   where bigger (beta, m) = alpha /= beta && abs n <= abs m
 
 
 The |(+~)| operator combines two group expressions by merging the
 lists of variables and constants.
 
-> (+~) :: (Eq a, Eq b) => GExp b a -> GExp b a -> GExp b a
-> (GExp vs1 bs1) +~ (GExp vs2 bs2) = mkGExp (vs1 ++ vs2) (bs1 ++ bs2)
+> (+~) :: Eq a => NExp a -> NExp a -> NExp a
+> (NExp xs k) +~ (NExp ys l) = mkNExp (xs ++ ys) (k + l)
 
-The |negateGExp| function negates the powers in a group expression.
+The |negateNExp| function negates the powers in a group expression.
 
-> negateGExp :: (Eq a, Eq b) => GExp b a -> GExp b a
-> negateGExp = mapCoeffs negate
+> negateNExp :: Eq a => NExp a -> NExp a
+> negateNExp = mapCoeffs negate
 
 
-> (-~) :: (Eq a, Eq b) => GExp b a -> GExp b a -> GExp b a
-> d -~ e = d +~ negateGExp e
+> (-~) :: Eq a => NExp a -> NExp a -> NExp a
+> d -~ e = d +~ negateNExp e
 
-> (*~) :: (Eq a, Eq b) => Integer -> GExp b a -> GExp b a
+> (*~) :: Eq a => Integer -> NExp a -> NExp a
 > (*~) k = mapCoeffs (* k)
 
 The |pivot| function removes the given variable (with its coefficient)
 from the group expression, negates it and takes the quotient of its
 coefficients by the coefficient of the removed variable.
 
-> pivot :: (Eq a, Eq b) => (a, Integer) -> GExp b a -> GExp b a
-> pivot (alpha, n) (GExp vs bs) = mapCoeffs (`quot` (-n)) $
->     GExp (deleteIndex alpha vs) bs
+> pivot :: Eq a => (a, Integer) -> NExp a -> NExp a
+> pivot (alpha, n) (NExp vs b) = mapCoeffs (`quot` (-n)) $
+>     NExp (deleteIndex alpha vs) b
 
 
-The |substGExp| function substitutes a group expression for a variable
+> bindNExp :: (Eq a, Eq b) => (a -> NExp b) -> NExp a -> NExp b
+> bindNExp f (NExp xs k) = foldr (+~) (mkConstant k) $
+>                              map (\ (a, n) -> n *~ f a) xs
+
+The |substNExp| function substitutes a group expression for a variable
 (with its power) in another group expression.
 
-> substGExp :: (Eq a, Eq b) => (a, Integer) -> GExp b a -> GExp b a -> GExp b a
-> substGExp (alpha, n) d (GExp ws cs) =
->     mapCoeffs (n *) d +~ (GExp (deleteIndex alpha ws) cs)
+> substNExp :: Eq a => (a, Integer) -> NExp a -> NExp a -> NExp a
+> substNExp (alpha, n) d (NExp ws k) =
+>     mapCoeffs (n *) d +~ (NExp (deleteIndex alpha ws) k)
 
 
-> substNum ::  (Eq a, Eq b) => a -> GExp b a -> GExp b a -> GExp b a
+> substNum ::  Eq a => a -> NExp a -> NExp a -> NExp a
 > substNum alpha d e = case lookupVariable alpha e of
->     Just n   -> substGExp (alpha, n) d e
+>     Just n   -> substNExp (alpha, n) d e
 >     Nothing  -> e
 
 
-> foldGExp :: (Integer -> a -> b -> b) -> (Integer -> b) -> GExp () a -> b
-> foldGExp f g (GExp vs [((), m)]) = foldr (\ (a, n) -> f n a) (g m) vs
-> foldGExp f g (GExp vs []) = foldr (\ (a, n) -> f n a) (g 0) vs
+> foldNExp :: (Integer -> a -> b -> b) -> (Integer -> b) -> NExp a -> b
+> foldNExp f g (NExp vs m) = foldr (\ (a, n) -> f n a) (g m) vs
 
 
 The following utility functions are just used within this module.
 
-> mapCoeffs :: (Eq a, Eq b) => (Integer -> Integer) -> GExp b a -> GExp b a
-> mapCoeffs f (GExp vs bs) = mkGExp (mapSnd vs) (mapSnd bs) 
+> mapCoeffs :: Eq a => (Integer -> Integer) -> NExp a -> NExp a
+> mapCoeffs f (NExp vs k) = mkNExp (mapSnd vs) (f k)
 >   where
 >     mapSnd :: [(a, Integer)] -> [(a, Integer)]
 >     mapSnd = map (\ (a, x) -> (a, f x))
