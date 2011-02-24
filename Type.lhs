@@ -96,8 +96,12 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)
 > simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
 > simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
-> simplifyTy (Qual p t)      = Qual (simplifyPred p) (simplifyTy t)
+> simplifyTy (Qual p t)      = case simplifyTy t of
+>     Bind b x k t' -> Bind b x k $ Qual (fmap S (simplifyPred p)) t'
+>     t' -> Qual (simplifyPred p) t'
 > simplifyTy t               = t
+
+
 
 > alphaConvert :: [(String, String)] -> Ty k a -> Ty k a
 > alphaConvert xys (TyApp f s) = TyApp (alphaConvert xys f)
