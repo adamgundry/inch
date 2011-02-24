@@ -50,7 +50,7 @@
 >         Layer pt@(PatternTop _ _ (_:_) cs) -> do
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
 >             m
->         Constraint c -> h c >> modifyContext (:< xD)
+>         Constraint Given c -> h c >> modifyContext (:< xD)
 >         _ -> onTopNum (p, m) h f >> modifyContext (:< xD)
 >     B0 -> inLocation ("when solving " ++ render p) $
 >               fail $ "onTopNum: ran out of context"
@@ -94,8 +94,10 @@
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- niceType t
 >                 u' <- niceType u
->                 return $ "when unifying\n        " ++ show (prettyHigh t')
->                     ++ "\n    and\n        " ++ show (prettyHigh u'))
+>                 g <- getContext
+>                 mtrace $ "foo:" ++ render g
+>                 return $ "when unifying\n        " ++ show (prettyHigh t)
+>                     ++ "\n    and\n        " ++ show (prettyHigh u))
 
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
@@ -151,8 +153,8 @@
 > startSolve :: TyName -> Type -> Contextual t ()
 > startSolve alpha tau = do
 >     (rho, xs) <- rigidHull tau
->     solve alpha (constraintsToSuffix xs) rho
->     solveConstraints xs
+>     solve alpha (pairsToSuffix xs) rho
+>     unifyPairs xs
 >     return ()
 
 > rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
@@ -167,11 +169,11 @@
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
 > rigidHull (Bind b x k t) = return (Bind b x k t, F0)
 
-> constraintsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
-> constraintsToSuffix = fmap ((:= Hole ::: KindNum) . fst)
+> pairsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
+> pairsToSuffix = fmap ((:= Hole ::: KindNum) . fst)
 
-> solveConstraints :: Fwd (TyName, TypeNum) -> Contextual t ()
-> solveConstraints = mapM_ (uncurry $ unifyNum . NumVar)
+> unifyPairs :: Fwd (TyName, TypeNum) -> Contextual t ()
+> unifyPairs = mapM_ (uncurry $ unifyNum . NumVar)
 
 
 > solve :: TyName -> Suffix -> Type -> Contextual t ()
@@ -186,8 +188,8 @@
 >     (True,   False,  Fixed)         ->  errUnifyFixed alpha tau
 >     (False,  True,   Some upsilon)  ->  do
 >         (upsilon', xs) <- rigidHull upsilon
->         solve alpha (constraintsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
->         solveConstraints xs
+>         solve alpha (pairsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
+>         unifyPairs xs
 >         replace F0
 >     (False,  True,   _)             ->  solve alpha ((gamma := d ::: k) :> _Xi) tau
 >                                         >>  replace F0   

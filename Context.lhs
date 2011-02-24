@@ -46,12 +46,15 @@
 
 
 
+> data CStatus = Given | Wanted
+>   deriving Show
+
 > type TyEnt a = a := TyDef a ::: Kind
 
 > data Ent a x  =  A      (TyEnt a)
 >               |  Layer  (TmLayer a x)
 >               |  Func   x (Ty Kind a)
->               |  Constraint (NormPred a)
+>               |  Constraint CStatus (NormPred a)
 >   deriving Show
 
 > data TyDef a = Hole | Some (Ty Kind a) | Fixed
@@ -181,8 +184,8 @@ Data constructors
 > expandContext B0 = B0
 > expandContext (g :< A (a := Some t ::: k))  = expandContext g
 > expandContext (g :< a@(A _))                = expandContext g :< a
-> expandContext (g :< Constraint p)           =
->     expandContext g :< Constraint (bindNormPred (normalNum . toNum . seekTy g) p)
+> expandContext (g :< Constraint s p)           =
+>     expandContext g :< Constraint s (bindNormPred (normalNum . toNum . seekTy g) p)
 > expandContext (g :< Func x ty) =
 >     expandContext g :< Func x (bindTy (\ _ -> seekTy g) ty)
 > expandContext (g :< Layer l) =

@@ -50,34 +50,39 @@
 >     insertTmCon c ty'
 >     return (c ::: ty')
 
+
 > checkFunDecl :: SFunDeclaration -> Contextual () FunDeclaration
+
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty           <- unknownTyVar $ "sty" ::: Set
->     (pattys, cs)  <- runWriterT $ mapM (checkPat (s ::: sty)) pats
->     ty'           <- simplifyTy <$> generalise cs sty
+>     pattys  <- mapM (checkPat (s ::: sty)) pats
+>     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
+>     ty'           <- simplifyTy <$> generalise sty
 >     modifyContext $ (:< Func s ty') . dropToDecl
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
+
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty ::: k <- inLocation ("in type " ++ render st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
->     (pattys, cs) <- runWriterT $ mapM (checkPat (s ::: sty)) pats
+>     pattys <- mapM (checkPat (s ::: sty)) pats
 >     let ty = tyOf (head pattys)
->     -- mtrace . ("checkFunDecl context: " ++) . render =<< getContext
->     ty' <- simplifyTy <$> generalise cs ty
+>     mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
+>     ty' <- simplifyTy <$> generalise ty
 >     -- mtrace $ "checkFunDecl ty': " ++ render ty'
->     (ty'', cs') <- runWriterT $ instantiate ty'
+>     ty'' <- instantiate ty'
 >     sty' <- specialise sty
 >     -- mtrace . ("checkFunDecl pre-match: " ++) . render =<< getContext
 >     inLocation ("when matching inferred type\n        " ++ render ty'
->         ++ "\n    against given type\n        " ++ render sty) $
+>         ++ "\n    against given type\n        " ++ render sty) $ do
 >             unify ty'' sty'
->     inLocation ("when solving predicates") $ solvePreds False [] cs'
+>             inLocation ("when solving constraints") $ solveConstraints False
 >     modifyContext $ (:< Func s ty') . dropToDecl
 >     return (FunDecl s (Just sty) (map tmOf pattys))
+
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
 
@@ -87,41 +92,34 @@
 > dropToDecl (g :< e)             = dropToDecl g
 
 
-> checkPat :: String ::: Type -> SPattern ->
->     ContextualWriter [NormalPredicate] () (Pattern ::: Type)
+> checkPat :: String ::: Type -> SPattern -> Contextual () (Pattern ::: Type)
 > checkPat (s ::: sty) (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
->     (xs', (bs, ps)) <- lift $ runWriterT $ checkPatTerms xs
+>     (xs', (bs, ps)) <- runWriterT $ checkPatTerms xs
 >     modifyContext (:< Layer (PatternTop (s ::: sty) bs ps []))
->     (t' ::: tty, cs)  <- lift $ runWriterT $ infer t
+>     t' ::: tty  <- infer t
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> tty
 >     sty'        <- instantiate sty
->     lift $ unify ty sty'
->     cs'   <- lift extractPatConstraints
->     cs''  <- lift $ unifySolvePreds ps (cs ++ cs')
->     ks    <- lift $ solvePreds True ps cs''
+>     unify ty sty'
+>     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
+>     when (null ps) $ unifySolveConstraints
+>     solveConstraints True
+>
 >     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
 >     -- mtrace $ "checkPat given: " ++ show (fsepPretty ps)
 >     -- mtrace $ "checkPat wanted: " ++ show (fsepPretty (cs ++ cs'))
->     tell (catMaybes ks)
 >     return $ Pat xtms Trivial t' ::: ty
 
-> unifySolvePreds :: [NormalPredicate] -> [NormalPredicate] ->
->     Contextual t [NormalPredicate]
-> unifySolvePreds hs ps = catMaybes <$> mapM (unifySolvePred hs) ps
-
-> unifySolvePred :: [NormalPredicate] -> NormalPredicate ->
->     Contextual t (Maybe NormalPredicate)
-> unifySolvePred [] (IsZero n) = unifyZero [] F0 n >> return Nothing
-> unifySolvePred hs p = return $ Just p
-
-> extractPatConstraints :: Contextual t [NormalPredicate]
-> extractPatConstraints = getContext >>= flip help []
+> unifySolveConstraints :: Contextual t ()
+> unifySolveConstraints = do
+>     ns <- collectEqualities <$> getContext
+>     mapM_ (unifyZero [] F0) ns
 >   where
->     help (g :< Layer (PatternTop _ _ _ cs)) h = putContext (g <><< h) >> return cs
->     help (g :< a) h = help g (a : h)
-
+>     collectEqualities :: Context -> [NormalNum]
+>     collectEqualities B0 = []
+>     collectEqualities (g :< Constraint Wanted (IsZero n)) = n : collectEqualities g
+>     collectEqualities (g :< _) = collectEqualities g
 
 > checkPatTerm :: SPatternTerm ->
 >     ContextualWriter ([TmName ::: Type], [NormalPredicate]) () (PatternTerm ::: Type)
@@ -131,7 +129,7 @@
 >     return $ PatVar v ::: vty
 > checkPatTerm (PatCon c pts) = do
 >     sc   <- lookupTmCon c
->     cty  <- mapPatWriter $ instantiate sc
+>     cty  <- mapPatWriter $ inst Hole sc
 >     unless (length pts == args cty) $
 >         errConUnderapplied c (args cty) (length pts)
 >     ptms ::: ptys  <- unzipAsc <$> checkPatTerms pts

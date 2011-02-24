@@ -12,9 +12,10 @@
 > instance (Show a, Show x, PrettyVar a, PrettyVar x) => Pretty (Ent a x) where
 >   pretty (A (a := d ::: k)) _ = prettyVar a <+> text ":="
 >       <+> prettyHigh d <+> text ":" <+> prettyHigh k
->   pretty (Layer l)       _ = text (show l)
->   pretty (Func f ty)     _ = prettyVar f <+> text "::" <+> prettyHigh ty
->   pretty (Constraint p)  _ = braces (prettyHigh p)
+>   pretty (Layer l)    _ = text (show l)
+>   pretty (Func f ty)  _ = prettyVar f <+> text "::" <+> prettyHigh ty
+>   pretty (Constraint Given p)   _ = braces (prettyHigh p)
+>   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "?"
 
 > instance PrettyVar a => Pretty (TyDef a) where
 >   pretty Hole _ = text "?"
