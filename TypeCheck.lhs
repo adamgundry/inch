@@ -162,14 +162,7 @@ location is found.
 >                  | otherwise  -> seekTruth (filter (not . (a <?)) hs) p g
 >     seekTruth hs p (g :< _) = seekTruth hs p g
 
->     findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
->     findRewrite a hs = join $ listToMaybe $ map (toRewrite a) hs
 
->     toRewrite :: TyName -> NormalPredicate -> Maybe NormalNum
->     toRewrite a (IsZero n) = case lookupVariable a n of
->         Just i | i `dividesCoeffs` n  -> Just $ pivot (a, i) n
->         _                             -> Nothing
->     toRewrite a (IsPos _) = Nothing
 
 >     deduce :: [NormalPredicate] -> NormalPredicate -> Contextual t (Maybe NormalPredicate)
 >     deduce hs (IsZero n)  | isZero n                 = return Nothing

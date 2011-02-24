@@ -197,8 +197,8 @@
 
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (NumConst 0) n = unifyZero F0 =<< normaliseNum n
-> unifyNum m n = unifyZero F0 =<< normaliseNum (m - n)
+> unifyNum (NumConst 0) n = unifyZero [] F0 =<< normaliseNum n
+> unifyNum m n = unifyZero [] F0 =<< normaliseNum (m - n)
 
 
 > typeToNum :: Type -> Contextual t NormalNum
@@ -216,21 +216,21 @@
 >     seek (g :< _) = seek g
 
 
-> unifyZero :: Suffix -> NormalNum -> Contextual t ()
-> unifyZero _Psi e
+> unifyZero :: [NormalPredicate] -> Suffix -> NormalNum -> Contextual t ()
+> unifyZero ps _Psi e
 >   | isZero e      = return ()
 >   | isConstant e  = errCannotUnify (numToType e) (TyNum (NumConst 0))
 >   | otherwise     = onTopNum
 >     (IsZero e, modifyContext (<>< _Psi))
->     (\ p -> unifyZero _Psi =<< rewriteNumBy e p) $
+>     (\ p -> unifyZero (p:ps) _Psi e) $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
->         Nothing  -> unifyZero _Psi e >> restore
+>         Nothing  -> unifyZero ps _Psi e >> restore
 >         Just n   -> case d of
 >             Some x   -> do
 >                           modifyContext (<>< _Psi)
 >                           x' <- typeToNum x
->                           unifyZero F0 (substNExp (alpha, n) x' e)
+>                           unifyZero ps F0 (substNExp (alpha, n) x' e)
 >                           restore
 >             Hole   | n `dividesCoeffs` e -> do
 >                           modifyContext (<>< _Psi)
@@ -238,20 +238,26 @@
 >                    | (alpha, n) `notMaxCoeff` e -> do
 >                           modifyContext (<>< _Psi)
 >                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
->                           unifyZero ((beta := Hole ::: KindNum) :> F0) $ substNExp (alpha, n) p e
+>                           unifyZero ps ((beta := Hole ::: KindNum) :> F0) $ substNExp (alpha, n) p e
 >                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
->                    | numVariables e > fwdLength _Psi + 1 -> do
->                           unifyZero ((alpha := Hole ::: KindNum) :> _Psi) e
+>             _ -> case findRewrite alpha ps of
+>                      Just na -> do
+>                          unifyZero (map (substNormPred alpha na) ps) _Psi (substNum alpha na e)
+>                          restore
+>                      Nothing | numVariables e > fwdLength _Psi + 1 -> do
+>                           unifyZero ps ((alpha := Hole ::: KindNum) :> _Psi) e
 >                           replace F0
->                    | otherwise -> fail "No way!"
->             Fixed  | numVariables e > fwdLength _Psi + 1 -> do
->                           unifyZero ((alpha := Fixed ::: KindNum) :> _Psi) e
->                           replace F0
->                    | otherwise -> errUnifyNumFixed alpha $ reifyNum e
+>                              | otherwise -> fail "No way!"
 
 
-> rewriteNumBy :: NormalNum -> NormalPredicate -> Contextual t NormalNum
-> rewriteNumBy e p = return e
+> findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
+> findRewrite a hs = join $ listToMaybe $ map (toRewrite a) hs
+
+> toRewrite :: TyName -> NormalPredicate -> Maybe NormalNum
+> toRewrite a (IsZero n) = case lookupVariable a n of
+>     Just i | i `dividesCoeffs` n  -> Just $ pivot (a, i) n
+>     _                             -> Nothing
+> toRewrite a (IsPos _) = Nothing
 
 
 

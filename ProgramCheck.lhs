@@ -113,7 +113,7 @@
 
 > unifySolvePred :: [NormalPredicate] -> NormalPredicate ->
 >     Contextual t (Maybe NormalPredicate)
-> unifySolvePred [] (IsZero n) = unifyZero F0 n >> return Nothing
+> unifySolvePred [] (IsZero n) = unifyZero [] F0 n >> return Nothing
 > unifySolvePred hs p = return $ Just p
 
 > extractPatConstraints :: Contextual t [NormalPredicate]
