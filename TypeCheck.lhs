@@ -97,6 +97,10 @@ location is found.
 >     TmVar x -> do
 >         sc  <- tyOf <$> lookupTmVar x
 >         ty  <- instantiate sc
+
+>         -- g <- expandContext <$> getContext
+>         -- mtrace $ "inferType " ++ x ++ " :: " ++ render ty ++ "\n" ++ render g
+
 >         goUp ty []
 >     TmCon c -> do
 >         sc  <- lookupTmCon c
@@ -147,7 +151,7 @@ location is found.
 > solveConstraints :: Bool -> Contextual t ()
 > solveConstraints try = do
 >   g <- getContext
->   mtrace $ "solveConstraints: " ++ render g
+>   mtrace $ "solveConstraints: " ++ render (expandContext g)
 >   seekTruth [] []
 >  where
 >   seekTruth :: [NormalPredicate] -> [NormalPredicate] -> Contextual t ()
@@ -159,7 +163,7 @@ location is found.
 >           unless (null cs) $ fail $ "solveConstraints: out of scope error: "
 >                                       ++ show (fsepPretty cs)
 >       (g :< xD)  -> putContext g >> case xD of
->           Constraint Given h   -> seekTruth (h:hs) ps
+>           Constraint Given h   -> seekTruth (h:hs) ps >> modifyContext (:< xD)
 >           Constraint Wanted p  -> seekTruth hs (p:ps)
 >           A (a := Some d ::: KindNum) -> do
 >               dn <- typeToNum d
@@ -173,6 +177,10 @@ location is found.
 >                   let (aps, qs) = partition (a <?) ps
 >                   seekTruth (filter (not . (a <?)) hs) qs
 >                   modifyContext (:< xD)
+>                   mtrace $ "hs: " ++ show hs
+>                             ++ "\na: " ++ show (prettyVar a)
+>                             ++ "\naps: " ++ show (fsepPretty aps)
+>                             ++ "\nqs: " ++ show (fsepPretty qs)
 >                   cs <- catMaybes <$> mapM (deduce hs) aps
 >                   modifyContext (<><< map (Constraint Wanted) cs)
 >           Layer (PatternTop _ _ ks ws) -> seekTruth (ks ++ hs) (ws ++ ps)
@@ -203,3 +211,4 @@ location is found.
 >     help (g :< A ((an := Some d ::: k)))  t = help g (substTy an d t)
 >     help (g :< A ((an := _ ::: k)))       t = help g (Bind All (fst an) k (bind an t))
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
+>     help (g :< Constraint Given _)        t = help g t

@@ -262,7 +262,7 @@
 > subsPreds a dn = map (substNormPred a dn)
 
 > findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
-> findRewrite a hs = join $ listToMaybe $ map (toRewrite a) hs
+> findRewrite a hs = listToMaybe $ catMaybes $ map (toRewrite a) hs
 
 > toRewrite :: TyName -> NormalPredicate -> Maybe NormalNum
 > toRewrite a (IsZero n) = case lookupVariable a n of

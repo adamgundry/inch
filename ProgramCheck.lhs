@@ -57,8 +57,8 @@
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty     <- unknownTyVar $ "sty" ::: Set
->     pattys  <- mapM (checkPat (s ::: sty)) pats
->     mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
+>     pattys  <- mapM (checkPat True (s ::: sty) sty) pats
+>     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
@@ -68,19 +68,26 @@
 >     modifyContext (:< Layer FunTop)
 >     sty ::: k <- inLocation ("in type " ++ render st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
->     pattys <- mapM (checkPat (s ::: sty)) pats
+
+>     sty'  <- specialise sty
+
+>     pattys <- mapM (checkPat False (s ::: sty) sty') pats
 >     let ty = tyOf (head pattys)
->     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
+>     mtrace . (s ++) . (" checkFunDecl context: " ++) . render . expandContext =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
 >     -- mtrace $ "checkFunDecl ty': " ++ render ty'
->     sty'  <- specialise sty
->     ty''  <- instantiate ty'
+
+> {-
+>     sty''  <- specialise sty
+>     ty''   <- instantiate ty'
 
 >     -- mtrace . ("checkFunDecl pre-match: " ++) . render =<< getContext
 >     inLocation ("when matching inferred type\n        " ++ render ty'
 >         ++ "\n    against given type\n        " ++ render sty) $ do
->             unify ty'' sty'
+>             unify ty'' sty''
 >             inLocation ("when solving constraints") $ unifySolveConstraints >> solveConstraints False
+> -}
+> 
 >     modifyContext $ (:< Func s sty) . dropToDecl
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 
@@ -93,23 +100,40 @@
 > dropToDecl (g :< e)             = dropToDecl g
 
 
-> checkPat :: String ::: Type -> SPattern -> Contextual () (Pattern ::: Type)
-> checkPat (s ::: sty) (Pat xs g t) =
->   inLocation ("in alternative " ++ s ++ " " ++ show (prettyHigh (Pat xs g t))) $ do
->     sty'        <- specialise sty
->     (xs', (bs, ps)) <- runWriterT $ checkPatTerms xs
->     modifyContext (:< Layer (PatternTop (s ::: sty) bs ps []))
+> checkPat :: Bool -> String ::: Type -> Type -> SPattern -> Contextual () (Pattern ::: Type)
+> checkPat try (s ::: sc) sty (Pat xs g t) =
+>   inLocation ("in alternative " ++ s ++ " " ++ render (Pat xs g t)) $ do
+>     (styxs, rty) <- inLocation "when matching arity" $ matchArity sty xs 
+>     (xs', (bs, ps)) <- runWriterT $ checkPatTerms styxs
+>     modifyContext (:< Layer (PatternTop (s ::: sc) bs ps []))
 >     t' ::: tty  <- infer t
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> tty
->     unify ty sty'
->     mtrace . (s ++) . (" checkPat context: " ++) . render =<< getContext
+
+>     nty <- niceType ty
+>     nsty <- niceType sty
+>     -- mtrace $ "checkPat unifying: " ++ render nty ++ " and " ++ render nsty
+
+>     unify tty rty
+>     mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
 >     unifySolveConstraints
->     solveConstraints True
+>     solveConstraints try
 >
 >     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
->     mtrace . (s ++) . (" checkPat ty: " ++) . render =<< niceType ty
+>     -- mtrace . (s ++) . (" checkPat ty: " ++) . render =<< niceType ty
 >     return $ Pat xtms Trivial t' ::: ty
+
+> matchArity :: Type -> [SPatternTerm] -> Contextual t ([SPatternTerm ::: Type], Type)
+> matchArity t [] = return ([], t)
+> matchArity (TyApp (TyApp Arr s) t) (x:xs) = do
+>     (ys, ty) <- matchArity t xs
+>     return ((x ::: s):ys, ty)
+> matchArity t (x:xs) = do
+>     sv <- unknownTyVar $ "_sv" ::: Set
+>     tv <- unknownTyVar $ "_tv" ::: Set
+>     unify t (sv --> tv)
+>     (ys, ty) <- matchArity tv xs
+>     return ((x ::: sv):ys, ty)
 
 > unifySolveConstraints :: Contextual t ()
 > unifySolveConstraints = do
@@ -121,21 +145,22 @@
 >     collectEqualities (g :< Constraint Wanted (IsZero n)) = n : collectEqualities g
 >     collectEqualities (g :< _) = collectEqualities g
 
-> checkPatTerm :: SPatternTerm ->
+> checkPatTerm :: SPatternTerm ::: Type ->
 >     ContextualWriter ([TmName ::: Type], [NormalPredicate]) () (PatternTerm ::: Type)
-> checkPatTerm (PatVar v) = do
->     vty <- unknownTyVar $ "_ty" ++ v ::: Set
->     tell ([v ::: vty], [])
->     return $ PatVar v ::: vty
-> checkPatTerm (PatCon c pts) = do
+> checkPatTerm (PatVar v ::: t) = do
+>     tell ([v ::: t], [])
+>     return $ PatVar v ::: t
+> checkPatTerm (PatCon c xs ::: t) =
+>   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
 >     sc   <- lookupTmCon c
 >     cty  <- mapPatWriter $ inst Hole sc
->     unless (length pts == args cty) $
->         errConUnderapplied c (args cty) (length pts)
->     ptms ::: ptys  <- unzipAsc <$> checkPatTerms pts
->     cod            <- unknownTyVar $ "_cod" ::: Set
->     lift $ unify cty $ ptys /-> cod
->     return $ PatCon c ptms ::: cod
+>     unless (length xs == args cty) $
+>         errConUnderapplied c (args cty) (length xs)
+
+>     (xtys, rty) <- lift $ inLocation "when matching pattern arity" $ matchArity cty xs
+>     ptms ::: ptys  <- unzipAsc <$> checkPatTerms xtys
+>     lift $ unify rty t
+>     return $ PatCon c ptms ::: t
 >   where
 >     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
 
