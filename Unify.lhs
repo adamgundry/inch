@@ -37,10 +37,9 @@
 >         B0 -> fail $ "onTop: ran out of context"
 
 > onTopNum ::  (NormalPredicate, Contextual t ()) ->
->                  (NormalPredicate -> Contextual t ()) ->
 >                  (TyEntry -> Contextual t Extension) ->
 >                  Contextual t ()
-> onTopNum (p, m) h f = do
+> onTopNum (p, m) f = do
 >   g <- getContext
 >   case g of
 >     _Gamma :< xD -> do  
@@ -48,10 +47,12 @@
 >       case xD of
 >         A (a := d ::: KindNum) -> ext xD =<< f (a := d ::: KindNum)
 >         Layer pt@(PatternTop _ _ (_:_) cs) -> do
->             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
 >             m
->         Constraint Given c -> h c >> modifyContext (:< xD)
->         _ -> onTopNum (p, m) h f >> modifyContext (:< xD)
+>             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
+>         Constraint Given _ -> do
+>             m
+>             modifyContext $ (:< xD) . (:< Constraint Wanted p)
+>         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
 >     B0 -> inLocation ("when solving " ++ render p) $
 >               fail $ "onTopNum: ran out of context"
 
@@ -95,9 +96,9 @@
 >                 t' <- niceType t
 >                 u' <- niceType u
 >                 g <- getContext
->                 mtrace $ "foo:" ++ render g
->                 return $ "when unifying\n        " ++ show (prettyHigh t)
->                     ++ "\n    and\n        " ++ show (prettyHigh u))
+>                 return $ "when unifying\n        " ++ render t
+>                     ++ "\n    and\n        " ++ render u
+>                     ++ "\n    in context " ++ render g)
 
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
@@ -155,7 +156,6 @@
 >     (rho, xs) <- rigidHull tau
 >     solve alpha (pairsToSuffix xs) rho
 >     unifyPairs xs
->     return ()
 
 > rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
 > rigidHull (TyVar KindNum a)      = do  n <- freshName
@@ -202,8 +202,8 @@
 
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (NumConst 0) n = unifyZero [] F0 =<< normaliseNum n
-> unifyNum m n = unifyZero [] F0 =<< normaliseNum (m - n)
+> unifyNum (NumConst 0) n = unifyZero F0 =<< normaliseNum n
+> unifyNum m n = unifyZero F0 =<< normaliseNum (m - n)
 
 
 > typeToNum :: Type -> Contextual t NormalNum
@@ -220,40 +220,46 @@
 >         | a == b = fail $ "Type variable " ++ show a ++ " is not numeric"
 >     seek (g :< _) = seek g
 
+> constrainZero :: NormalNum -> Contextual t ()
+> constrainZero e = modifyContext (:< Constraint Wanted (IsZero e))
 
-> unifyZero :: [NormalPredicate] -> Suffix -> NormalNum -> Contextual t ()
-> unifyZero ps _Psi e
+> unifyZero :: Suffix -> NormalNum -> Contextual t ()
+> unifyZero _Psi e
 >   | isZero e      = return ()
 >   | isConstant e  = errCannotUnify (numToType e) (TyNum (NumConst 0))
->   | otherwise     = onTopNum
->     (IsZero e, modifyContext (<>< _Psi))
->     (\ p -> unifyZero (p:ps) _Psi e) $
+>   | otherwise     = onTopNum (IsZero e, modifyContext (<>< _Psi)) $
 >     \ (alpha := d ::: KindNum) ->
 >     case lookupVariable alpha e of
->         Nothing  -> unifyZero ps _Psi e >> restore
->         Just n   -> case d of
->             Some x   -> do
->                           modifyContext (<>< _Psi)
->                           x' <- typeToNum x
->                           unifyZero ps F0 (substNExp (alpha, n) x' e)
->                           restore
->             Hole   | n `dividesCoeffs` e -> do
->                           modifyContext (<>< _Psi)
->                           replace $ (alpha := Some (numToType (pivot (alpha, n) e)) ::: KindNum) :> F0
->                    | (alpha, n) `notMaxCoeff` e -> do
->                           modifyContext (<>< _Psi)
->                           (p, beta) <- insertFreshVar $ pivot (alpha, n) e
->                           unifyZero ps ((beta := Hole ::: KindNum) :> F0) $ substNExp (alpha, n) p e
->                           replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
->             _ -> case findRewrite alpha ps of
->                      Just na -> do
->                          unifyZero (map (substNormPred alpha na) ps) _Psi (substNum alpha na e)
->                          restore
->                      Nothing | numVariables e > fwdLength _Psi + 1 -> do
->                           unifyZero ps ((alpha := Hole ::: KindNum) :> _Psi) e
->                           replace F0
->                              | otherwise -> fail "No way!"
+>       Nothing -> unifyZero _Psi e >> restore
+>       Just n -> case d of
+>         Some x -> do
+>             modifyContext (<>< _Psi)
+>             x' <- typeToNum x
+>             unifyZero F0 (substNum alpha x' e)
+>             restore
+>         Hole  | n `dividesCoeffs` e -> do
+>                   modifyContext (<>< _Psi)
+>                   replace $ (alpha := Some (numToType (pivot (alpha, n) e)) ::: KindNum) :> F0
+>               | (alpha, n) `notMaxCoeff` e -> do
+>                   modifyContext (<>< _Psi)
+>                   error "this really ought to be tested"
+>                   (p, beta) <- insertFreshVar $ pivot (alpha, n) e
+>                   unifyZero ((beta := Hole ::: KindNum) :> F0) $ substNExp (alpha, n) p e
+>                   replace $ (alpha := Some (numToType p) ::: KindNum) :> F0
+>         _  | numVariables e > fwdLength _Psi + 1 -> do
+>                          unifyZero ((alpha := d ::: KindNum) :> _Psi) e
+>                          replace F0
+>            | otherwise -> do
+>                modifyContext (:< A (alpha := d ::: KindNum))
+>                modifyContext (<>< _Psi)
+>                constrainZero e
+>                replace F0
+>                --g <- getContext
+>                --fail $ "No way for " ++ render e ++ " in " ++
+>                --           render g ++ "; " ++ render (alpha := d ::: KindNum) ++ " | " ++ render _Psi
 
+
+> subsPreds a dn = map (substNormPred a dn)
 
 > findRewrite :: TyName -> [NormalPredicate] -> Maybe NormalNum
 > findRewrite a hs = join $ listToMaybe $ map (toRewrite a) hs

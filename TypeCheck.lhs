@@ -145,7 +145,10 @@ location is found.
 
 
 > solveConstraints :: Bool -> Contextual t ()
-> solveConstraints try = seekTruth [] []
+> solveConstraints try = do
+>   g <- getContext
+>   mtrace $ "solveConstraints: " ++ render g
+>   seekTruth [] []
 >  where
 >   seekTruth :: [NormalPredicate] -> [NormalPredicate] -> Contextual t ()
 >   seekTruth hs ps = do
@@ -153,17 +156,18 @@ location is found.
 >     case g of
 >       B0         -> do
 >           cs <- catMaybes <$> mapM (deduce hs) ps
->           unless (null cs) $ fail "solveConstraints: out of scope error"
+>           unless (null cs) $ fail $ "solveConstraints: out of scope error: "
+>                                       ++ show (fsepPretty cs)
 >       (g :< xD)  -> putContext g >> case xD of
 >           Constraint Given h   -> seekTruth (h:hs) ps
 >           Constraint Wanted p  -> seekTruth hs (p:ps)
 >           A (a := Some d ::: KindNum) -> do
 >               dn <- typeToNum d
->               seekTruth (subs a dn hs) (subs a dn ps)
+>               seekTruth (subsPreds a dn hs) (subsPreds a dn ps)
 >               modifyContext (:< xD)
 >           A (a := d ::: KindNum) -> case findRewrite a hs of
 >               Just n   -> do
->                   seekTruth (subs a n hs) (subs a n ps)
+>                   seekTruth (subsPreds a n hs) (subsPreds a n ps)
 >                   modifyContext (:< xD)
 >               Nothing  -> do
 >                   let (aps, qs) = partition (a <?) ps
@@ -173,10 +177,6 @@ location is found.
 >                   modifyContext (<><< map (Constraint Wanted) cs)
 >           Layer (PatternTop _ _ ks ws) -> seekTruth (ks ++ hs) (ws ++ ps)
 >           _ -> seekTruth hs ps >> modifyContext (:< xD)
-
-
->   subs a dn = map (substNormPred a dn)
-
 
 >   deduce :: [NormalPredicate] -> NormalPredicate -> Contextual t (Maybe NormalPredicate)
 >   deduce hs (IsZero n)  | isZero n                 = return Nothing

@@ -120,6 +120,11 @@ should use a better representation?
 > args (Qual p t) = args t
 > args _ = 0
 
+> splitArgs :: Ty k a -> ([Ty k a], Ty k a)
+> splitArgs (TyApp (TyApp Arr s) t) = (s:ss, ty)
+>   where (ss, ty) = splitArgs t
+> splitArgs t = ([], t)
+
 > targets :: Eq a => Ty k a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
