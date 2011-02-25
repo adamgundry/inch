@@ -92,13 +92,16 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var KindNum  = TyNum . NumVar
 > var k        = TyVar k
 
+This is inefficient, but ensures Binds go outside Quals. Perhaps we
+should use a better representation?
+
 > simplifyTy :: Ty k a -> Ty k a
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)
 > simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
 > simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
 > simplifyTy (Qual p t)      = case simplifyTy t of
->     Bind b x k t' -> Bind b x k $ Qual (fmap S (simplifyPred p)) t'
->     t' -> Qual (simplifyPred p) t'
+>     Bind b x k t'  -> Bind b x k $ simplifyTy (Qual (fmap S p) t')
+>     t'             -> Qual (simplifyPred p) t'
 > simplifyTy t               = t
 
 

@@ -158,16 +158,19 @@
 >     return ()
 
 > rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
+> rigidHull (TyVar KindNum a)      = do  n <- freshName
+>                                        let beta = ("_j", n)
+>                                        return (TyNum (NumVar beta), (beta, NumVar a) :> F0)
 > rigidHull (TyVar k a)            = return (TyVar k a, F0)
 > rigidHull (TyCon c)              = return (TyCon c, F0)
-> rigidHull (TyApp f s)            = do  (f',      xs  )  <- rigidHull f
+> rigidHull (TyApp f s)            = do  (f',  xs  )  <- rigidHull f
 >                                        (s',  ys  )  <- rigidHull s
 >                                        return (TyApp f' s', xs <+> ys)
 > rigidHull Arr = return (Arr, F0)
 > rigidHull (TyNum d)          = do  n <- freshName
 >                                    let beta = ("_i", n)
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
-> rigidHull (Bind b x k t) = return (Bind b x k t, F0)
+> rigidHull b = error $ "rigidHull: " ++ show b
 
 > pairsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
 > pairsToSuffix = fmap ((:= Hole ::: KindNum) . fst)

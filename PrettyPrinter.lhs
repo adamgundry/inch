@@ -165,9 +165,11 @@
 > instance Pretty NormalNum where
 >     pretty n _ = prettyHigh $ simplifyNum $ reifyNum n
 
-> instance Pretty a => Pretty (Bwd a) where
+> instance Pretty x => Pretty (Bwd x) where
 >     pretty bs _ = fsep $ punctuate (text ",") (map prettyHigh (trail bs))
 
+> instance Pretty x => Pretty (Fwd x) where
+>     pretty bs _ = fsep $ punctuate (text ",") $ map prettyHigh $ Data.Foldable.foldr (:) [] bs
 
 
 > fsepPretty xs  = fsep . punctuate (text ",") . map prettyHigh $ xs
