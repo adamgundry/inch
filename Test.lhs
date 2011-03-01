@@ -1,12 +1,12 @@
 > module Test where
 
-> import Text.PrettyPrint.HughesPJ
-> import qualified Text.ParserCombinators.Parsec.IndentParser as I
+> import Control.Monad.State
 
 > import Parser
 > import PrettyPrinter
 > import Syntax
 > import ProgramCheck
+> import Erase
 
 > test :: (a -> Either String String)
 >             -> [a] -> Int -> Int -> String
@@ -30,10 +30,10 @@
 
 
 > roundTrip :: String -> Either String String
-> roundTrip s = case I.parse program "roundTrip" s of
+> roundTrip s = case parse program "roundTrip" s of
 >     Right prog  ->
 >         let s' = show $ vcatPretty prog in
->         case I.parse program "roundTrip2" s' of
+>         case parse program "roundTrip2" s' of
 >             Right prog'
 >               | prog == prog'  -> Right $ show (vcatPretty prog')
 >               | otherwise      -> Left $ "Round trip mismatch:"
@@ -100,7 +100,7 @@
 
 
 > parseCheck :: (String, Bool) -> Either String String
-> parseCheck (s, b) = case I.parse program "parseCheck" s of
+> parseCheck (s, b) = case parse program "parseCheck" s of
 >     Right p   -> case typeCheck p of
 >         Right (p', st)
 >             | b      -> Right $ "Accepted good program:\n"
@@ -183,6 +183,24 @@
 
 
 
+> eraseCheck :: String -> Either String String
+> eraseCheck s = case parse program "eraseCheck" s of
+>     Right p   -> case typeCheck p of
+>         Right (p', st) -> case runStateT (eraseProg p') st of
+>             Right (p'', st) -> Right $ "Erased program:\n" ++ show (prettyProgram p'')
+>             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ render err ++ "\n"
+
+>         Left err -> Left $ "Rejected program:\n"
+>                             ++ s ++ "\n" ++ render err ++ "\n"
+>     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
+
+> eraseCheckTest = runTest eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
+
+
 > checkPrelude = do
 >     s <- readFile "Prelude.nhs"
 >     putStrLn $ test parseCheck [(s, True)] 0 0
+
+> erasePrelude = do
+>     s <- readFile "Prelude.nhs"
+>     putStrLn $ test eraseCheck [s] 0 0

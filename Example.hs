@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -F -pgmF ./toy #-}
+{-# LANGUAGE ExplicitForAll, GADTs, KindSignatures #-}
 
 -- Combinators
 
@@ -9,9 +11,9 @@ comp f g = \ x -> f (g x)
 
 -- Data types
 
-data Bool where
-  True :: Bool
-  False :: Bool
+data Bools where
+  TT :: Bools
+  FF :: Bools
 
 data Nat where
   Zero :: Nat
@@ -78,8 +80,8 @@ vid VNil          = VNil
 vid (VCons x xs)  = VCons x (vid xs)
 
 
-undefined :: forall a. a
-undefined = undefined
+bottom :: forall a. a
+bottom = bottom
 
 unaryToNat :: forall (n :: Num) . UNat n -> Nat
 unaryToNat UZero    = Zero
@@ -90,9 +92,9 @@ plan UZero = VNil
 plan (USuc m) = VCons (unaryToNat m) (plan m)
 
 
-lookup :: forall (n m :: Num) a . 0 <= m, (m+1) <= n => Vec n a -> UNat m -> a
-lookup (VCons x xs) UZero = x
-lookup (VCons x xs) (USuc m) = lookup xs m
+vlookup :: forall (n m :: Num) a . 0 <= m, (m+1) <= n => Vec n a -> UNat m -> a
+vlookup (VCons x xs) UZero = x
+vlookup (VCons x xs) (USuc m) = vlookup xs m
 
 
 one      = Suc Zero

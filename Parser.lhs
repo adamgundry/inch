@@ -19,6 +19,8 @@
 > import Kit
 
 
+> parse = I.parse
+
 > toyDef = haskellDef
 
 > lexer       = T.makeTokenParser toyDef    
