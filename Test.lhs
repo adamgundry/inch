@@ -31,10 +31,10 @@
 
 > roundTrip :: String -> Either String String
 > roundTrip s = case parse program "roundTrip" s of
->     Right prog  ->
+>     Right (prog, _)  ->
 >         let s' = show $ vcatPretty prog in
 >         case parse program "roundTrip2" s' of
->             Right prog'
+>             Right (prog', _)
 >               | prog == prog'  -> Right $ show (vcatPretty prog')
 >               | otherwise      -> Left $ "Round trip mismatch:"
 >                     ++ "\n" ++ s ++ "\n" ++ s'
@@ -101,7 +101,7 @@
 
 > parseCheck :: (String, Bool) -> Either String String
 > parseCheck (s, b) = case parse program "parseCheck" s of
->     Right p   -> case typeCheck p of
+>     Right (p, _)   -> case typeCheck p of
 >         Right (p', st)
 >             | b      -> Right $ "Accepted good program:\n"
 >                                     ++ show (prettyProgram p') ++ "\n"
@@ -185,7 +185,7 @@
 
 > eraseCheck :: String -> Either String String
 > eraseCheck s = case parse program "eraseCheck" s of
->     Right p   -> case typeCheck p of
+>     Right (p, _)   -> case typeCheck p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
 >             Right (p'', st) -> Right $ "Erased program:\n" ++ show (prettyProgram p'')
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ render err ++ "\n"

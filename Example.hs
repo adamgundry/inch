@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -F -pgmF ./toy #-}
 {-# LANGUAGE ExplicitForAll, GADTs, KindSignatures #-}
 
+module Example where
+
 -- Combinators
 
 k        = \ x y -> x
@@ -19,10 +21,6 @@ data Nat where
   Zero :: Nat
   Suc :: Nat -> Nat
 
-data List :: * -> * where
-  Nil :: forall a. List a
-  Cons :: forall a. a -> List a -> List a
-
 {-
 data Vec :: Num -> * -> * where
   VNil :: forall a. Vec 0 a
@@ -31,7 +29,7 @@ data Vec :: Num -> * -> * where
 
 data Vec :: Num -> * -> * where
   VNil :: forall (n :: Num) a . n ~ 0 => Vec n a
-  VCons :: forall (n m :: Num) a . 0 <= n, m ~ (n + 1) => a -> Vec n a -> Vec m a
+  VCons :: forall (n m :: Num) a . 1 <= n => a -> Vec (n-1) a -> Vec n a
 
 data UNat :: Num -> * where
   UZero :: forall (n :: Num) . n ~ 0 => UNat n
@@ -70,6 +68,9 @@ vrevapp :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vrevapp VNil ys = ys
 vrevapp (VCons x xs) ys = vrevapp xs (VCons x ys)
 
+vreverse :: forall (n :: Num) a . Vec n a -> Vec n a
+vreverse xs = vrevapp xs VNil
+
 vec :: forall (n :: Num) a. UNat n -> a -> Vec n a
 vec UZero    a = VNil
 vec (USuc m) a = VCons a (vec m a)
@@ -79,6 +80,9 @@ vid :: forall (n :: Num) a . Vec n a -> Vec n a
 vid VNil          = VNil
 vid (VCons x xs)  = VCons x (vid xs)
 
+vmap :: forall (n :: Num) a b . (a -> b) -> Vec n a -> Vec n b
+vmap f VNil = VNil
+vmap f (VCons x xs) = VCons (f x) (vmap f xs)
 
 bottom :: forall a. a
 bottom = bottom
@@ -95,6 +99,8 @@ plan (USuc m) = VCons (unaryToNat m) (plan m)
 vlookup :: forall (n m :: Num) a . 0 <= m, (m+1) <= n => Vec n a -> UNat m -> a
 vlookup (VCons x xs) UZero = x
 vlookup (VCons x xs) (USuc m) = vlookup xs m
+
+
 
 
 one      = Suc Zero

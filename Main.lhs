@@ -23,11 +23,14 @@
 >         _ -> putStrLn $ help me
 
 
+> modHeader Nothing = ""
+> modHeader (Just m) = "module " ++ m ++ " where\n"
+
 > preprocess :: String -> String -> Either String String
 > preprocess fn s = case parse program fn s of
->     Right p   -> case typeCheck p of
+>     Right (p, mn) -> case typeCheck p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
->             Right (p'', st) -> Right $ show (prettyProgram p'')
+>             Right (p'', st) -> Right $ modHeader mn ++ show (prettyProgram p'')
 >             Left err        -> Left $ "erase error:\n" ++ render err ++ "\n"
 
 >         Left err -> Left $ "type-checking failed:\n"

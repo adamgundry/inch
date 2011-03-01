@@ -168,7 +168,13 @@ Terms
 
 Programs
 
-> program = whiteSpace >> many decl <* eof
+> program = do
+>     whiteSpace
+>     mn <- optional (reserved "module" *>
+>                        identLike False "module name" <* reserved "where")
+>     ds <- many decl
+>     eof
+>     return (ds, mn)
 
 > decl  =    DD <$> dataDecl
 >       <|>  FD <$> funDecl
