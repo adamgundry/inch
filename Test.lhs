@@ -179,6 +179,7 @@
 >   (vecDecl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   (vec2Decl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   ("f :: forall a. 0 ~ 1 => a\nf = f", False) :
+>   ("x = y\ny = x", True) :
 >   []
 
 

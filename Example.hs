@@ -10,6 +10,7 @@ s x y z  = x z (y z)
 i        = s k k 
 app f s  = f s
 comp f g = \ x -> f (g x)
+fix f    = f (fix f)
 
 -- Data types
 

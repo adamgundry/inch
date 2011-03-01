@@ -3,9 +3,14 @@
 > import Control.Applicative
 > import Control.Monad.Error
 > import Control.Monad.State
+> import Control.Monad.Writer
 > import Text.ParserCombinators.Parsec
 
 > instance Monad m => Applicative (StateT s m) where
+>     pure = return
+>     (<*>) = ap
+
+> instance (Monoid o, Monad m) => Applicative (WriterT o m) where
 >     pure = return
 >     (<*>) = ap
 

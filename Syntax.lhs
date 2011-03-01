@@ -59,6 +59,13 @@
 
 
 
+> partitionDecls :: [Decl k a x] -> ([DataDecl k a x], [FunDecl k a x])
+> partitionDecls [] = ([], [])
+> partitionDecls (DD d : xs) = (d:ds, fs)
+>   where (ds, fs) = partitionDecls xs
+> partitionDecls (FD f : xs) = (ds, f:fs)
+>   where (ds, fs) = partitionDecls xs
+
 
 > traverseTypes :: Applicative f => (Ty k a -> f (Ty l b)) -> Tm k a x -> f (Tm l b x)
 > traverseTypes g (TmVar x) = pure $ TmVar x

@@ -8,7 +8,7 @@
 > import Control.Monad.Writer hiding (All)
 > import Data.List
 > import Data.Maybe
-> import Data.Bitraversable
+> import Data.Traversable
 
 > import BwdFwd
 > import TyNum
@@ -29,18 +29,23 @@
 > typeCheck p = runStateT (checkProg p) initialState
 
 > checkProg :: SProgram -> Contextual () Program
-> checkProg = mapM checkDecl 
+> checkProg xs = do
+>     let (ds, _) = partitionDecls xs
+>     traverse makeTyCon ds
+>     traverse checkDecl xs
+>   where
+>     makeTyCon :: SDataDeclaration -> Contextual () ()
+>     makeTyCon (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
+>         unless (targetsSet k) $ errKindTarget k
+>         insertTyCon t k
 
 > checkDecl :: SDeclaration -> Contextual () Declaration
 > checkDecl (DD d) = DD <$> checkDataDecl d
-> checkDecl (FD f) = FD <$> checkFunDecl f
->     
+> checkDecl (FD f) = FD <$> checkFunDecl f  
 
 > checkDataDecl :: SDataDeclaration -> Contextual () DataDeclaration
-> checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
->     unless (targetsSet k) $ errKindTarget k
->     insertTyCon t k
->     DataDecl t k <$> mapM (checkConstructor t) cs
+> checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $
+>     DataDecl t k <$> traverse (checkConstructor t) cs
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation ("in constructor " ++ c) $ do
@@ -57,7 +62,7 @@
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
 >     sty     <- unknownTyVar $ "sty" ::: Set
->     pattys  <- mapM (checkPat True (s ::: sty) sty) pats
+>     pattys  <- traverse (checkPat True (s ::: sty) sty) pats
 >     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
 >     ty'     <- simplifyTy <$> generalise sty
 >     modifyContext (:< Func s ty')
@@ -71,7 +76,7 @@
 
 >     sty'  <- specialise sty
 
->     pattys <- mapM (checkPat False (s ::: sty) sty') pats
+>     pattys <- traverse (checkPat False (s ::: sty) sty') pats
 >     let ty = tyOf (head pattys)
 >     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render . expandContext =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
@@ -138,7 +143,8 @@
 > unifySolveConstraints :: Contextual t ()
 > unifySolveConstraints = do
 >     ns <- collectEqualities <$> getContext
->     mapM_ (unifyZero F0) ns
+>     traverse (unifyZero F0) ns
+>     return ()
 >   where
 >     collectEqualities :: Context -> [NormalNum]
 >     collectEqualities B0 = []
@@ -165,4 +171,4 @@
 >     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
 
 
-> checkPatTerms = mapM checkPatTerm
+> checkPatTerms = traverse checkPatTerm
