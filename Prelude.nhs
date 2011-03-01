@@ -32,8 +32,8 @@ data Vec :: Num -> * -> * where
   VCons :: forall (n m :: Num) a . 0 <= n, m ~ (n + 1) => a -> Vec n a -> Vec m a
 
 data UNat :: Num -> * where
-  UZero :: UNat 0
-  USuc :: forall (n :: Num). UNat n -> UNat (n+1)
+  UZero :: forall (n :: Num) . n ~ 0 => UNat n
+  USuc :: forall (n m :: Num). 0 <= n, m ~ (n + 1) => UNat n -> UNat m
 
 
 -- Vector kit
@@ -44,7 +44,7 @@ vhead (VCons x xs) = x
 vtail :: forall (n :: Num) a. 0 <= n => Vec (n+1) a -> Vec n a
 vtail (VCons x xs) = xs
 
-vtail2 :: forall (n :: Num) a. 0 <= n, 0 <= (n + 1) => Vec (n+2) a -> Vec n a
+vtail2 :: forall (n :: Num) a. 0 <= n => Vec (n+2) a -> Vec n a
 vtail2 (VCons x (VCons y xs)) = xs
 
 vtail3 :: forall (n :: Num) a. 1 <= n => Vec n a -> Vec (n-1) a
@@ -53,26 +53,46 @@ vtail3 (VCons x xs) = xs
 vtail4 :: forall (n :: Num) a. 1 <= n => Vec n a -> Vec (n-1) a
 vtail4 (VCons x xs) = xs
 
-{-
-twotails :: forall (n :: Num) a. 0 <= n, 0 <= (n+1) => Vec (n+2) a -> Vec n a
+twotails :: forall (n :: Num) a. 0 <= n => Vec (n+2) a -> Vec n a
 twotails xs = vtail (vtail xs)
--}
 
+-- thing :: forall a (n m :: Num) . 1 <= n, n <= m => Vec n (Vec m a) -> Vec (m-1) a
 thing = comp vtail vhead
 
-{-
-vappend :: forall (m n :: Num) a . 0 <= m, 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
+
+vappend :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vappend VNil ys = ys
 vappend (VCons x xs) ys = VCons x (vappend xs ys)
 
-vrevapp :: forall (m n :: Num) a . Vec m a -> Vec n a -> Vec (m+n) a
+vrevapp :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vrevapp VNil ys = ys
 vrevapp (VCons x xs) ys = vrevapp xs (VCons x ys)
 
 vec :: forall (n :: Num) a. UNat n -> a -> Vec n a
 vec UZero    a = VNil
 vec (USuc m) a = VCons a (vec m a)
--}
+
+
+vid :: forall (n :: Num) a . Vec n a -> Vec n a
+vid VNil          = VNil
+vid (VCons x xs)  = VCons x (vid xs)
+
+
+undefined :: forall a. a
+undefined = undefined
+
+unaryToNat :: forall (n :: Num) . UNat n -> Nat
+unaryToNat UZero    = Zero
+unaryToNat (USuc m) = Suc (unaryToNat m)
+
+plan :: forall (n :: Num) . UNat n -> Vec n Nat
+plan UZero = VNil
+plan (USuc m) = VCons (unaryToNat m) (plan m)
+
+
+lookup :: forall (n m :: Num) a . 0 <= m, (m+1) <= n => Vec n a -> UNat m -> a
+lookup (VCons x xs) UZero = x
+lookup (VCons x xs) (USuc m) = lookup xs m
 
 
 one      = Suc Zero
@@ -81,10 +101,3 @@ three    = Suc two
 v123     = VCons one (VCons two (VCons three VNil))
 right    = vhead v123
 righter  = app vtail v123
-
-
-
-
-vid :: forall (n :: Num) a . Vec n a -> Vec n a
-vid VNil          = VNil
-vid (VCons x xs)  = VCons x (vid xs)

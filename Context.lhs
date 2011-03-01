@@ -207,7 +207,7 @@ Data constructors
 >     expandNumVar :: Context -> TyName -> TypeNum
 >     expandNumVar g a = maybe (NumVar a) ((>>= expandNumVar g) . toNum) $ defToMaybe $ seek g a
 
->     seek B0 a = error "expandPredicate: erk"
+>     seek B0 a = error "expandNum: erk"
 >     seek (g :< A (b := d ::: KindNum)) a | a == b = d
 >     seek (g :< _) a = seek g a
 

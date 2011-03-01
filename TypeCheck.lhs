@@ -8,7 +8,9 @@
 > import Control.Monad.Writer hiding (All)
 > import Data.List
 > import Data.Maybe
-> import Data.Bitraversable
+> import Data.Traversable
+
+> import qualified Data.Integer.Presburger as P
 
 > import BwdFwd
 > import TyNum
@@ -151,7 +153,7 @@ location is found.
 > solveConstraints :: Bool -> Contextual t ()
 > solveConstraints try = do
 >   g <- getContext
->   mtrace $ "solveConstraints: " ++ render (expandContext g)
+>   -- mtrace $ "solveConstraints: " ++ render (expandContext g)
 >   seekTruth [] []
 >  where
 >   seekTruth :: [NormalPredicate] -> [NormalPredicate] -> Contextual t ()
@@ -159,7 +161,7 @@ location is found.
 >     g <- getContext
 >     case g of
 >       B0         -> do
->           cs <- catMaybes <$> mapM (deduce hs) ps
+>           cs <- catMaybes <$> traverse (deduce hs) ps
 >           unless (null cs) $ fail $ "solveConstraints: out of scope error: "
 >                                       ++ show (fsepPretty cs)
 >       (g :< xD)  -> putContext g >> case xD of
@@ -177,11 +179,11 @@ location is found.
 >                   let (aps, qs) = partition (a <?) ps
 >                   seekTruth (filter (not . (a <?)) hs) qs
 >                   modifyContext (:< xD)
->                   mtrace $ "hs: " ++ show hs
->                             ++ "\na: " ++ show (prettyVar a)
->                             ++ "\naps: " ++ show (fsepPretty aps)
->                             ++ "\nqs: " ++ show (fsepPretty qs)
->                   cs <- catMaybes <$> mapM (deduce hs) aps
+>                   -- mtrace $ "hs: " ++ show hs
+>                   --          ++ "\na: " ++ show (prettyVar a)
+>                   --          ++ "\naps: " ++ show (fsepPretty aps)
+>                   --          ++ "\nqs: " ++ show (fsepPretty qs)
+>                   cs <- catMaybes <$> traverse (deduce hs) aps
 >                   modifyContext (<><< map (Constraint Wanted) cs)
 >           Layer (PatternTop _ _ ks ws) -> seekTruth (ks ++ hs) (ws ++ ps)
 >           _ -> seekTruth hs ps >> modifyContext (:< xD)
@@ -191,13 +193,46 @@ location is found.
 >   deduce hs (IsPos n)   | Just k <- getConstant n  = 
 >         if k >= 0  then  return Nothing
 >                    else  fail $ "Impossible constraint 0 <= " ++ show k
->   deduce hs p  | p `elem` hs  = return Nothing
->                  | try          = return $ Just p
->                  | otherwise    = do
+>   deduce hs p = do
+>       f <- toFormula hs p
+>       if P.check f
+>           then return Nothing
+>           else if try
+>                then return $ Just p
+>                else do
 >         g <- getContext
 >         fail $ "Could not deduce " ++ render p ++ " from [" ++ show (fsepPretty hs)
 >                                              ++ "] in context\n" ++ render g
 
+
+> toFormula :: [NormalPredicate] -> NormalPredicate -> Contextual t P.Formula
+> toFormula hs p = do
+>     g <- getContext
+>     let hs'  = map (expandPred g . reifyPred) hs
+>         p'   = expandPred g (reifyPred p)
+>     return $ convert (expandContext g) [] hs' p'
+>   where
+>     convert :: Context -> [(TyName, P.Term)] -> [Predicate] -> Predicate -> P.Formula
+>     convert B0 axs hs p =
+>         foldr (P.:/\:) P.TRUE (map (predToFormula . apply axs) hs)
+>             P.:=>: predToFormula (apply axs p)
+>     convert (g :< A (a := _ ::: KindNum)) axs hs p = 
+>         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
+>     convert (g :< _) axs hs p = convert g axs hs p
+
+>     apply :: [(TyName, P.Term)] -> Predicate -> Pred P.Term
+>     apply xs = bindPred (NumVar . fromJust . flip lookup xs)
+>                
+>     predToFormula :: Pred P.Term -> P.Formula
+>     predToFormula (m :==: n)  = numToTerm m P.:=: numToTerm n
+>     predToFormula (m :<=: n)  = numToTerm m P.:<=: numToTerm n
+
+>     numToTerm :: TyNum P.Term -> P.Term
+>     numToTerm (NumConst k)  = fromInteger k
+>     numToTerm (NumVar t)    = t
+>     numToTerm (n :+: m)     = numToTerm n + numToTerm m
+>     numToTerm (n :*: m)     = numToTerm n * numToTerm m
+>     numToTerm (Neg n)       = - numToTerm n
 
 
 > generalise :: Type -> Contextual t Type

@@ -73,7 +73,7 @@
 
 >     pattys <- mapM (checkPat False (s ::: sty) sty') pats
 >     let ty = tyOf (head pattys)
->     mtrace . (s ++) . (" checkFunDecl context: " ++) . render . expandContext =<< getContext
+>     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render . expandContext =<< getContext
 >     ty' <- simplifyTy <$> generalise ty
 >     -- mtrace $ "checkFunDecl ty': " ++ render ty'
 
@@ -115,7 +115,7 @@
 >     -- mtrace $ "checkPat unifying: " ++ render nty ++ " and " ++ render nsty
 
 >     unify tty rty
->     mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
+>     -- mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
 >     unifySolveConstraints
 >     solveConstraints try
 >
