@@ -201,8 +201,9 @@ location is found.
 >                then return $ Just p
 >                else do
 >         g <- getContext
->         fail $ "Could not deduce " ++ render p ++ " from [" ++ show (fsepPretty hs)
->                                              ++ "] in context\n" ++ render g
+>         fail $ "Could not deduce " ++ render p
+>                    ++ " from [" ++ show (fsepPretty hs) ++ "]"
+>                    -- ++ " in context\n" ++ render g
 
 
 > toFormula :: [NormalPredicate] -> NormalPredicate -> Contextual t P.Formula

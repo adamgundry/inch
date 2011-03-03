@@ -97,8 +97,8 @@
 >                 u' <- niceType u
 >                 g <- getContext
 >                 return $ "when unifying\n        " ++ render t
->                     ++ "\n    and\n        " ++ render u
->                     ++ "\n    in context " ++ render g)
+>                     ++ "\n    and\n        " ++ render u)
+>                     -- ++ "\n    in context " ++ render g)
 
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
