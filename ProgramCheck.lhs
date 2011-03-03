@@ -61,7 +61,7 @@
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation ("in declaration of " ++ s) $ do
 >     modifyContext (:< Layer FunTop)
->     sty     <- unknownTyVar $ "sty" ::: Set
+>     sty     <- unknownTyVar $ "_sty" ::: Set
 >     pattys  <- traverse (checkPat True (s ::: sty) sty) pats
 >     -- mtrace . (s ++) . (" checkFunDecl context: " ++) . render =<< getContext
 >     ty'     <- simplifyTy <$> generalise sty
@@ -128,6 +128,7 @@
 >     -- mtrace . (s ++) . (" checkPat ty: " ++) . render =<< niceType ty
 >     return $ Pat xtms Trivial t' ::: ty
 
+> {-
 > matchArity :: Type -> [SPatternTerm] -> Contextual t ([SPatternTerm ::: Type], Type)
 > matchArity t [] = return ([], t)
 > matchArity (TyApp (TyApp (TyB Arr) s) t) (x:xs) = do
@@ -143,6 +144,7 @@
 >     unify t (sv --> tv)
 >     (ys, ty) <- matchArity tv xs
 >     return ((x ::: sv):ys, ty)
+> -}
 
 > unifySolveConstraints :: Contextual t ()
 > unifySolveConstraints = do
@@ -169,7 +171,7 @@
 >   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
 >     (s, t) <- lift $ splitFun sat
 >     sc   <- lookupTmCon c
->     cty  <- mapPatWriter $ inst Hole sc
+>     cty  <- mapPatWriter $ inst (++ "_pat_inst") Hole sc
 >     unless (length xs == args cty) $
 >         errConUnderapplied c (args cty) (length xs)
 >     (pts, aty)  <- checkPatTerms cty xs
@@ -185,13 +187,13 @@
 >     return ((PatIgnore ::: s) : pts, ty)
 
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
->     nm <- fresh x (Fixed ::: KindNum)
+>     nm <- fresh ("_" ++ x ++ "aa") (Fixed ::: KindNum)
 >     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
 >     (pts, ty) <- checkPatTerms (unbind nm t) ps
 >     return ((PatBrace Nothing k ::: TyNum (NumVar nm)) : pts, ty)
 
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
->     nm <- fresh (x ++ "oo") (Fixed ::: KindNum)
+>     nm <- fresh ("_" ++ x ++ "oo") (Fixed ::: KindNum)
 >     am <- fresh a (Fixed ::: KindNum)
 >     tell ([], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
 >     (pts, ty) <- checkPatTerms (unbind nm t) ps

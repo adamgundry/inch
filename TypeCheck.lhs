@@ -119,7 +119,7 @@ location is found.
 >     TmApp f s -> goAppLeft >> inferType
 >     TmBrace n -> fail "Braces aren't cool"
 >     Lam x t -> do
->         a <- fresh "a" (Hole ::: Set)
+>         a <- fresh "_a" (Hole ::: Set)
 >         goLam (TyVar Set a)
 >         inferType
 >     t :? ty -> goAnnotLeft >> inferType
@@ -133,30 +133,30 @@ location is found.
 
 
 
-> inst :: TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
-> inst d (TyApp f a)     = TyApp f <$> inst d a
-> inst d (Bind All x k t)  = do
->     beta <- fresh x (d ::: k)
->     inst d (unbind beta t)
-> inst d (Qual p t)      = do
+> inst :: (String -> String) -> TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
+> inst s d (TyApp f a)     = TyApp f <$> inst s d a
+> inst s d (Bind All x k t)  = do
+>     beta <- fresh (s x) (d ::: k)
+>     inst s d (unbind beta t)
+> inst s d (Qual p t)      = do
 >     p' <- lift $ normalisePred p
 >     tell [p']
->     inst d t
-> inst d t               = return t
+>     inst s d t
+> inst s d t               = return t
 
 
-> instS :: CStatus -> TypeDef -> Type -> Contextual t Type
-> instS s d t = do
->     (ty, cs) <- runWriterT $ inst d t
+> instS :: (String -> String) -> CStatus -> TypeDef -> Type -> Contextual t Type
+> instS f s d t = do
+>     (ty, cs) <- runWriterT $ inst f d t
 >     modifyContext (<><< map (Constraint s) cs)
 >     return ty
 
 
 > specialise :: Type -> Contextual t Type
-> specialise = instS Given Fixed
+> specialise = instS id Given Fixed
 
 > instantiate :: Type -> Contextual t Type
-> instantiate = instS Wanted Hole
+> instantiate = instS (++ "_inst") Wanted Hole
 
 
 > solveConstraints :: Bool -> Contextual t ()
@@ -170,7 +170,8 @@ location is found.
 >     case (qs, try) of
 >       ([],   _      ) -> return ()
 >       (_:_,  True   ) -> want qs
->       (_:_,  False  ) -> fail "Could not deduce"
+>       (_:_,  False  ) -> fail $ "Could not deduce\n    [" ++ show (fsepPretty qs)
+>                              ++ "]\nfrom\n    [" ++ show (fsepPretty hs) ++ "]"
 >   where
 >     formulaic hs p = (not . P.check) <$> toFormula hs p
 >

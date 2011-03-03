@@ -281,5 +281,5 @@ We can insert a fresh variable into a unit thus:
 > insertFreshVar :: NormalNum -> Contextual t (NormalNum, TyName)
 > insertFreshVar d = do
 >     n <- freshName
->     let beta = ("beta", n)
+>     let beta = ("_beta", n)
 >     return (d +~ mkVar beta, beta)

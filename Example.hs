@@ -120,11 +120,9 @@ pairMap :: forall a b c d . (a -> c) -> (b -> d) -> Pair a b -> Pair c d
 pairMap f g (Pair a b) = Pair (f a) (g b)
 
 
-{-
-vsplit :: forall (m n :: Num) a . UNat m -> Vec (m + n) a -> Pair (Vec m a) (Vec n a)
-vsplit UZero xs = Pair VNil xs
-vsplit (USuc i) (VCons x xs) = pairMap (\ ys -> VCons x ys) i (vsplit i xs)
--}
+vsplit :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)
+vsplit {0}   xs           = Pair VNil xs
+vsplit {n+1} (VCons x xs) = pairMap (VCons x) i (vsplit {n} xs)
 
 vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a
 vtake {0}   _            = VNil
@@ -200,6 +198,7 @@ Things that would be nice:
 * Existentials
 * Mutually recursive binding groups
 * Nat kind (desugars to Num with inequality constraint)
+* Fix lexically-scoped type variables, without name munging
 -}
 
 
