@@ -161,6 +161,49 @@ location is found.
 
 > solveConstraints :: Bool -> Contextual t ()
 > solveConstraints try = do
+>     g <- getContext
+>     let (g', hs, ps) = collect g [] []
+>     putContext g'
+>     -- mtrace $ "solveConstraints: hs = " ++ show (fsepPretty hs)
+>     -- mtrace $ "solveConstraints: ps = " ++ show (fsepPretty ps)
+>     qs <- filterM (formulaic hs) ps
+>     case (qs, try) of
+>       ([],   _      ) -> return ()
+>       (_:_,  True   ) -> want qs
+>       (_:_,  False  ) -> fail "Could not deduce"
+>   where
+>     formulaic hs p = (not . P.check) <$> toFormula hs p
+>
+>     collect :: Context -> [NormalPredicate] -> [NormalPredicate] ->
+>         (Context, [NormalPredicate], [NormalPredicate])
+>     collect B0 hs ps = (B0, hs, ps)
+>     collect (g :< Constraint Wanted p)  hs ps = collect g hs (p:ps)
+>     collect (g :< Constraint Given h)   hs ps = collect g (h:hs) ps <:< Constraint Given h
+>     collect (g :< A e@(a := Some d ::: KindNum)) hs ps =
+>         let dn = normalNum (toNum d) in 
+>         collect g (subsPreds a dn hs) (subsPreds a dn ps )
+>             <:< A e
+>     collect (g :< Layer (PatternTop _ _ ks ws)) hs ps = 
+>         collect g (ks ++ hs) (ws ++ ps)
+>     collect (g :< e) hs ps = collect g hs ps <:< e
+>
+>     (g, a, b) <:< e = (g :< e, a, b)
+>
+>     want :: [NormalPredicate] -> Contextual t ()
+>     want [] = return ()
+>     want (p:ps) | nonsense p  = fail $ "Impossible constraint " ++ render p
+>                 | otherwise   = modifyContext (:< Constraint Wanted p)
+>                                 >> want ps
+>
+>     nonsense :: NormalPredicate -> Bool
+>     nonsense (IsZero n) = maybe False (/= 0) (getConstant n)
+>     nonsense (IsPos  n) = maybe False (< 0)  (getConstant n)
+
+
+
+> {-
+> solveConstraints :: Bool -> Contextual t ()
+> solveConstraints try = do
 >   g <- getContext
 >   -- mtrace $ "solveConstraints: " ++ render (expandContext g)
 >   seekTruth [] []
@@ -214,6 +257,7 @@ location is found.
 >                    ++ " from [" ++ show (fsepPretty hs) ++ "]"
 >                    -- ++ " in context\n" ++ render g
 
+> -}
 
 > toFormula :: [NormalPredicate] -> NormalPredicate -> Contextual t P.Formula
 > toFormula hs p = do
@@ -254,6 +298,7 @@ location is found.
 >   where
 >     help g@(_ :< Layer FunTop)            t = return (g, t)
 >     help (g :< A ((an := Some d ::: k)))  t = help g (substTy an d t)
->     help (g :< A ((an := _ ::: k)))       t = help g (Bind All (fst an) k (bind an t))
+>     help (g :< A ((an := Hole ::: k)))    t = help g (Bind All (fst an) k (bind an t))
+>     help (g :< A ((an := Fixed ::: k)))   t = help g t
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
 >     help (g :< Constraint Given _)        t = help g t

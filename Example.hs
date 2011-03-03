@@ -196,10 +196,10 @@ aTm' = subst (comp V FSuc) aTm
 {-
 Things that would be nice:
 * Let bindings or where clauses
-* More efficient constraint solving that doesn't throw away information
 * Automatic translation of GADT notation into local equality constraints
 * Existentials
 * Mutually recursive binding groups
+* Nat kind (desugars to Num with inequality constraint)
 -}
 
 
@@ -226,21 +226,18 @@ serialize (Layer2 TT)  = Zero
 serialize (Layer2 FF)  = Suc Zero
 serialize (Layer3 n)   = n
 
--- layer :: forall (m :: Num) . m <= 2 => Layer m -> Layer (m + 1)
-layer :: forall (m :: Num) . Layer m -> Layer (m + 1)
+layer :: forall (m :: Num) . m <= 2 => Layer m -> Layer (m + 1)
 layer (Layer0 n)           = Layer1 (Suc n)
 layer (Layer1 (Suc Zero))  = Layer2 TT
 layer (Layer1 n)           = Layer2 FF
 layer (Layer2 TT)          = Layer3 Zero
 layer (Layer2 FF)          = Layer3 (Suc Zero)
 
-
 doLayers :: forall (m :: Num) . pi (n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
 doLayers {0}   l = l
 doLayers {i+1} l = doLayers {i} (layer l)
 
--- runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Nat -> Nat
-runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, m <= 3, (m + n) <= 3 => Nat -> Nat
+runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Nat -> Nat
 runLayers {m} {n} b = serialize (doLayers {n} (deserialize {m} b))
 
 
