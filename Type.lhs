@@ -41,22 +41,36 @@
 >   deriving (Eq, Show)
 
 
+> data BuiltinTyCon where
+>     Arr    :: BuiltinTyCon
+>     NumTy  :: BuiltinTyCon
+>   deriving (Eq, Show)
+
+> builtinKind :: BuiltinTyCon -> Kind
+> builtinKind Arr    = Set ---> Set ---> Set
+> builtinKind NumTy  = Set
+
 
 > data Ty k a where
 >     TyVar  :: k -> a -> Ty k a
 >     TyCon  :: TyConName -> Ty k a
 >     TyApp  :: Ty k a -> Ty k a -> Ty k a
->     Arr    :: Ty k a
+>     TyB    :: BuiltinTyCon -> Ty k a
 >     TyNum  :: TyNum a -> Ty k a
 >     Bind   :: Binder -> String -> Kind -> Ty k (S a) -> Ty k a
 >     Qual   :: Pred a -> Ty k a -> Ty k a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
+> mkTyCon :: String -> Ty k a
+> mkTyCon "Num" = TyB NumTy
+> mkTyCon "->"  = TyB Arr
+> mkTyCon c     = TyCon c
+
 > bindTy :: (Kind -> a -> Ty Kind b) -> Ty Kind a -> Ty Kind b
 > bindTy g (TyVar k a)     = g k a
 > bindTy g (TyCon c)       = TyCon c
 > bindTy g (TyApp f s)     = TyApp (bindTy g f) (bindTy g s)
-> bindTy g Arr             = Arr
+> bindTy g (TyB b)         = TyB b
 > bindTy g (TyNum n)       = TyNum (n >>= (toNum . g KindNum))
 > bindTy g (Qual p t)      = Qual (bindPred (toNum . g KindNum) p) (bindTy g t)
 > bindTy g (Bind b x k t)  = Bind b x k (bindTy (wkKind g) t)
@@ -71,7 +85,7 @@
 > wkKind g k Z      = TyVar k Z
 > wkKind g k (S a)  = fmap S (g k a)
 
-> s --> t = TyApp (TyApp Arr s) t
+> s --> t = TyApp (TyApp (TyB Arr) s) t
 > infixr 5 -->
 
 > (/->) :: Foldable f => f (Ty k a) -> Ty k a -> Ty k a
@@ -115,19 +129,19 @@ should use a better representation?
 > alphaConvert xys t = t
 
 > args :: Ty k a -> Int
-> args (TyApp (TyApp Arr s) t) = succ $ args t
+> args (TyApp (TyApp (TyB Arr) s) t) = succ $ args t
 > args (Bind b x k t) = args t
 > args (Qual p t) = args t
 > args _ = 0
 
 > splitArgs :: Ty k a -> ([Ty k a], Ty k a)
-> splitArgs (TyApp (TyApp Arr s) t) = (s:ss, ty)
+> splitArgs (TyApp (TyApp (TyB Arr) s) t) = (s:ss, ty)
 >   where (ss, ty) = splitArgs t
 > splitArgs t = ([], t)
 
 > targets :: Eq a => Ty k a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True
-> targets (TyApp (TyApp Arr _) ty)  t = targets ty t
+> targets (TyApp (TyApp (TyB Arr) _) ty)  t = targets ty t
 > targets (TyApp f s)               t = targets f t
 > targets (Bind b a k ty)           t = targets ty t
 > targets (Qual p ty)               t = targets ty t

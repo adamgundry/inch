@@ -79,6 +79,10 @@ vec :: forall (n :: Num) a. UNat n -> a -> Vec n a
 vec UZero    a = VNil
 vec (USuc m) a = VCons a (vec m a)
 
+vec2 :: forall a. pi (n :: Num) . a -> Vec n a
+vec2 {0} a = VNil
+vec2 {n+1} a = VCons a (vec2 {n} a)
+
 vid :: forall (n :: Num) a . Vec n a -> Vec n a
 vid VNil          = VNil
 vid (VCons x xs)  = VCons x (vid xs)
@@ -97,28 +101,34 @@ unaryToNat :: forall (n :: Num) . UNat n -> Nat
 unaryToNat UZero    = Zero
 unaryToNat (USuc m) = Suc (unaryToNat m)
 
-plan :: forall (n :: Num) . UNat n -> Vec n Nat
-plan UZero = VNil
-plan (USuc m) = VCons (unaryToNat m) (plan m)
+nat :: pi (n :: Num) . 0 <= n => Nat
+nat {0}   = Zero
+nat {n+1} = Suc (nat {n})
 
+plan :: pi (n :: Num) . 0 <= n => Vec n Nat
+plan {0}   = VNil
+plan {m+1} = VCons (nat {m}) (plan {m})
 
-vlookup :: forall (n m :: Num) a . 0 <= m, (m+1) <= n => Vec n a -> UNat m -> a
-vlookup (VCons x xs) UZero = x
-vlookup (VCons x xs) (USuc m) = vlookup xs m
+plan5 = plan {5}
+
+vlookup :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, (m+1) <= n => Vec n a -> a
+vlookup {0}   (VCons x xs) = x
+vlookup {k+1} (VCons x xs) = vlookup {k} xs
 
 
 pairMap :: forall a b c d . (a -> c) -> (b -> d) -> Pair a b -> Pair c d
 pairMap f g (Pair a b) = Pair (f a) (g b)
 
+
 {-
 vsplit :: forall (m n :: Num) a . UNat m -> Vec (m + n) a -> Pair (Vec m a) (Vec n a)
 vsplit UZero xs = Pair VNil xs
-vsplit (USuc i) (VCons x xs) = pairMap (VCons x) i (vsplit i xs)
+vsplit (USuc i) (VCons x xs) = pairMap (\ ys -> VCons x ys) i (vsplit i xs)
 -}
 
-vtake :: forall (m n :: Num) a . UNat m -> Vec (m + n) a -> Vec m a
-vtake UZero    xs           = VNil
-vtake (USuc i) (VCons x xs) = VCons x (vtake i xs)
+vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a
+vtake {0}   _            = VNil
+vtake {i+1} (VCons x xs) = VCons x (vtake {i} xs)
 
 
 one      = Suc Zero
@@ -186,8 +196,6 @@ aTm' = subst (comp V FSuc) aTm
 {-
 Things that would be nice:
 * Let bindings or where clauses
-* Underscores in patterns
-* Genuine Pi-types
 * More efficient constraint solving that doesn't throw away information
 * Automatic translation of GADT notation into local equality constraints
 * Existentials
@@ -204,12 +212,12 @@ data Layer :: Num -> * where
   Layer2 :: forall (m :: Num) . m ~ 2 => Bools  -> Layer m
   Layer3 :: forall (m :: Num) . m ~ 3 => Nat    -> Layer m
 
-deserialize :: forall (m :: Num) . m <= 3 => UNat m -> Nat -> Layer m
-deserialize UZero                      n     = Layer0 n
-deserialize (USuc UZero)               n     = Layer1 n
-deserialize (USuc (USuc UZero))        Zero  = Layer2 TT
-deserialize (USuc (USuc UZero))        n     = Layer2 FF
-deserialize (USuc (USuc (USuc UZero))) n     = Layer3 n
+deserialize :: pi (m :: Num) . m <= 3 => Nat -> Layer m
+deserialize {0} n     = Layer0 n
+deserialize {1} n     = Layer1 n
+deserialize {2} Zero  = Layer2 TT
+deserialize {2} n     = Layer2 FF
+deserialize {3} n     = Layer3 n
 
 serialize :: forall (m :: Num) . Layer m -> Nat
 serialize (Layer0 n)   = n
@@ -226,17 +234,16 @@ layer (Layer1 n)           = Layer2 FF
 layer (Layer2 TT)          = Layer3 Zero
 layer (Layer2 FF)          = Layer3 (Suc Zero)
 
--- doLayers :: forall (m n :: Num) . (m + n) <= 3 => UNat n -> Layer m -> Layer (m + n)
-doLayers :: forall (m n :: Num) . UNat n -> Layer m -> Layer (m + n)
-doLayers UZero l    = l
-doLayers (USuc n) l = doLayers n (layer l)
 
--- runLayers :: forall (m n :: Num) . 0 <= n, (m + n) <= 3 => UNat m -> UNat n -> Nat -> Nat
-runLayers :: forall (m n :: Num) . m <= 3, (m + n) <= 3 => UNat m -> UNat n -> Nat -> Nat
-runLayers m n b = serialize (doLayers n (deserialize m b))
+doLayers :: forall (m :: Num) . pi (n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
+doLayers {0}   l = l
+doLayers {i+1} l = doLayers {i} (layer l)
+
+-- runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Nat -> Nat
+runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, m <= 3, (m + n) <= 3 => Nat -> Nat
+runLayers {m} {n} b = serialize (doLayers {n} (deserialize {m} b))
 
 
-l1  = runLayers UZero (USuc UZero) Zero
-l2  = runLayers UZero (USuc (USuc UZero)) Zero
-l3  = runLayers UZero (USuc (USuc (USuc UZero))) Zero
--- bad = runLayers UZero (USuc (USuc (USuc (USuc UZero)))) Zero
+l1  = runLayers {0} {1} Zero
+l2  = runLayers {0} {2} Zero
+l3  = runLayers {0} {3} Zero

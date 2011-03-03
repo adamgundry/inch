@@ -95,6 +95,9 @@
 >   "f :: forall m n. 0 <= -n => Vec m\nf = f" :
 >   "f :: forall m n. m ~ n => Vec m\nf = f" :
 >   "f :: forall m n. m ~ (n + n) => Vec m\nf = f" :
+>   "f :: pi (m :: Num) . Int\nf {0} = Zero\nf {n+1} = Suc f {n}" :
+>   "f x _ = x" :
+>   "f :: forall a. pi (m :: Num) . a -> Vec a\nf {0} a = VNil\nf {n} a = VCons a (f {n-1} a)" :
 >   []
 
 
@@ -126,6 +129,8 @@
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
 >   ++ "  Cons :: forall a (n :: Num). 1 <= n => a -> Vec (n-1) a -> Vec n a\n"
 
+> natDecl = "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\n"
+
 > parseCheckTestData = 
 >   ("f x = x", True) :
 >   ("f = f", True) :
@@ -142,9 +147,9 @@
 >   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf = \\ x y z -> x y z", True) :
 >   ("f :: forall a b c. (b -> c) -> (a -> b) -> a -> c\nf x y z = x (y z)", True) :
 >   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf x y z = x y z", True) :
->   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nplus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat", True) :
->   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Suc = Suc", False) :
->   ("data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\nf Zero = Zero\nf x = \\ y -> y", False) :
+>   (natDecl ++ "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat", True) :
+>   (natDecl ++ "f Suc = Suc", False) :
+>   (natDecl ++ "f Zero = Zero\nf x = \\ y -> y", False) :
 >   ("data List :: * -> * where\n Nil :: forall a. List a\n Cons :: forall a. a -> List a -> List a\nsing = \\ x -> Cons x Nil\nsong x y = Cons x (Cons (sing y) Nil)\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   ("f :: forall a b. (a -> b) -> (a -> b)\nf x = x", True) :
 >   ("f :: forall a. a\nf x = x", False) :
@@ -180,6 +185,10 @@
 >   (vec2Decl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   ("f :: forall a. 0 ~ 1 => a\nf = f", False) :
 >   ("x = y\ny = x", True) :
+>   ("f :: forall a . pi (m :: Num) . a -> a\nf {0} x = x\nf {n} x = x", True) :
+>   ("f :: forall a . a -> (pi (m :: Num) . a)\nf x {m} = x", True) :
+>   (vecDecl ++ "vec :: forall a . pi (m :: Num) . 0 <= m => a -> Vec m a\nvec {0} x = Nil\nvec {n+1} x = Cons x (vec {n} x)", True) :
+>   (natDecl ++ "nat :: pi (n :: Num) . 0 <= n => Nat\nnat {0} = Zero\nnat{m+1} = Suc (nat {m})", True) :
 >   []
 
 
@@ -198,10 +207,10 @@
 > eraseCheckTest = runTest eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 
-> checkPrelude = do
->     s <- readFile "Prelude.nhs"
+> checkEx = do
+>     s <- readFile "Example.hs"
 >     putStrLn $ test parseCheck [(s, True)] 0 0
 
-> erasePrelude = do
->     s <- readFile "Prelude.nhs"
+> eraseEx = do
+>     s <- readFile "Example.hs"
 >     putStrLn $ test eraseCheck [s] 0 0

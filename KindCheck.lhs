@@ -29,7 +29,7 @@
 >             unless (k1 == l) $ errKindMismatch (s' ::: l) k1
 >             return $ TyApp f' s' ::: k2
 >         _ -> errKindNotArrow k
-> inferKind g Arr             = return $ Arr ::: Set ---> Set ---> Set
+> inferKind g (TyB b)         = return $ TyB b ::: builtinKind b
 > inferKind g (TyNum n)       = (\ n -> TyNum n ::: KindNum) <$> checkNumKind g n
 > inferKind g (Bind b a k t)  = do
 >     n <- freshName
@@ -52,4 +52,4 @@
 
 
 > scopeCheckTypes :: STerm -> Contextual () Term
-> scopeCheckTypes = traverseTypes (\ t -> tmOf <$> inferKind B0 t)
+> scopeCheckTypes = traverseTypes (checkNumKind B0) (\ t -> tmOf <$> inferKind B0 t)

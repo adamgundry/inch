@@ -67,6 +67,14 @@ location is found.
 >     case context st of
 >       (es :< Layer l) ->
 >         case l of         
+>             AppLeft () (TmBrace n) -> do
+>                 put st{tValue = TmApp t (TmBrace n),
+>                     context = es <><< _Xi}
+>                 case tau of
+>                     Bind Pi x KindNum t -> do
+>                         nm <- fresh "_n" (Some (TyNum n) ::: KindNum)
+>                         t' <- instantiate (unbind nm t)
+>                         goUp t' []
 >             AppLeft () a -> do
 >                 put st{tValue = a,
 >                     context = es <><< _Xi :< Layer (AppRight (t ::: tau) ())}
@@ -109,6 +117,7 @@ location is found.
 >         ty  <- instantiate sc
 >         goUp ty []
 >     TmApp f s -> goAppLeft >> inferType
+>     TmBrace n -> fail "Braces aren't cool"
 >     Lam x t -> do
 >         a <- fresh "a" (Hole ::: Set)
 >         goLam (TyVar Set a)
@@ -126,7 +135,7 @@ location is found.
 
 > inst :: TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
 > inst d (TyApp f a)     = TyApp f <$> inst d a
-> inst d (Bind b x k t)  = do
+> inst d (Bind All x k t)  = do
 >     beta <- fresh x (d ::: k)
 >     inst d (unbind beta t)
 > inst d (Qual p t)      = do

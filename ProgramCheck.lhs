@@ -108,15 +108,15 @@
 > checkPat :: Bool -> String ::: Type -> Type -> SPattern -> Contextual () (Pattern ::: Type)
 > checkPat try (s ::: sc) sty (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ render (Pat xs g t)) $ do
->     (styxs, rty) <- inLocation "when matching arity" $ matchArity sty xs 
->     (xs', (bs, ps)) <- runWriterT $ checkPatTerms styxs
+>     ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms sty xs
+>     rty <- specialise rty
 >     modifyContext (:< Layer (PatternTop (s ::: sc) bs ps []))
 >     t' ::: tty  <- infer t
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> tty
 
->     nty <- niceType ty
->     nsty <- niceType sty
+>     -- nty <- niceType ty
+>     -- nsty <- niceType sty
 >     -- mtrace $ "checkPat unifying: " ++ render nty ++ " and " ++ render nsty
 
 >     unify tty rty
@@ -130,9 +130,13 @@
 
 > matchArity :: Type -> [SPatternTerm] -> Contextual t ([SPatternTerm ::: Type], Type)
 > matchArity t [] = return ([], t)
-> matchArity (TyApp (TyApp Arr s) t) (x:xs) = do
+> matchArity (TyApp (TyApp (TyB Arr) s) t) (x:xs) = do
 >     (ys, ty) <- matchArity t xs
 >     return ((x ::: s):ys, ty)
+> matchArity (Bind Pi y KindNum t) (x:xs) = do
+>     beta <- fresh y (Fixed ::: KindNum)
+>     (ys, ty) <- matchArity (unbind beta t) xs
+>     return ((x ::: TyB NumTy):ys, ty)
 > matchArity t (x:xs) = do
 >     sv <- unknownTyVar $ "_sv" ::: Set
 >     tv <- unknownTyVar $ "_tv" ::: Set
@@ -151,24 +155,58 @@
 >     collectEqualities (g :< Constraint Wanted (IsZero n)) = n : collectEqualities g
 >     collectEqualities (g :< _) = collectEqualities g
 
-> checkPatTerm :: SPatternTerm ::: Type ->
->     ContextualWriter ([TmName ::: Type], [NormalPredicate]) () (PatternTerm ::: Type)
-> checkPatTerm (PatVar v ::: t) = do
->     tell ([v ::: t], [])
->     return $ PatVar v ::: t
-> checkPatTerm (PatCon c xs ::: t) =
+
+> checkPatTerms :: Type -> [SPatternTerm] ->
+>     ContextualWriter ([TmName ::: Type], [NormalPredicate]) ()
+>     ([PatternTerm ::: Type], Type)
+> checkPatTerms t [] = return ([], t)
+> checkPatTerms sat (PatVar v : ps) = do
+>     (s, t) <- lift $ splitFun sat
+>     tell ([v ::: s], [])
+>     (pts, ty) <- checkPatTerms t ps
+>     return ((PatVar v ::: s) : pts, ty)
+> checkPatTerms sat (PatCon c xs : ps) =
 >   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
+>     (s, t) <- lift $ splitFun sat
 >     sc   <- lookupTmCon c
 >     cty  <- mapPatWriter $ inst Hole sc
 >     unless (length xs == args cty) $
 >         errConUnderapplied c (args cty) (length xs)
-
->     (xtys, rty) <- lift $ inLocation "when matching pattern arity" $ matchArity cty xs
->     ptms ::: ptys  <- unzipAsc <$> checkPatTerms xtys
->     lift $ unify rty t
->     return $ PatCon c ptms ::: t
+>     (pts, aty)  <- checkPatTerms cty xs
+>     lift $ unify s aty
+>     (pps, ty) <- checkPatTerms t ps
+>     return ((PatCon c (map tmOf pts) ::: s) : pps, ty)
 >   where
 >     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
 
+> checkPatTerms sat (PatIgnore : ps) = do
+>     (s, t) <- lift $ splitFun sat
+>     (pts, ty) <- checkPatTerms t ps
+>     return ((PatIgnore ::: s) : pts, ty)
 
-> checkPatTerms = traverse checkPatTerm
+> checkPatTerms (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
+>     nm <- fresh x (Fixed ::: KindNum)
+>     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
+>     (pts, ty) <- checkPatTerms (unbind nm t) ps
+>     return ((PatBrace Nothing k ::: TyNum (NumVar nm)) : pts, ty)
+
+> checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
+>     nm <- fresh (x ++ "oo") (Fixed ::: KindNum)
+>     am <- fresh a (Fixed ::: KindNum)
+>     tell ([], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
+>     (pts, ty) <- checkPatTerms (unbind nm t) ps
+>     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
+
+
+> splitFun :: Type -> Contextual t (Type, Type)
+> splitFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
+> splitFun (Qual q t) = do
+>     q' <- normalisePred q
+>     modifyContext (:< Constraint Given q')
+>     splitFun t
+
+> splitFun t = do
+>     a <- unknownTyVar $ "_dom" ::: Set
+>     b <- unknownTyVar $ "_cod" ::: Set
+>     unify (a --> b) t
+>     return (a, b)

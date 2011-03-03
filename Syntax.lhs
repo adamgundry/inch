@@ -11,12 +11,14 @@
 
 > import Kit
 > import Type
+> import TyNum
 
 
 > data Tm k a x where
 >     TmVar  :: x -> Tm k a x
 >     TmCon  :: TmConName -> Tm k a x
 >     TmApp  :: Tm k a x -> Tm k a x -> Tm k a x
+>     TmBrace :: TyNum a -> Tm k a x
 >     Lam    :: String -> Tm k a (S x) -> Tm k a x
 >     (:?)   :: Tm k a x -> Ty k a -> Tm k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
@@ -49,8 +51,10 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data PatTerm a x where
->     PatVar  :: x -> PatTerm a x
->     PatCon  :: TmConName -> [PatTerm a x] -> PatTerm a x
+>     PatVar     :: x -> PatTerm a x
+>     PatCon     :: TmConName -> [PatTerm a x] -> PatTerm a x
+>     PatIgnore  :: PatTerm a x
+>     PatBrace   :: Maybe x -> Integer -> PatTerm a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Guard a x where
@@ -67,26 +71,43 @@
 >   where (ds, fs) = partitionDecls xs
 
 
-> traverseTypes :: Applicative f => (Ty k a -> f (Ty l b)) -> Tm k a x -> f (Tm l b x)
-> traverseTypes g (TmVar x) = pure $ TmVar x
-> traverseTypes g (TmCon c) = pure $ TmCon c
-> traverseTypes g (TmApp f s) = TmApp <$> traverseTypes g f <*> traverseTypes g s
-> traverseTypes g (Lam x t) = Lam x <$> traverseTypes g t
-> traverseTypes g (t :? ty) = (:?) <$> traverseTypes g t <*> g ty
+> traverseTypes :: Applicative f => (TyNum a -> f (TyNum b)) ->
+>     (Ty k a -> f (Ty l b)) -> Tm k a x -> f (Tm l b x)
+> traverseTypes fn g (TmVar x) = pure $ TmVar x
+> traverseTypes fn g (TmCon c) = pure $ TmCon c
+> traverseTypes fn g (TmApp f s) = TmApp <$> traverseTypes fn g f <*> traverseTypes fn g s
+> traverseTypes fn g (TmBrace n) = TmBrace <$> fn n
+> traverseTypes fn g (Lam x t) = Lam x <$> traverseTypes fn g t
+> traverseTypes fn g (t :? ty) = (:?) <$> traverseTypes fn g t <*> g ty
 
-> mapTypes :: (Ty k a -> Ty l b) -> Tm k a x -> Tm l b x
-> mapTypes f t = unId $ traverseTypes (Id . f) t
+> mapTypes :: (TyNum a -> TyNum b) -> (Ty k a -> Ty l b) -> Tm k a x -> Tm l b x
+> mapTypes fn f t = unId $ traverseTypes (Id . fn)  (Id . f) t
 
 > bindTypes :: (Kind -> a -> Ty Kind b) -> Tm Kind a x -> Tm Kind b x
-> bindTypes f = mapTypes (bindTy f)
+> bindTypes f = mapTypes (>>= (toNum . f KindNum)) (bindTy f)
 
 
+> {-
+
+> class Trav t where
+>     trav :: Applicative f => (a -> f b) ->
+>                 (a ::: k -> f (b ::: l)) -> (x -> f y) ->
+>                 t k a x -> f (t l b y)
+
+> instance Trav Tm where
+>     trav fn fa fx (TmVar x) = TmVar <$> fx x
+>     trav fn fa fx (TmCon c) = pure $ TmCon c
+>     trav fn fa fx (TmApp g s) = TmApp <$> trav fn fa fx g <*> trav fn fa fx s
+>     trav fn fa fx (TmBrace n) = TmBrace <$> traverse fx n
+
+> -}
 
 
 > instance Bitraversable (Tm k) where
 >     bitraverse f g (TmVar x)    = TmVar <$> g x
 >     bitraverse f g (TmCon c)    = pure (TmCon c)
 >     bitraverse f g (TmApp t s)  = TmApp <$> bitraverse f g t <*> bitraverse f g s
+>     bitraverse f g (TmBrace n)  = TmBrace <$> traverse f n
 >     bitraverse f g (Lam x t)    = Lam x <$> bitraverse f (traverse g) t
 >     bitraverse f g (t :? ty)    = (:?) <$> bitraverse f g t <*> traverse f ty
 
@@ -139,6 +160,8 @@
 > instance Bitraversable PatTerm where
 >     bitraverse f g (PatVar x)      = PatVar <$> g x
 >     bitraverse f g (PatCon c pts)  = PatCon c <$> traverse (bitraverse f g) pts
+>     bitraverse f g PatIgnore = pure PatIgnore
+>     bitraverse f g (PatBrace mx k) = PatBrace <$> traverse g mx <*> pure k
 
 > instance Bifunctor PatTerm where
 >     bimap = bimapDefault
@@ -176,7 +199,3 @@
 > type SDataDeclaration  = DataDecl () String String
 > type SFunDeclaration   = FunDecl () String String
 > type SProgram          = Prog () String String
-
-> patToTm :: PatTerm a x -> Tm k a x
-> patToTm (PatVar a)     = TmVar a
-> patToTm (PatCon a ps)  = foldl1 TmApp (TmCon a : map patToTm ps)

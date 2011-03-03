@@ -72,18 +72,18 @@ Types
 
 > tyVarName  = identLike True "type variable"
 > tyConName  = identLike False "type constructor"
-> tyVar      = TyVar <$> tyVarName
-> tyCon      = TyCon <$> tyConName
+> tyVar      = TyVar () <$> tyVarName
+> tyCon      = mkTyCon <$> tyConName
 > tyExp      = tyAll <|> tyPi <|> tyExpArr
 > tyAll      = tyQuant "forall" (Bind All)
 > tyPi       = tyQuant "pi" (Bind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
 > tyArrow    = reservedOp "->" >> return (-->)
 > tyBit      = tyBob `chainl1` pure TyApp
-> tyBob      =    TyVar () <$> tyVarName
->            <|>  TyCon <$> tyConName
+> tyBob      =    tyVar
+>            <|>  tyCon
 >            <|>  TyNum <$> try tyNumTerm
->            <|>  parens (reservedOp "->" *> pure Arr <|> tyExp)
+>            <|>  parens (reservedOp "->" *> pure (TyB Arr) <|> tyExp)
 
 > numVarName   = identLike True "numeric type variable"
 > tyNum        = tyNumTerm `chainr1` tyPlusMinus
@@ -140,6 +140,8 @@ Terms
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  parens expr
+>       <|>  braces (TmBrace <$> tyNum)
+
 
 
 > isVar :: String -> Bool
@@ -219,11 +221,20 @@ Programs
 > pattern = Pat <$> many patTerm <* reservedOp "=" <*> pure Trivial <*> expr
 
 > patTerm  =    parens (PatCon <$> dataConName <*> many patTerm)
+>          <|>  braces patBrace
 >          <|>  PatCon <$> dataConName <*> pure []
 >          <|>  PatVar <$> patVarName
+>          <|>  reservedOp "_" *> pure PatIgnore
 >          
 
 > patVarName = identLike True "pattern variable"
+
+> patBrace = do
+>     ma  <- optional patVarName
+>     mk  <- optional $ case ma of
+>                           Just _   -> reservedOp "+" *> integer
+>                           Nothing  -> integer
+>     return $ PatBrace ma (maybe 0 id mk)
 
 > signature = I.lineFold $ do
 >     s <- try $ tmVarName <* doubleColon

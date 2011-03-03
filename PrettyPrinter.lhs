@@ -86,14 +86,18 @@
 >     pretty (n :==: m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> text "~" <+> pretty m ArgSize
 
+> instance Pretty BuiltinTyCon where
+>     pretty Arr   _ = parens (text "->")
+>     pretty NumTy _ = text "Integer"
+
 > instance PrettyVar a => Pretty (Ty k a) where
 >     pretty (TyVar k a)              = const $ prettyVar a
 >     pretty (TyCon c)                = const $ text c
->     pretty (TyApp (TyApp Arr s) t)  = wrapDoc ArrSize $ 
+>     pretty (TyApp (TyApp (TyB Arr) s) t)  = wrapDoc ArrSize $ 
 >         pretty s AppSize <+> text "->" <+> pretty t ArrSize
 >     pretty (TyApp f s)  = wrapDoc AppSize $ 
 >         pretty f AppSize <+> pretty s ArgSize
->     pretty Arr          = const (parens (text "->"))
+>     pretty (TyB b)          = pretty b
 >     pretty (TyNum n) = pretty n
 >     pretty (Bind b a k t) = prettyBind b (B0 :< (a, k)) $
 >         alphaConvert [(a, a ++ "'")] (unbind (injectVar a) t)
@@ -125,6 +129,7 @@
 >     pretty (TmCon s)    = const $ text s
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <+> pretty s ArgSize
+>     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
 >     pretty (Lam x t)  = prettyLam (text x) (unbind (injectVar x) t)
 >     pretty (t :? ty)  = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
@@ -157,7 +162,17 @@
 >                                       <+> prettyHigh e
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm a x) where
->     pretty p = pretty (patToTm p)
+>     pretty (PatVar x)    = const $ prettyVar x
+>     pretty (PatCon c []) = const $ text c
+>     pretty (PatCon "+" [a, b]) = wrapDoc AppSize $
+>         prettyLow a <+> text "+" <+> prettyLow b
+>     pretty (PatCon c ps) = wrapDoc AppSize $
+>                                text c <+> hsep (map prettyLow ps)
+>     pretty PatIgnore = const $ text "_"
+>     pretty (PatBrace Nothing k)   = const $ braces $ integer k
+>     pretty (PatBrace (Just a) 0)  = const $ braces $ prettyVar a
+>     pretty (PatBrace (Just a) k)  = const $ braces $
+>                                     prettyVar a <+> text "+" <+> integer k
 
 > instance (PrettyVar a, Show a, Ord a) => Pretty (NormPred a) where
 >     pretty p = pretty (reifyPred p)

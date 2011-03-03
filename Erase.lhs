@@ -9,6 +9,7 @@
 > import BwdFwd
 > import Kit
 > import Type
+> import TyNum
 > import Syntax
 > import Context
 > import TypeCheck
@@ -32,8 +33,11 @@
 >                 (s' ::: ks) <- eraseType s
 >                 unless (k' == ks) $ fail "Kind mismatch"
 >                 return $ TyApp f' s' ::: l
-> eraseType Arr = return $ Arr ::: Set ---> Set ---> Set
-> eraseType (Bind b x KindNum t)  = eraseType $ unbind (error "eraseType: erk") t
+> eraseType (TyB b) = return $ TyB b ::: builtinKind b
+> eraseType (Bind Pi x KindNum t)   = do
+>     t' ::: Set <- eraseType $ unbind (error "eraseType: erk") t
+>     return (TyB NumTy --> t' ::: Set)
+> eraseType (Bind All x KindNum t)  = eraseType $ unbind (error "eraseType: erk") t
 > eraseType (Bind b x k t)        = do
 >     an <- fresh x (Hole ::: k)
 >     k' <- eraseKind k
@@ -42,17 +46,36 @@
 > eraseType (Qual p t) = eraseType t
 
 
-> eraseTerm :: Term -> Contextual a (Term ::: Type)
-> eraseTerm (TmVar x)    = (TmVar x :::) <$> undefined
-> eraseTerm (TmCon c)    = (TmCon c :::) <$> undefined
-> eraseTerm (TmApp f s)  = undefined
+> eraseTm :: Tm Kind TyName x -> Contextual t (Tm Kind TyName x)
+> eraseTm (TmVar x)    = pure $ TmVar x
+> eraseTm (TmCon c)    = pure $ TmCon c
+> eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
+> eraseTm (TmBrace n)  = pure $ numToTm n
+> eraseTm (Lam x b)    = Lam x <$> eraseTm b
+> eraseTm (t :? ty)    = (:?) <$> eraseTm t <*> (tmOf <$> eraseType ty)
+
+This is a bit of a hack; we really ought to extend the syntax of terms:
+
+> numToTm :: TypeNum -> Tm Kind TyName x
+> numToTm (NumVar x)    = TmCon (fst x)
+> numToTm (NumConst k)  = TmCon (show k)
+> numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
+> numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)
+> numToTm (Neg m)       = TmApp (TmCon "-") (numToTm m)
 
 
 > eraseCon :: Constructor -> Contextual a Constructor
 > eraseCon (c ::: t) = ((c :::) . tmOf) <$> eraseType t
 
 > erasePat :: Pattern -> Contextual a Pattern
-> erasePat = return
+> erasePat (Pat ps Trivial t) = Pat (map erasePatTm ps) Trivial <$> eraseTm t
+
+> erasePatTm :: PatternTerm -> PatternTerm
+> erasePatTm (PatBrace Nothing k)   = PatCon (show k) []
+> erasePatTm (PatBrace (Just a) 0)  = PatVar a
+> erasePatTm (PatBrace (Just a) k)  = PatCon "+" [PatVar a, PatCon (show k) []]
+> erasePatTm (PatCon c ps) = PatCon c (map erasePatTm ps)
+> erasePatTm t = t
 
 > eraseDecl :: Declaration -> Contextual a Declaration
 > eraseDecl (DD (DataDecl s k cs)) =

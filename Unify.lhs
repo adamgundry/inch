@@ -102,7 +102,7 @@
 
 > unifyTypes :: Type -> Type -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
-> unifyTypes Arr Arr = return ()
+> unifyTypes (TyB b) (TyB c) | b == c  = return ()
 > unifyTypes (TyVar KindNum alpha) (TyVar KindNum beta) = unifyNum (NumVar alpha) (NumVar beta)
 > unifyTypes (TyVar ka alpha) (TyVar kb beta) | ka /= kb   = fail "Kind mismatch in unify"
 >                                             | otherwise  = onTop $
@@ -127,6 +127,10 @@
 
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
+
+> unifyTypes (Bind Pi a1 KindNum t1) (Bind Pi a2 KindNum t2) = do
+>     nm <- fresh a1 (Hole ::: KindNum)
+>     unifyTypes (unbind nm t1) (unbind nm t2)
 
 > {-
 > unifyTypes (Bind b a k ty) tau = do
@@ -166,7 +170,7 @@
 > rigidHull (TyApp f s)            = do  (f',  xs  )  <- rigidHull f
 >                                        (s',  ys  )  <- rigidHull s
 >                                        return (TyApp f' s', xs <+> ys)
-> rigidHull Arr = return (Arr, F0)
+> rigidHull (TyB b) = return (TyB b, F0)
 > rigidHull (TyNum d)          = do  n <- freshName
 >                                    let beta = ("_i", n)
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
