@@ -11,4 +11,5 @@ deriving instance (Show a, Show b) => Show (Pair a b)
 deriving instance Show UNat
 deriving instance Show Fin
 deriving instance Show Tm
+deriving instance Show Tm'
 deriving instance Show Shape

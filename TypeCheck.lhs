@@ -75,6 +75,9 @@ location is found.
 >                         nm <- fresh "_n" (Some (TyNum n) ::: KindNum)
 >                         t' <- instantiate (unbind nm t)
 >                         goUp t' []
+>                     _ -> fail $ "Bad dependent application: type "
+>                              ++ render tau ++ " of " ++ render t
+>                              ++ " is not good"
 >             AppLeft () a -> do
 >                 put st{tValue = a,
 >                     context = es <><< _Xi :< Layer (AppRight (t ::: tau) ())}

@@ -188,8 +188,34 @@ subst g (V i)   = g i
 subst g (L b)   = L (subst (foo g) b)
 subst g (A f a) = A (subst g f) (subst g a)
 
-aTm' = subst (comp V FSuc) aTm
+saTm = subst (comp V FSuc) aTm
 
+
+
+data Tm' :: Num -> * where
+  V' :: forall (m :: Num) . pi (n :: Num) . 0 <= n, n <= m => Tm' m
+  L' :: forall (m :: Num) . 0 <= m => Tm' (m+1) -> Tm' m
+  A' :: forall (m :: Num) . 0 <= m => Tm' m -> Tm' m -> Tm' m
+
+
+idTm' :: Tm' 0
+idTm' = L' (V' {0})
+
+aTm' :: Tm' 1
+aTm' = L' (A' (V' {0}) (V' {1}))
+
+foldTm :: forall a (m :: Num) . 
+    (pi (k :: Num) . a) -> (a -> a) -> (a -> a -> a) -> Tm' m -> a
+foldTm v _ _ (V' {i})  = v {i}
+foldTm v l a (L' b)    = l (foldTm v l a b)
+foldTm v l a (A' f s)  = a (foldTm v l a f) (foldTm v l a s)
+
+foldTm2 :: forall (a :: Num -> *) (m :: Num) . 
+    (pi (k :: Num) . a k) ->
+    (forall (k :: Num) . a k -> a k) ->
+    (forall (k :: Num) . a k -> a k -> a k) ->
+        Tm' m -> a m
+foldTm2 = foldTm2
 
 {-
 Things that would be nice:
@@ -248,6 +274,9 @@ l3  = runLayers {0} {3} Zero
 
 -- Cartesian
 
+data Coord :: Num -> Num -> Num -> Num -> * where
+  Coord :: pi (l b r t :: Num) . l <= r, b <= t => Coord l b r t
+
 data Shape :: Num -> Num -> Num -> Num -> * where
   Box :: pi (l b r t :: Num) . l <= r, b <= t => Shape l b r t
   Above :: forall (l b r t b' :: Num) . Shape l b r t -> Shape l b' r b -> Shape l b' r t
@@ -261,5 +290,11 @@ box2 = Box {0} {1} {1} {3}
 boxes = Above box2 box1
 
 
-bound :: forall (l b r t :: Num) . Shape l b r t -> Shape l b r t
-bound (Box {l} {b} {r} {t}) = Box {l} {b} {r} {t}
+aboveC :: forall (l b r t b' :: Num) . Coord l b r t ->
+    Coord l b' r b -> Coord l b' r t
+aboveC (Coord {l} {b} {r} {t}) (Coord {l2} {b'} {r2} {t2}) =
+    Coord {l} {b'} {r} {t} 
+
+bound :: forall (l b r t :: Num) . Shape l b r t -> Coord l b r t
+bound (Box {l} {b} {r} {t}) = Coord {l} {b} {r} {t}
+bound (Above s t) = aboveC (bound s) (bound t)

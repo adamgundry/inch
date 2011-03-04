@@ -127,12 +127,12 @@
 
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
-> {-
+
 > unifyTypes (Bind Pi a1 KindNum t1) (Bind Pi a2 KindNum t2) = do
 >     nm <- fresh a1 (Hole ::: KindNum)
 >     unifyTypes (unbind nm t1) (unbind nm t2)
 
-
+> {-
 > unifyTypes (Bind b a k ty) tau = do
 >     nm <- fresh a (Hole ::: k)
 >     unifyTypes (unbind nm ty) tau
