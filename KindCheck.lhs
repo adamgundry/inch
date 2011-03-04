@@ -44,6 +44,7 @@
 > checkNumKind g (NumConst k) = return $ NumConst k
 > checkNumKind g (NumVar a) = lookupNumVar g a
 > checkNumKind g (m :+: n) = (:+:) <$> checkNumKind g m <*> checkNumKind g n
+> checkNumKind g (m :*: n) = (:*:) <$> checkNumKind g m <*> checkNumKind g n
 > checkNumKind g (Neg n) = Neg <$> checkNumKind g n
 
 > checkPredKind :: Bwd (TyName ::: Kind) -> Pred String -> Contextual t Predicate

@@ -62,8 +62,8 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > mkTyCon :: String -> Ty k a
-> mkTyCon "Num" = TyB NumTy
-> mkTyCon "->"  = TyB Arr
+> mkTyCon "Integer"  = TyB NumTy
+> mkTyCon "->"       = TyB Arr
 > mkTyCon c     = TyCon c
 
 > bindTy :: (Kind -> a -> Ty Kind b) -> Ty Kind a -> Ty Kind b
@@ -129,10 +129,11 @@ should use a better representation?
 > alphaConvert xys t = t
 
 > args :: Ty k a -> Int
-> args (TyApp (TyApp (TyB Arr) s) t) = succ $ args t
-> args (Bind b x k t) = args t
-> args (Qual p t) = args t
-> args _ = 0
+> args (TyApp (TyApp (TyB Arr) s) t)  = succ $ args t
+> args (Bind Pi x k t)                = succ $ args t
+> args (Bind All x k t)               = args t
+> args (Qual p t)                     = args t
+> args _                              = 0
 
 > splitArgs :: Ty k a -> ([Ty k a], Ty k a)
 > splitArgs (TyApp (TyApp (TyB Arr) s) t) = (s:ss, ty)

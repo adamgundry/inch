@@ -87,7 +87,9 @@ Types
 
 > numVarName   = identLike True "numeric type variable"
 > tyNum        = tyNumTerm `chainr1` tyPlusMinus
-> tyPlusMinus  = reservedOp "+" *> return (+) <|> specialOp "-" *> return (-)
+> tyPlusMinus  =    reservedOp "+" *> return (+)
+>              <|>  specialOp "-" *> return (-)
+>              <|>  reservedOp "*" *> return (*)
 > tyNumTerm    =    NumVar <$> numVarName
 >              <|>  NumConst <$> try integer
 >              <|>  Neg <$> (specialOp "-" *> tyNumTerm)

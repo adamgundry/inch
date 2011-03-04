@@ -243,3 +243,23 @@ runLayers {m} {n} b = serialize (doLayers {n} (deserialize {m} b))
 l1  = runLayers {0} {1} Zero
 l2  = runLayers {0} {2} Zero
 l3  = runLayers {0} {3} Zero
+
+
+
+-- Cartesian
+
+data Shape :: Num -> Num -> Num -> Num -> * where
+  Box :: pi (l b r t :: Num) . l <= r, b <= t => Shape l b r t
+  Above :: forall (l b r t b' :: Num) . Shape l b r t -> Shape l b' r b -> Shape l b' r t
+
+point :: pi (x y :: Num) . Shape x y x y
+point {x} {y} = Box {x} {y} {x} {y}
+
+
+box1 = Box {0} {0} {1} {1}
+box2 = Box {0} {1} {1} {3}
+boxes = Above box2 box1
+
+
+bound :: forall (l b r t :: Num) . Shape l b r t -> Shape l b r t
+bound (Box {l} {b} {r} {t}) = Box {l} {b} {r} {t}

@@ -299,7 +299,6 @@ location is found.
 >   where
 >     help g@(_ :< Layer FunTop)            t = return (g, t)
 >     help (g :< A ((an := Some d ::: k)))  t = help g (substTy an d t)
->     help (g :< A ((an := Hole ::: k)))    t = help g (Bind All (fst an) k (bind an t))
->     help (g :< A ((an := Fixed ::: k)))   t = help g t
+>     help (g :< A ((an := _ ::: k)))    t = help g (Bind All (fst an) k (bind an t))
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
 >     help (g :< Constraint Given _)        t = help g t
