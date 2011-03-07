@@ -204,7 +204,7 @@
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
 >     nm <- fresh ("_" ++ x ++ "oo") (Hole ::: KindNum)
 >     am <- fresh a (Fixed ::: KindNum)
->     tell ([], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
+>     tell ([a ::: TyB NumTy], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
 >     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
 >     (pts, ty) <- checkPatTerms aty ps
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)

@@ -148,6 +148,12 @@ location is found.
 >             Nothing   -> instantiate sc
 >         putT (t, Just ty)
 >         goUp []
+>     TmInt k -> do
+>         case mty of
+>             Just ty  -> unify ty (TyB NumTy)
+>             Nothing  -> return ()
+>         putT (t, Just (TyB NumTy))
+>         goUp []
 >     TmApp f s  -> goAppLeft    >> inferType
 >     Lam x t    -> goLam        >> inferType
 >     t :? ty    -> goAnnotLeft  >> inferType

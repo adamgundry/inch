@@ -127,6 +127,7 @@
 > instance (PrettyVar a, PrettyVar x) => Pretty (Tm k a x) where
 >     pretty (TmVar x)    = const $ prettyVar x
 >     pretty (TmCon s)    = const $ text s
+>     pretty (TmInt k)    = const $ integer k
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <+> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 

@@ -17,6 +17,7 @@
 > data Tm k a x where
 >     TmVar  :: x -> Tm k a x
 >     TmCon  :: TmConName -> Tm k a x
+>     TmInt  :: Integer -> Tm k a x
 >     TmApp  :: Tm k a x -> Tm k a x -> Tm k a x
 >     TmBrace :: TyNum a -> Tm k a x
 >     Lam    :: String -> Tm k a (S x) -> Tm k a x
@@ -27,6 +28,7 @@
 >     return = TmVar
 >     TmVar x    >>= g = g x
 >     TmCon c    >>= g = TmCon c
+>     TmInt k    >>= g = TmInt k
 >     TmApp f s  >>= g = TmApp (f >>= g) (s >>= g)
 >     Lam x t    >>= g = Lam x (t >>= wk g)
 >     (t :? ty)  >>= g = (t >>= g) :? ty
@@ -75,6 +77,7 @@
 >     (Ty k a -> f (Ty l b)) -> Tm k a x -> f (Tm l b x)
 > traverseTypes fn g (TmVar x) = pure $ TmVar x
 > traverseTypes fn g (TmCon c) = pure $ TmCon c
+> traverseTypes fn g (TmInt k) = pure $ TmInt k
 > traverseTypes fn g (TmApp f s) = TmApp <$> traverseTypes fn g f <*> traverseTypes fn g s
 > traverseTypes fn g (TmBrace n) = TmBrace <$> fn n
 > traverseTypes fn g (Lam x t) = Lam x <$> traverseTypes fn g t
@@ -105,7 +108,8 @@
 
 > instance Bitraversable (Tm k) where
 >     bitraverse f g (TmVar x)    = TmVar <$> g x
->     bitraverse f g (TmCon c)    = pure (TmCon c)
+>     bitraverse f g (TmCon c)    = pure $ TmCon c
+>     bitraverse f g (TmInt k)    = pure $ TmInt k
 >     bitraverse f g (TmApp t s)  = TmApp <$> bitraverse f g t <*> bitraverse f g s
 >     bitraverse f g (TmBrace n)  = TmBrace <$> traverse f n
 >     bitraverse f g (Lam x t)    = Lam x <$> bitraverse f (traverse g) t

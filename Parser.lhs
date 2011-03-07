@@ -141,6 +141,7 @@ Terms
 
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
+>       <|>  TmInt <$> integer
 >       <|>  parens expr
 >       <|>  braces (TmBrace <$> tyNum)
 

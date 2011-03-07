@@ -49,6 +49,7 @@
 > eraseTm :: Tm Kind TyName x -> Contextual t (Tm Kind TyName x)
 > eraseTm (TmVar x)    = pure $ TmVar x
 > eraseTm (TmCon c)    = pure $ TmCon c
+> eraseTm (TmInt k)    = pure $ TmInt k
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
@@ -58,7 +59,7 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 
 > numToTm :: TypeNum -> Tm Kind TyName x
 > numToTm (NumVar x)    = TmCon (fst x)
-> numToTm (NumConst k)  = TmCon (show k)
+> numToTm (NumConst k)  = TmInt k
 > numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
 > numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)
 > numToTm (Neg m)       = TmApp (TmCon "-") (numToTm m)

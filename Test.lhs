@@ -98,6 +98,8 @@
 >   "f :: pi (m :: Num) . Int\nf {0} = Zero\nf {n+1} = Suc f {n}" :
 >   "f x _ = x" :
 >   "f :: forall a. pi (m :: Num) . a -> Vec a\nf {0} a = VNil\nf {n} a = VCons a (f {n-1} a)" :
+>   "x = 0" :
+>   "x = plus 0 1" :
 >   []
 
 
@@ -194,6 +196,8 @@
 >   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
 >   ("f :: Integer -> Integer\nf x = x", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {n} = n", True) :
+>   ("f :: pi (n :: Num) . Integer\nf {0} = 0\nf {n+1} = n", True) :
+>   ("f :: pi (n :: Num) . Integer\nf {n+1} = n", True) :
 >   (vecDecl ++ "vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a\nvtake {0}   _            = Nil\nvtake {i+1} (Cons x xs) = Cons x (vtake {i} xs)", True) :
 >   []
 
