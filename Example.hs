@@ -195,7 +195,7 @@ saTm = subst (comp V FSuc) aTm
 data Tm' :: Num -> * where
   V' :: forall (m :: Num) . pi (n :: Num) . 0 <= n, n <= m => Tm' m
   L' :: forall (m :: Num) . 0 <= m => Tm' (m+1) -> Tm' m
-  A' :: forall (m :: Num) . 0 <= m => Tm' m -> Tm' m -> Tm' m
+  A' :: forall (m :: Num) . Tm' m -> Tm' m -> Tm' m
 
 
 idTm' :: Tm' 0
@@ -211,11 +211,27 @@ foldTm v l a (L' b)    = l (foldTm v l a b)
 foldTm v l a (A' f s)  = a (foldTm v l a f) (foldTm v l a s)
 
 foldTm2 :: forall (a :: Num -> *) (m :: Num) . 
-    (pi (k :: Num) . a k) ->
-    (forall (k :: Num) . a k -> a k) ->
+    (forall (k :: Num) . pi (n :: Num) . a k) ->
+    (forall (k :: Num) . a (k+1) -> a k) ->
     (forall (k :: Num) . a k -> a k -> a k) ->
         Tm' m -> a m
-foldTm2 = foldTm2
+foldTm2 v l a (V' {i}) = v {i}
+foldTm2 v l a (L' b)   = l (foldTm2 v l a b)
+foldTm2 v l a (A' f s) = a (foldTm2 v l a f) (foldTm2 v l a s)
+
+{-
+foldTm3 :: forall (a :: Num -> *) (m :: Num) . 
+    (forall (k :: Num) . pi (n :: Num) . 0 <= n, n <= k => a k) ->
+    (forall (k :: Num) . 0 <= k => a (k+1) -> a k) ->
+    (forall (k :: Num) . a k -> a k -> a k) ->
+        Tm' m -> a m
+-}
+
+{-
+rebuildTm :: forall (m :: Num) . Tm m -> Tm m
+rebuildTm = foldTm2 V' L' A'
+-}
+
 
 {-
 Things that would be nice:
