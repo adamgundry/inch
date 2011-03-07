@@ -136,7 +136,7 @@
 >   ("f = f", True) :
 >   ("f = \\ x -> x", True) :
 >   ("f = (\\ x -> x) :: forall a. a -> a", True) :
->   -- ("f x = x :: forall a b. a -> b", True) :
+>   ("f x = x :: forall a b. a -> b", True) :
 >   ("f = \\ x y z -> x y z", True) :
 >   ("f x y z = x (y z)", True) :
 >   ("f x y z = x y z", True) :

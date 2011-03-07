@@ -129,7 +129,7 @@
 
 
 > unifyTypes (Bind Pi a1 KindNum t1) (Bind Pi a2 KindNum t2) = do
->     nm <- fresh a1 (Hole ::: KindNum)
+>     nm <- fresh (a1 ++ "_u") (Fixed ::: KindNum)
 >     unifyTypes (unbind nm t1) (unbind nm t2)
 
 > {-
@@ -141,8 +141,15 @@
 >     nm <- fresh a (Hole ::: k)
 >     unifyTypes tau (unbind nm ty)
 
-> unifyTypes (Qual p t) tau = modifyContext (:< Constraint p) >> unifyTypes t tau
-> unifyTypes tau (Qual p t) = modifyContext (:< Constraint p) >> unifyTypes tau t
+> unifyTypes (Qual p t) tau = do
+>     p <- normalisePred p
+>     modifyContext (:< Constraint Wanted p)
+>     unifyTypes t tau
+> unifyTypes tau (Qual p t) = do
+>     p <- normalisePred p
+>     modifyContext (:< Constraint Wanted p)
+>     unifyTypes tau t
+
 > -}
 
 > unifyTypes (TyNum m)      (TyNum n)              = unifyNum m n
@@ -174,7 +181,23 @@
 > rigidHull (TyNum d)          = do  n <- freshName
 >                                    let beta = ("_i", n)
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
-> rigidHull b = error $ "rigidHull: " ++ show b
+
+> {-
+> rigidHull (Bind Pi x KindNum b) = do
+>     n <- freshName
+>     (t, cs) <- rigidHull (unbind ("magic", n) b)
+>     return (Bind Pi x KindNum (bind ("magic", n) t), dropMagic ("magic", n) cs)
+>   where
+>     dropMagic :: Eq a => a -> Fwd (a, b) -> Fwd (a, b)
+>     dropMagic a F0 = F0
+>     dropMagic a ((x, y) :> xys) | x == a     = dropMagic a xys
+>                                 | otherwise  = (x, y) :> dropMagic a xys
+> -}
+
+> rigidHull (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull t
+
+
+> rigidHull b = fail $ "rigidHull can't cope with " ++ render b
 
 > pairsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
 > pairsToSuffix = fmap ((:= Hole ::: KindNum) . fst)

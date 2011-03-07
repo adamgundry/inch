@@ -45,7 +45,7 @@
 >     pretty (DuplicateTyCon t)          _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t)          _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a)           _ = text "Type variable" <+> prettyVar a <+> text "is not numeric"
->     pretty (CannotUnify t u)           _ = text "Cannot unify" <+> prettyHigh t <+> text "and" <+> prettyHigh u
+>     pretty (CannotUnify t u)           _ = text "Cannot unify" $$ nest 2 (prettyHigh t) $$ text "with" $$ nest 2 (prettyHigh u)
 >     pretty (UnifyFixed a t)            _ = text "Cannot unify fixed variable" <+> prettyVar a <+> text "with" <+> prettyHigh t
 >     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettyVar a <+> text "to unify" <+> prettyHigh n <+> text "with 0"
 >     pretty (Fail s)                    _ = text s

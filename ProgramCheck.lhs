@@ -74,7 +74,7 @@
 >     sty ::: k <- inLocation ("in type " ++ render st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 
->     sty'  <- specialise sty
+>     sty'  <- instS True id Given Fixed sty
 
 >     pattys <- traverse (checkPat False (s ::: sty) sty') pats
 >     let ty = tyOf (head pattys)
@@ -111,15 +111,14 @@
 >     ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms sty xs
 >     rty <- specialise rty
 >     modifyContext (:< Layer (PatternTop (s ::: sc) bs ps []))
->     t' ::: tty  <- infer t
+>     t'  <- check rty t
 >     let  xtms ::: xtys  = unzipAsc xs'
->          ty             = xtys /-> tty
+>          ty             = xtys /-> rty
 
 >     -- nty <- niceType ty
 >     -- nsty <- niceType sty
 >     -- mtrace $ "checkPat unifying: " ++ render nty ++ " and " ++ render nsty
 
->     unify tty rty
 >     -- mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
 >     unifySolveConstraints
 >     solveConstraints try
@@ -158,35 +157,40 @@
 >     collectEqualities (g :< _) = collectEqualities g
 
 
+> mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
+
 > checkPatTerms :: Type -> [SPatternTerm] ->
 >     ContextualWriter ([TmName ::: Type], [NormalPredicate]) ()
 >     ([PatternTerm ::: Type], Type)
+>
 > checkPatTerms t [] = return ([], t)
+>
 > checkPatTerms sat (PatVar v : ps) = do
+>     sat <- mapPatWriter $ inst True id Fixed sat
 >     (s, t) <- lift $ splitFun sat
 >     tell ([v ::: s], [])
 >     (pts, ty) <- checkPatTerms t ps
 >     return ((PatVar v ::: s) : pts, ty)
+>
 > checkPatTerms sat (PatCon c xs : ps) =
 >   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
+>     sat <- mapPatWriter $ inst True id Fixed sat
 >     (s, t) <- lift $ splitFun sat
 >     sc   <- lookupTmCon c
->     cty  <- mapPatWriter $ inst (++ "_pat_inst") Hole sc
+>     cty  <- mapPatWriter $ inst True (++ "_pat_inst") Hole sc
 >     unless (length xs == args cty) $
 >         errConUnderapplied c (args cty) (length xs)
 >     (pts, aty)  <- checkPatTerms cty xs
->     aty <- mapPatWriter $ inst id Fixed aty
+>     aty <- mapPatWriter $ inst True id Fixed aty
 >     lift $ unify s aty
 >     (pps, ty) <- checkPatTerms t ps
 >     return ((PatCon c (map tmOf pts) ::: s) : pps, ty)
->   where
->     mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
-
+>  
 > checkPatTerms sat (PatIgnore : ps) = do
 >     (s, t) <- lift $ splitFun sat
 >     (pts, ty) <- checkPatTerms t ps
 >     return ((PatIgnore ::: s) : pts, ty)
-
+>
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
 >     nm <- fresh ("_" ++ x ++ "aa") (Hole ::: KindNum)
 >     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
@@ -206,16 +210,5 @@
 >     (pts, ty) <- checkPatTerms (unbind nm t) ps
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
 
-
-> splitFun :: Type -> Contextual t (Type, Type)
-> splitFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
-> splitFun (Qual q t) = do
->     q' <- normalisePred q
->     modifyContext (:< Constraint Given q')
->     splitFun t
-
-> splitFun t = do
->     a <- unknownTyVar $ "_dom" ::: Set
->     b <- unknownTyVar $ "_cod" ::: Set
->     unify (a --> b) t
->     return (a, b)
+> checkPatTerms ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "
+>                            ++ render p ++ " against type " ++ render ty

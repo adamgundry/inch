@@ -30,27 +30,41 @@
 If the current term is a lambda, |goLam ty| enters its body, assigning
 the type |ty| to the bound variable.
 
-> goLam :: MonadState (ZipState Term) m => Type -> m ()
-> goLam tau = modify $ \ st@(St{tValue = Lam x t}) ->
->     st {  tValue = unbind x t
->        ,  context = context st :< Layer (LamBody (x ::: tau) ())
->        }
+> goLam :: Contextual (Term, Type) ()
+> goLam = do
+>     (Lam x t, ty)  <- getT
+>     (dom, cod)     <- splitFun ty
+>     putT (unbind x t, cod)
+>     modifyContext (:< Layer (LamBody (x ::: dom) ()))
 
 
 If the current term is an application, |goAppLeft| enters the
 function.
 
-> goAppLeft :: MonadState (ZipState Term) m => m ()
-> goAppLeft = modify $ \ st@(St{tValue = TmApp f s}) ->
->     st {tValue = f, context = context st :< Layer (AppLeft () s)}
+> goAppLeft :: Contextual (Term, Type) ()
+> goAppLeft = do
+>     (TmApp f s, ty)  <- getT
+>     case s of
+>         TmBrace n -> do
+>             picod <- fresh "_picod" (Hole ::: KindNum ---> Set)
+>             putT (f, Bind Pi "_ni" KindNum
+>                 (TyApp (TyVar (KindNum ---> Set) (S picod))
+>                        (TyVar KindNum Z)))
+>         _ -> do
+>             dom <- unknownTyVar $ "_dom" ::: Set
+>             putT (f, dom --> ty)
+>     modifyContext (:< Layer (AppLeft () s))
 
 
 If the current term is an annotation, |goAnnotLeft| enters the term
 being annotated.
 
-> goAnnotLeft :: MonadState (ZipState Term) m => m ()
-> goAnnotLeft = modify $ \ st@(St{tValue = t :? ty}) ->
->     st {tValue = t, context = context st :< Layer (AnnotLeft () ty)}
+> goAnnotLeft :: Contextual (Term, Type) ()
+> goAnnotLeft = do
+>     (t :? uty, ty) <- getT
+>     subsCheck ty uty
+>     putT (t, ty)
+>     modifyContext (:< Layer (AnnotLeft () uty))
 
 
 The function |goUp tau _Xi| is called when the term at the current
@@ -61,105 +75,134 @@ The accumulator |_Xi| collects variable definitions that |tau| may
 depend on, and hence must be reinserted into the context once the new
 location is found.
 
-> goUp :: Type -> [Entry] -> Contextual Term Type
-> goUp tau _Xi = do
->     st@(St{tValue = t}) <- get
+> goUp :: [Entry] -> Contextual (Term, Type) Type
+> goUp _Xi = do
+>     st@(St{tValue = (t, ty)}) <- get
 >     case context st of
 >       (es :< Layer l) ->
->         case l of         
+>         case l of      
 >             AppLeft () (TmBrace n) -> do
->                 put st{tValue = TmApp t (TmBrace n),
->                     context = es <><< _Xi}
->                 case tau of
->                     Bind Pi x KindNum t -> do
+>                 case ty of
+>                     Bind Pi x KindNum aty -> do
+>                         putContext (es <><< _Xi)
 >                         nm <- fresh "_n" (Some (TyNum n) ::: KindNum)
->                         t' <- instantiate (unbind nm t)
->                         goUp t' []
+>                         aty' <- instantiate (unbind nm aty)
+>                         putT (TmApp t (TmBrace n), aty')
+>                         goUp []
 >                     _ -> fail $ "Bad dependent application: type "
->                              ++ render tau ++ " of " ++ render t
+>                              ++ render ty ++ " of " ++ render t
 >                              ++ " is not good"
 >             AppLeft () a -> do
->                 put st{tValue = a,
->                     context = es <><< _Xi :< Layer (AppRight (t ::: tau) ())}
+>                 putContext (es <><< _Xi)
+>                 (dom, cod) <- splitFun ty
+>                 modifyContext (:< Layer (AppRight (t ::: dom --> cod) ()))
+>                 putT (a, dom)
 >                 inferType
 >             AppRight (f ::: sigma) () -> do
->                 put st{tValue = TmApp f t, context = es <><< _Xi}
->                 alpha <- fresh "_t" (Hole ::: Set)
->                 unify sigma (tau --> TyVar Set alpha)
->                 goUp (TyVar Set alpha) []
+>                 putContext (es <><< _Xi)
+>                 (dom, cod) <- splitFun sigma
+>                 putT (TmApp f t, cod)
+>                 goUp []
 >             LamBody (x ::: sigma) () -> do
->                 put st{tValue = Lam x (bind x t), context = es}
->                 goUp (sigma --> tau) _Xi
->             AnnotLeft () ty -> do
->                 put st{tValue = t :? ty, context = es <><< _Xi}
->                 unify ty tau
->                 goUp ty []
+>                 put st{tValue = (Lam x (bind x t), sigma --> ty),
+>                        context = es}
+>                 goUp _Xi
+>             AnnotLeft () uty -> do
+>                 put st{tValue = (t :? uty, ty),
+>                        context = es}
+>                 goUp _Xi
 >             PatternTop _ _ _ _ -> do
 >                 put st{context = context st <><< _Xi}
->                 return tau
+>                 return ty
 >       (es :< e) -> do
 >           put st{context = es}
->           goUp tau (e : _Xi)
+>           goUp (e : _Xi)
 >       B0 -> error (  "Ran out of context when going up from " 
->                      ++ (show t) ++ " : " ++ (show tau))
+>                      ++ (show t) ++ " : " ++ (show ty))
 
 
 
-> inferType :: Contextual Term Type
-> inferType = getT >>= \ t -> case t of
+> subsCheck :: Type -> Type -> Contextual a Type
+> subsCheck s t = do
+>     t  <- specialise t
+>     s  <- instantiate s
+>     unify s t
+>     return t
+
+
+> inferType :: Contextual (Term, Type) Type
+> inferType = getT >>= \ (t, ity) -> case t of
 >     TmVar x -> do
 >         sc  <- tyOf <$> lookupTmVar x
->         ty  <- instantiate sc
-
->         -- g <- expandContext <$> getContext
->         -- mtrace $ "inferType " ++ x ++ " :: " ++ render ty ++ "\n" ++ render g
-
->         goUp ty []
+>         ty  <- subsCheck sc ity
+>         putT (t, ty)
+>         goUp []
 >     TmCon c -> do
 >         sc  <- lookupTmCon c
->         ty  <- instantiate sc
->         goUp ty []
->     TmApp f s -> goAppLeft >> inferType
->     TmBrace n -> fail "Braces aren't cool"
->     Lam x t -> do
->         a <- fresh "_a" (Hole ::: Set)
->         goLam (TyVar Set a)
->         inferType
->     t :? ty -> goAnnotLeft >> inferType
-
+>         ty  <- subsCheck sc ity
+>         putT (t, ty)
+>         goUp []
+>     TmApp f s  -> goAppLeft    >> inferType
+>     Lam x t    -> goLam        >> inferType
+>     t :? ty    -> goAnnotLeft  >> inferType
+>     TmBrace n  -> fail "Braces aren't cool"
 
 > infer :: STerm -> Contextual () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t'  <- scopeCheckTypes t
->     ty  <- withT t' $ inferType
+>     a   <- unknownTyVar $ "_go" ::: Set
+>     ty  <- withT (t', a) $ inferType
 >     return $ t' ::: ty
 
+> check :: Type -> STerm -> Contextual () Term
+> check ty t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
+>     t'  <- scopeCheckTypes t
+>     withT (t', ty) $ inferType
+>     return t'
 
 
-> inst :: (String -> String) -> TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
-> inst s d (TyApp f a)     = TyApp f <$> inst s d a
-> inst s d (Bind All x k t)  = do
+> splitFun :: Type -> Contextual a (Type, Type)
+> splitFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
+> {-
+> splitFun (Qual q t) = do
+>     q' <- normalisePred q
+>     modifyContext (:< Constraint Given q')
+>     splitFun t
+> -}
+> splitFun t = do
+>     a <- unknownTyVar $ "_dom" ::: Set
+>     b <- unknownTyVar $ "_cod" ::: Set
+>     unify (a --> b) t
+>     return (a, b)
+
+
+
+
+> inst :: Bool -> (String -> String) -> TypeDef -> Type -> ContextualWriter [NormalPredicate] t Type
+> inst pi s d (TyApp f a)     = TyApp f <$> inst pi s d a
+> inst True s d (Bind Pi x k t) = return $ Bind Pi x k t
+> inst pi s d (Bind b x k t)  = do
 >     beta <- fresh (s x) (d ::: k)
->     inst s d (unbind beta t)
-> inst s d (Qual p t)      = do
+>     inst pi s d (unbind beta t)
+> inst pi s d (Qual p t)      = do
 >     p' <- lift $ normalisePred p
 >     tell [p']
->     inst s d t
-> inst s d t               = return t
+>     inst pi s d t
+> inst pi s d t               = return t
 
 
-> instS :: (String -> String) -> CStatus -> TypeDef -> Type -> Contextual t Type
-> instS f s d t = do
->     (ty, cs) <- runWriterT $ inst f d t
+> instS :: Bool -> (String -> String) -> CStatus -> TypeDef -> Type -> Contextual t Type
+> instS pi f s d t = do
+>     (ty, cs) <- runWriterT $ inst pi f d t
 >     modifyContext (<><< map (Constraint s) cs)
 >     return ty
 
 
 > specialise :: Type -> Contextual t Type
-> specialise = instS id Given Fixed
+> specialise = instS True id Given Fixed
 
 > instantiate :: Type -> Contextual t Type
-> instantiate = instS (++ "_inst") Wanted Hole
+> instantiate = instS True (++ "_inst") Wanted Hole
 
 
 > solveConstraints :: Bool -> Contextual t ()
