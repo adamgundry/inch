@@ -128,7 +128,7 @@
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
 
-> unifyTypes (Bind Pi a1 KindNum t1) (Bind Pi a2 KindNum t2) = do
+> unifyTypes (Bind b1 a1 k1 t1) (Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 = do
 >     nm <- fresh (a1 ++ "_u") (Fixed ::: KindNum)
 >     unifyTypes (unbind nm t1) (unbind nm t2)
 

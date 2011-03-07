@@ -115,10 +115,6 @@
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> rty
 
->     -- nty <- niceType ty
->     -- nsty <- niceType sty
->     -- mtrace $ "checkPat unifying: " ++ render nty ++ " and " ++ render nsty
-
 >     -- mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
 >     unifySolveConstraints
 >     solveConstraints try
@@ -194,20 +190,23 @@
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
 >     nm <- fresh ("_" ++ x ++ "aa") (Hole ::: KindNum)
 >     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
->     (pts, ty) <- checkPatTerms (unbind nm t) ps
+>     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
+>     (pts, ty) <- checkPatTerms aty ps
 >     return ((PatBrace Nothing k ::: TyNum (NumVar nm)) : pts, ty)
 
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
 >     tell ([a ::: TyB NumTy], [])
 >     am <- fresh a (Hole ::: KindNum)
->     (pts, ty) <- checkPatTerms (unbind am t) ps
+>     aty <- mapPatWriter $ inst True id Fixed (unbind am t)
+>     (pts, ty) <- checkPatTerms aty ps
 >     return ((PatBrace (Just a) 0 ::: TyNum (NumVar am)) : pts, ty)
 
 > checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
 >     nm <- fresh ("_" ++ x ++ "oo") (Hole ::: KindNum)
 >     am <- fresh a (Fixed ::: KindNum)
 >     tell ([], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
->     (pts, ty) <- checkPatTerms (unbind nm t) ps
+>     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
+>     (pts, ty) <- checkPatTerms aty ps
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
 
 > checkPatTerms ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "

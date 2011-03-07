@@ -30,40 +30,36 @@
 If the current term is a lambda, |goLam ty| enters its body, assigning
 the type |ty| to the bound variable.
 
-> goLam :: Contextual (Term, Type) ()
+> goLam :: Contextual (Term, Maybe Type) ()
 > goLam = do
->     (Lam x t, ty)  <- getT
->     (dom, cod)     <- splitFun ty
->     putT (unbind x t, cod)
+>     (Lam x t, mty)  <- getT
+>     (dom, cod)      <- case mty of
+>         Just ty  -> splitFun ty
+>         Nothing  -> (,) <$> unknownTyVar ("_dom" ::: Set) <*> unknownTyVar ("_cod" ::: Set)
+>     putT (unbind x t, Just cod)
 >     modifyContext (:< Layer (LamBody (x ::: dom) ()))
 
 
 If the current term is an application, |goAppLeft| enters the
 function.
 
-> goAppLeft :: Contextual (Term, Type) ()
+> goAppLeft :: Contextual (Term, Maybe Type) ()
 > goAppLeft = do
->     (TmApp f s, ty)  <- getT
->     case s of
->         TmBrace n -> do
->             picod <- fresh "_picod" (Hole ::: KindNum ---> Set)
->             putT (f, Bind Pi "_ni" KindNum
->                 (TyApp (TyVar (KindNum ---> Set) (S picod))
->                        (TyVar KindNum Z)))
->         _ -> do
->             dom <- unknownTyVar $ "_dom" ::: Set
->             putT (f, dom --> ty)
->     modifyContext (:< Layer (AppLeft () s))
+>     (TmApp f s, mty)  <- getT
+>     putT (f, Nothing)
+>     modifyContext (:< Layer (AppLeft () s mty))
 
 
 If the current term is an annotation, |goAnnotLeft| enters the term
 being annotated.
 
-> goAnnotLeft :: Contextual (Term, Type) ()
+> goAnnotLeft :: Contextual (Term, Maybe Type) ()
 > goAnnotLeft = do
->     (t :? uty, ty) <- getT
->     subsCheck ty uty
->     putT (t, ty)
+>     (t :? uty, mty) <- getT
+>     aty <- case mty of
+>         Just ty  -> subsCheck ty uty
+>         Nothing  -> instantiate uty
+>     putT (t, Just aty)
 >     modifyContext (:< Layer (AnnotLeft () uty))
 
 
@@ -75,40 +71,46 @@ The accumulator |_Xi| collects variable definitions that |tau| may
 depend on, and hence must be reinserted into the context once the new
 location is found.
 
-> goUp :: [Entry] -> Contextual (Term, Type) Type
+> goUp :: [Entry] -> Contextual (Term, Maybe Type) Type
 > goUp _Xi = do
->     st@(St{tValue = (t, ty)}) <- get
+>     st@(St{tValue = (t, Just ty)}) <- get
 >     case context st of
 >       (es :< Layer l) ->
 >         case l of      
->             AppLeft () (TmBrace n) -> do
+>             AppLeft () (TmBrace n) mty -> do
 >                 case ty of
 >                     Bind Pi x KindNum aty -> do
 >                         putContext (es <><< _Xi)
 >                         nm <- fresh "_n" (Some (TyNum n) ::: KindNum)
 >                         aty' <- instantiate (unbind nm aty)
->                         putT (TmApp t (TmBrace n), aty')
+>                         case mty of
+>                             Just ty  -> unify ty aty'
+>                             Nothing  -> return ()
+>                         putT (TmApp t (TmBrace n), Just aty')
 >                         goUp []
 >                     _ -> fail $ "Bad dependent application: type "
 >                              ++ render ty ++ " of " ++ render t
 >                              ++ " is not good"
->             AppLeft () a -> do
+>             AppLeft () a mty -> do
 >                 putContext (es <><< _Xi)
 >                 (dom, cod) <- splitFun ty
+>                 case mty of
+>                     Just ty  -> unify ty cod
+>                     Nothing  -> return ()
 >                 modifyContext (:< Layer (AppRight (t ::: dom --> cod) ()))
->                 putT (a, dom)
+>                 putT (a, Just dom)
 >                 inferType
 >             AppRight (f ::: sigma) () -> do
 >                 putContext (es <><< _Xi)
 >                 (dom, cod) <- splitFun sigma
->                 putT (TmApp f t, cod)
+>                 putT (TmApp f t, Just cod)
 >                 goUp []
 >             LamBody (x ::: sigma) () -> do
->                 put st{tValue = (Lam x (bind x t), sigma --> ty),
+>                 put st{tValue = (Lam x (bind x t), Just (sigma --> ty)),
 >                        context = es}
 >                 goUp _Xi
 >             AnnotLeft () uty -> do
->                 put st{tValue = (t :? uty, ty),
+>                 put st{tValue = (t :? uty, Just ty),
 >                        context = es}
 >                 goUp _Xi
 >             PatternTop _ _ _ _ -> do
@@ -130,17 +132,21 @@ location is found.
 >     return t
 
 
-> inferType :: Contextual (Term, Type) Type
-> inferType = getT >>= \ (t, ity) -> case t of
+> inferType :: Contextual (Term, Maybe Type) Type
+> inferType = getT >>= \ (t, mty) -> case t of
 >     TmVar x -> do
 >         sc  <- tyOf <$> lookupTmVar x
->         ty  <- subsCheck sc ity
->         putT (t, ty)
+>         ty <- case mty of
+>             Just ity  -> subsCheck sc ity
+>             Nothing   -> instantiate sc
+>         putT (t, Just ty)
 >         goUp []
 >     TmCon c -> do
 >         sc  <- lookupTmCon c
->         ty  <- subsCheck sc ity
->         putT (t, ty)
+>         ty <- case mty of
+>             Just ity  -> subsCheck sc ity
+>             Nothing   -> instantiate sc
+>         putT (t, Just ty)
 >         goUp []
 >     TmApp f s  -> goAppLeft    >> inferType
 >     Lam x t    -> goLam        >> inferType
@@ -150,14 +156,13 @@ location is found.
 > infer :: STerm -> Contextual () (Term ::: Type)
 > infer t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t'  <- scopeCheckTypes t
->     a   <- unknownTyVar $ "_go" ::: Set
->     ty  <- withT (t', a) $ inferType
+>     ty  <- withT (t', Nothing) $ inferType
 >     return $ t' ::: ty
 
 > check :: Type -> STerm -> Contextual () Term
 > check ty t = inLocation ("in expression " ++ show (prettyHigh t)) $ do
 >     t'  <- scopeCheckTypes t
->     withT (t', ty) $ inferType
+>     withT (t', Just ty) $ inferType
 >     return t'
 
 

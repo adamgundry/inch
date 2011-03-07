@@ -23,7 +23,7 @@
 >                                  ,  ptPreds  :: [NormPred a]
 >                                  ,  ptConstraints :: [NormPred a]
 >                                  }
->                   |  AppLeft () (Tm Kind a x)
+>                   |  AppLeft () (Tm Kind a x) (Maybe (Ty Kind a))
 >                   |  AppRight (Tm Kind a x ::: Ty Kind a) ()
 >                   |  LamBody (x ::: Ty Kind a) ()
 >                   |  AnnotLeft () (Ty Kind a)
@@ -38,7 +38,7 @@
 >         (map (\ (y ::: t) -> y ::: bindTy f t) yts)
 >         (map (bindNormPred (normalNum . toNum . f KindNum)) ps)
 >         (map (bindNormPred (normalNum . toNum . f KindNum)) cs)
-> bindLayer f (AppLeft () tm)             = AppLeft () (bindTypes f tm)
+> bindLayer f (AppLeft () tm mty)         = AppLeft () (bindTypes f tm) (fmap (bindTy f) mty)
 > bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: bindTy f ty) ()
 > bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: bindTy f ty) ()
 > bindLayer f (AnnotLeft () ty)           = AnnotLeft () (bindTy f ty)
