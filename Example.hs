@@ -96,6 +96,29 @@ vzipWith f VNil VNil = VNil
 vzipWith f (VCons x xs) (VCons y ys) = VCons (f x y) (vzipWith f xs ys)
 
 
+vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 ->
+    (forall (m :: Num) . a -> f m -> f (m + 1)) -> Vec n a -> f n
+-- vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 ->
+--    (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> Vec n a -> f n
+vfold n c VNil         = n
+vfold n c (VCons x xs) = c x (vfold n c xs)
+
+vsum :: forall (n :: Num) . (Integer -> Integer -> Integer) ->
+    Vec n Integer -> Integer
+vsum plus VNil = 0
+vsum plus (VCons x xs) = plus x (vsum plus xs)
+
+{-
+vsum2 :: forall (n :: Num) . (Integer -> Integer -> Integer) ->
+    Vec n Integer -> Integer
+vsum2 plus = vfold 0 plus
+-}
+
+{-
+vbuild :: forall (n :: Num) a . Vec n a -> Vec n a
+vbuild = vfold VNil VCons
+-}
+
 
 unaryToNat :: forall (n :: Num) . UNat n -> Nat
 unaryToNat UZero    = Zero
@@ -314,3 +337,14 @@ aboveC (Coord {l} {b} {r} {t}) (Coord {l2} {b'} {r2} {t2}) =
 bound :: forall (l b r t :: Num) . Shape l b r t -> Coord l b r t
 bound (Box {l} {b} {r} {t}) = Coord {l} {b} {r} {t}
 bound (Above s t) = aboveC (bound s) (bound t)
+
+
+data Ex :: * where
+  Ex :: forall a . a -> (a -> Integer) -> Ex
+
+f :: Ex -> Integer
+f (Ex s f) = f s
+
+g (Ex s f) = f s
+
+h (Ex s f) = s
