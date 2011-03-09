@@ -108,7 +108,7 @@
 > checkPat :: Bool -> String ::: Type -> Type -> SPattern -> Contextual () (Pattern ::: Type)
 > checkPat try (s ::: sc) sty (Pat xs g t) =
 >   inLocation ("in alternative " ++ s ++ " " ++ render (Pat xs g t)) $ do
->     ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms sty xs
+>     ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms True sty xs
 >     rty <- specialise rty
 >     modifyContext (:< Layer (PatternTop (s ::: sc) bs ps []))
 >     t'  <- check rty t
@@ -155,59 +155,81 @@
 
 > mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
 
-> checkPatTerms :: Type -> [SPatternTerm] ->
+
+> existentialise :: ContextualWriter ([TmName ::: Type], [NormalPredicate]) t Type
+>     -> ContextualWriter ([TmName ::: Type], [NormalPredicate]) t Type
+> existentialise m = do
+>     modifyContext (:< Layer FunTop) -- hackish
+>     ty <- m
+>     modifyContext $ help (getTarget ty)
+>     return ty
+>   where
+>     help ty (g :< Layer FunTop)                      = g
+>     help ty (g :< A (a := Hole ::: k))  | a <? ty    = help ty g :< A (a := Hole ::: k)
+>                                         | otherwise  = help ty g :< A (a := Exists ::: k)
+>     help ty (g :< e)                                 = help ty g :< e
+
+> checkPatTerms :: Bool -> Type -> [SPatternTerm] ->
 >     ContextualWriter ([TmName ::: Type], [NormalPredicate]) ()
 >     ([PatternTerm ::: Type], Type)
 >
-> checkPatTerms t [] = return ([], t)
+> checkPatTerms top t [] = return ([], t)
 >
-> checkPatTerms sat (PatVar v : ps) = do
+> checkPatTerms top sat (PatVar v : ps) = do
 >     sat <- mapPatWriter $ inst True id Fixed sat
 >     (s, t) <- lift $ splitFun sat
 >     tell ([v ::: s], [])
->     (pts, ty) <- checkPatTerms t ps
+>     (pts, ty) <- checkPatTerms top t ps
 >     return ((PatVar v ::: s) : pts, ty)
 >
-> checkPatTerms sat (PatCon c xs : ps) =
+> checkPatTerms top sat (PatCon c xs : ps) =
 >   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
 >     sat <- mapPatWriter $ inst True id Fixed sat
 >     (s, t) <- lift $ splitFun sat
 >     sc   <- lookupTmCon c
->     cty  <- mapPatWriter $ inst True (++ "_pat_inst") Hole sc
+>     cty  <- existentialise $ mapPatWriter $ inst True (++ "_pat_inst") Hole sc
 >     unless (length xs == args cty) $
 >         errConUnderapplied c (args cty) (length xs)
->     (pts, aty)  <- checkPatTerms cty xs
+>     (pts, aty)  <- checkPatTerms False cty xs
 >     aty <- mapPatWriter $ inst True id Fixed aty
 >     lift $ unify s aty
->     (pps, ty) <- checkPatTerms t ps
+>     (pps, ty) <- checkPatTerms top t ps
 >     return ((PatCon c (map tmOf pts) ::: s) : pps, ty)
 >  
-> checkPatTerms sat (PatIgnore : ps) = do
+> checkPatTerms top sat (PatIgnore : ps) = do
 >     (s, t) <- lift $ splitFun sat
->     (pts, ty) <- checkPatTerms t ps
+>     (pts, ty) <- checkPatTerms top t ps
 >     return ((PatIgnore ::: s) : pts, ty)
 >
-> checkPatTerms (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
->     nm <- fresh ("_" ++ x ++ "aa") (Hole ::: KindNum)
+> checkPatTerms top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
+>     nm <- freshS $ "_" ++ x ++ "aa"
+>     let d = if top || nm <? getTarget (unbind nm t) then Hole else Exists
+>     modifyContext (:< A (nm := d ::: KindNum))
 >     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
 >     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
->     (pts, ty) <- checkPatTerms aty ps
+>     (pts, ty) <- checkPatTerms top aty ps
 >     return ((PatBrace Nothing k ::: TyNum (NumVar nm)) : pts, ty)
 
-> checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
+> checkPatTerms top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
 >     tell ([a ::: TyB NumTy], [])
->     am <- fresh a (Hole ::: KindNum)
+>     am <- freshS a
+>     let d = if top || am <? getTarget (unbind am t) then Hole else Exists
+>     modifyContext (:< A (am := d ::: KindNum))
 >     aty <- mapPatWriter $ inst True id Fixed (unbind am t)
->     (pts, ty) <- checkPatTerms aty ps
+>     (pts, ty) <- checkPatTerms top aty ps
 >     return ((PatBrace (Just a) 0 ::: TyNum (NumVar am)) : pts, ty)
 
-> checkPatTerms (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
->     nm <- fresh ("_" ++ x ++ "oo") (Hole ::: KindNum)
->     am <- fresh a (Fixed ::: KindNum)
+> checkPatTerms top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
+>     nm <- freshS $ "_" ++ x ++ "oo"
+>     let (d, d') = if top || nm <? getTarget (unbind nm t)
+>                       then (Hole, Fixed)
+>                       else (Exists, Exists)
+>     modifyContext (:< A (nm := d ::: KindNum))
+>     am <- fresh a (d' ::: KindNum)
 >     tell ([a ::: TyB NumTy], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
 >     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
->     (pts, ty) <- checkPatTerms aty ps
+>     (pts, ty) <- checkPatTerms top aty ps
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
 
-> checkPatTerms ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "
+> checkPatTerms top ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "
 >                            ++ render p ++ " against type " ++ render ty

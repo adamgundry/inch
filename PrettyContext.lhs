@@ -21,9 +21,10 @@
 >   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "??"
 
 > instance PrettyVar a => Pretty (TyDef a) where
->   pretty Hole _ = text "?"
->   pretty Fixed _ = text "!"
->   pretty (Some t) _ = prettyHigh t
+>   pretty Hole      _ = text "?"
+>   pretty Fixed     _ = text "!"
+>   pretty Exists    _ = text "Ex"
+>   pretty (Some t)  l = pretty t l
 
 > instance (Show a, Show x, PrettyVar x, PrettyVar a) => Pretty (TmLayer a x) where
 >   pretty (PatternTop (s ::: sty) bs ps cs) _ = text "<PatternTop>"

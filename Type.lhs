@@ -140,6 +140,11 @@ should use a better representation?
 >   where (ss, ty) = splitArgs t
 > splitArgs t = ([], t)
 
+> getTarget :: Ty k a -> Ty k a
+> getTarget (TyApp (TyApp (TyB Arr) _) ty)  = getTarget ty
+> getTarget t                               = t
+
+
 > targets :: Eq a => Ty k a -> TyConName -> Bool
 > targets (TyCon c)                 t | c == t = True
 > targets (TyApp (TyApp (TyB Arr) _) ty)  t = targets ty t

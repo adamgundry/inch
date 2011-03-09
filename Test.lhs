@@ -164,7 +164,7 @@
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   ("f :: forall a (n :: Num) . n ~ n => a -> a\nf x = x", True) :
 >   ("f :: forall a (n :: Num) . n ~ m => a -> a\nf x = x", False) :
->   (vecDecl ++ "head (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs\nid2 (Cons x xs) = Cons x xs\nid2 Nil = Nil\n", True) :
+>   (vecDecl ++ "head (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs", False) :
 >   (vecDecl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid :: forall (n :: Num) a. Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
@@ -197,11 +197,13 @@
 >   ("f :: pi (n :: Num) . Integer\nf {n+1} = n", True) :
 >   (vecDecl ++ "vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a\nvtake {0}   _            = Nil\nvtake {i+1} (Cons x xs) = Cons x (vtake {i} xs)", True) :
 >   (vecDecl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> Vec n a -> f n\nvfold n c Nil         = n\nvfold n c (Cons x xs) = c x (vfold n c xs)", True) :
->   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> (a -> One) -> Ex\nf (Ex s f) = f s", True) :
+>   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> (a -> One) -> Ex\nf (Ex s g) = g s", True) :
+>   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> (a -> One) -> Ex\nf :: Ex -> One\nf (Ex s g) = g s", True) :
 >   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> Ex\nf (Ex a) = a", False) :
 >   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> Ex\nf (Ex One) = One", False) :
 >   ("data Ex where Ex :: pi (n :: Num) . Ex\nf (Ex {n}) = n", True) : 
->   ("data Ex where Ex :: pi (n :: Num) . Ex\ndata T :: Num -> * where T :: pi (n :: Num) . T n\nf (Ex {n}) = T {n}", False) : 
+>   ("data Ex where Ex :: pi (n :: Num) . Ex\ndata T :: Num -> * where T :: pi (n :: Num) . T n\nf (Ex {n}) = T {n}", False) :
+>   ("data Ex where Ex :: pi (n :: Num) . Ex\ndata T :: Num -> * where T :: pi (n :: Num) . T n\nf (Ex {n+1}) = T {n}", False) : 
 >   []
 
 

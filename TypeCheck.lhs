@@ -355,7 +355,11 @@ location is found.
 >     return t'
 >   where
 >     help g@(_ :< Layer FunTop)            t = return (g, t)
->     help (g :< A ((an := Some d ::: k)))  t = help g (substTy an d t)
->     help (g :< A ((an := _ ::: k)))    t = help g (Bind All (fst an) k (bind an t))
+>     help (g :< A (an := d ::: k)) t | an <? t = case d of
+>         Exists  -> fail $ "Illegal existential " ++ show (prettyVar an) ++
+>                           "\nwhen generalising type " ++ render t
+>         Some d  -> help g (substTy an d t)
+>         _       -> help g (Bind All (fst an) k (bind an t))
+>     help (g :< A _) t = help g t
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
 >     help (g :< Constraint Given _)        t = help g t

@@ -109,15 +109,17 @@
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha, gamma == beta, d) of
 >           (True,   True,   _)  ->  restore                                 
+
 >           (True,   False,  Hole)      ->  replace ((alpha := Some (var k beta) ::: k) :> F0)
->           (True,   False,  Fixed)     ->  solve beta ((alpha := Fixed ::: k) :> F0) (TyVar ka alpha)
->                                       >>  replace F0
->           (False,  True,   Hole)      ->  replace ((beta := Some (var k alpha) ::: k) :> F0)
->           (False,  True,   Fixed)     ->  solve alpha ((beta := Fixed ::: k) :> F0) (TyVar kb beta)
+>           (True,   False,  Some tau)  ->  unifyTypes (TyVar kb beta)   tau       >> restore   
+>           (True,   False,  _)          ->  solve beta ((alpha := d ::: k) :> F0) (TyVar ka alpha)
 >                                       >>  replace F0
 
->           (True,   False,  Some tau)  ->  unifyTypes (TyVar kb beta)   tau       >> restore   
+>           (False,  True,   Hole)      ->  replace ((beta := Some (var k alpha) ::: k) :> F0)
 >           (False,  True,   Some tau)  ->  unifyTypes (TyVar ka alpha)  tau       >> restore   
+>           (False,  True,   _)         ->  solve alpha ((beta := d ::: k) :> F0) (TyVar kb beta)
+>                                       >>  replace F0
+
 >           (False,  False,  _)         ->  unifyTypes (TyVar ka alpha)  (TyVar kb beta)  >> restore   
 
 > unifyTypes (TyCon c1) (TyCon c2)
@@ -169,8 +171,7 @@
 >     unifyPairs xs
 
 > rigidHull :: Type -> Contextual t (Type, Fwd (TyName, TypeNum))
-> rigidHull (TyVar KindNum a)      = do  n <- freshName
->                                        let beta = ("_j", n)
+> rigidHull (TyVar KindNum a)      = do  beta <- freshS "_j"
 >                                        return (TyNum (NumVar beta), (beta, NumVar a) :> F0)
 > rigidHull (TyVar k a)            = return (TyVar k a, F0)
 > rigidHull (TyCon c)              = return (TyCon c, F0)
@@ -178,8 +179,7 @@
 >                                        (s',  ys  )  <- rigidHull s
 >                                        return (TyApp f' s', xs <+> ys)
 > rigidHull (TyB b) = return (TyB b, F0)
-> rigidHull (TyNum d)          = do  n <- freshName
->                                    let beta = ("_i", n)
+> rigidHull (TyNum d)          = do  beta <- freshS "_i"
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
 
 > {-
@@ -210,12 +210,15 @@
 > solve alpha _Xi tau = onTop $
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
 >     (gamma == alpha, occurs, d) of
+
 >     (True,   True,   _)             ->  fail "Occurrence detected!"
+
 >     (True,   False,  Hole)          ->  replace (_Xi <+> ((alpha := Some tau ::: k) :> F0))
 >     (True,   False,  Some upsilon)  ->  modifyContext (<>< _Xi)
 >                                         >>  unifyTypes upsilon tau
 >                                         >>  restore
->     (True,   False,  Fixed)         ->  errUnifyFixed alpha tau
+>     (True,   False,  _)             ->  errUnifyFixed alpha tau
+
 >     (False,  True,   Some upsilon)  ->  do
 >         (upsilon', xs) <- rigidHull upsilon
 >         solve alpha (pairsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
@@ -303,6 +306,5 @@ We can insert a fresh variable into a unit thus:
 
 > insertFreshVar :: NormalNum -> Contextual t (NormalNum, TyName)
 > insertFreshVar d = do
->     n <- freshName
->     let beta = ("_beta", n)
+>     beta <- freshS "_beta"
 >     return (d +~ mkVar beta, beta)

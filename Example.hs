@@ -1,5 +1,14 @@
 {-# OPTIONS_GHC -F -pgmF ./toy #-}
-{-# LANGUAGE ExplicitForAll, GADTs, KindSignatures #-}
+{-# LANGUAGE RankNTypes, GADTs, KindSignatures #-}
+
+{-
+Things that would be nice:
+* Let bindings or where clauses
+* Automatic translation of GADT notation into local equality constraints
+* Mutually recursive binding groups
+* Nat kind (desugars to Num with inequality constraint)
+* Fix lexically-scoped type variables, without name munging
+-}
 
 module Example where
 
@@ -64,9 +73,10 @@ twotails xs = vtail (vtail xs)
 thing = comp vtail vhead
 
 
-vappend :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
+vappend :: forall (m n :: Num) a . Vec m a -> Vec n a -> Vec (m+n) a
 vappend VNil ys = ys
-vappend (VCons x xs) ys = VCons x (vappend xs ys)
+vappend (VCons x xs) VNil = VCons x (vappend xs VNil)
+vappend (VCons x xs) (VCons y ys) = VCons x (vappend xs (VCons y ys))
 
 vrevapp :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vrevapp VNil ys = ys
@@ -256,16 +266,6 @@ rebuildTm = foldTm2 V' L' A'
 -}
 
 
-{-
-Things that would be nice:
-* Let bindings or where clauses
-* Automatic translation of GADT notation into local equality constraints
-* Existentials
-* Mutually recursive binding groups
-* Nat kind (desugars to Num with inequality constraint)
-* Fix lexically-scoped type variables, without name munging
--}
-
 
 -- A practical Haskell puzzle
 -- http://www.haskell.org/pipermail/haskell-cafe/2011-February/089719.html
@@ -339,12 +339,43 @@ bound (Box {l} {b} {r} {t}) = Coord {l} {b} {r} {t}
 bound (Above s t) = aboveC (bound s) (bound t)
 
 
-data Ex :: * where
-  Ex :: forall a . a -> (a -> Integer) -> Ex
 
-f :: Ex -> Integer
-f (Ex s f) = f s
+-- Existentials
 
-g (Ex s f) = f s
+data Ex :: (Num -> *) -> * where
+  Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
 
-h (Ex s f) = s
+unEx :: forall (f :: Num -> *) a . (forall (n :: Num) . f n -> a) -> Ex f -> a
+unEx g (Ex x) = g x
+
+data IntVec :: Num -> * where
+  IV :: forall (n :: Num) . Vec n Integer -> IntVec n
+
+len :: Ex IntVec -> Nat
+len (Ex (IV VNil))         = Zero
+len (Ex (IV (VCons x xs))) = Suc (len (Ex (IV (VCons x xs))))
+
+ivappend :: Ex IntVec -> Ex IntVec -> Ex IntVec
+ivappend (Ex (IV xs)) (Ex (IV ys)) = Ex (IV (vappend xs ys))
+
+
+data ExPi where
+  ExPi :: pi (n :: Num) . 0 <= n => ExPi
+
+unExPi (ExPi {n+1})  = Suc (unExPi (ExPi {n}))
+unExPi (ExPi {0})    = Zero
+
+unExPi2 (ExPi {n}) = nat {n}
+
+
+data ExSet :: (* -> *) -> * where
+  ExSet :: forall (f :: * -> *) a . f a -> ExSet f
+
+unExSet :: forall (f :: * -> *) b . (forall a . f a -> b) -> ExSet f -> b
+unExSet g (ExSet x) = g x
+
+data SillyPair :: * -> * where
+  SillyPair :: forall a . a -> (a -> Integer) -> SillyPair a
+
+unSP :: ExSet SillyPair -> Integer
+unSP (ExSet (SillyPair a f)) = f a

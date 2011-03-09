@@ -57,7 +57,7 @@
 >               |  Constraint CStatus (NormPred a)
 >   deriving Show
 
-> data TyDef a = Hole | Some (Ty Kind a) | Fixed
+> data TyDef a = Hole | Some (Ty Kind a) | Fixed | Exists
 >   deriving (Show, Functor, Foldable)
 
 > defToMaybe :: TyDef a -> Maybe (Ty Kind a)
@@ -95,6 +95,9 @@ Fresh names
 >                 let beta = nextFreshInt st
 >                 put st{nextFreshInt = succ beta}
 >                 return beta
+
+> freshS :: (Functor m, MonadState (ZipState t) m) => String -> m TyName
+> freshS s = (\ n -> (s, n)) <$> freshName
 
 > fresh :: MonadState (ZipState t) m => String -> TypeDef ::: Kind -> m TyName
 > fresh a d = do  beta <- freshName
