@@ -26,9 +26,10 @@
 >                   |  AppLeft () (Tm k a x) (Maybe (Ty k a))
 >                   |  AppRight (Tm k a x ::: Ty k a) ()
 >                   |  LamBody (x ::: Ty k a) ()
+>                   |  LetBody [x ::: Ty k a] ()
 >                   |  AnnotLeft () (Ty k a)
 >                   |  FunTop
->     deriving (Eq, Show)
+>     deriving Show
 
 > type TermLayer = TmLayer Kind TyName TmName
 
@@ -60,7 +61,7 @@
 
 > data Ent k a x  =  A      (TyEnt a)
 >                 |  Layer  (TmLayer k a x)
->                 |  Func   x (Ty Kind a)
+>                 |  Func   x (Ty k a)
 >                 |  Constraint CStatus (NormPred a)
 >   deriving Show
 
@@ -275,6 +276,9 @@ Data constructors
 >     seek B0 = missingTmVar x
 >     seek (g :< Func y ty)                      | x == y = return $ TmVar y ::: ty
 >     seek (g :< Layer (LamBody (y ::: ty) ()))  | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (LetBody bs ())) = case lookIn bs of
+>                                             Just tt  -> return tt
+>                                             Nothing  -> seek g
 >     seek (g :< Layer (PatternTop (y ::: ty) bs ps cs))
 >         | x == y = return $ TmVar y ::: ty
 >         | otherwise = case lookIn bs of

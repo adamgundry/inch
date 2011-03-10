@@ -129,23 +129,48 @@ Types
 
 Terms
 
-> expr  =    lambda
->       <|>  fexp 
 
-> fexp = do
->     t <- foldl1 TmApp <$> many1 aexp
->     mty <- optionMaybe (doubleColon >> tyExp)
+> expr = do
+>     t    <- expi 0
+>     mty  <- optionMaybe (doubleColon >> tyExp)
 >     case mty of
 >         Just ty -> return $ t :? ty
 >         Nothing -> return t
+
+> expi 10  =    lambda
+>          <|>  letExpr
+>          <|>  fexp
+> expi i = expi (i+1) -- <|> lexpi i <|> rexpi i
+
+
+> letExpr = do
+>     reserved "let"
+>     ds <- I.block $ many funDecl
+>     reserved "in"
+>     t <- expr
+>     return $ Let ds t
+
+> {-
+> letExpr = do
+>     reserved "let"
+>     a <- tmVarName
+>     reservedOp "="
+>     w <- expr
+>     reserved "in"
+>     t <- expr
+>     return $ Let [FunDecl a Nothing [Pat [] Trivial w]] t
+> -}
+
+<   Let <$> (reserved "let" *> many funDecl <* reserved "in") <*> expr
+
+
+> fexp = foldl1 TmApp <$> many1 aexp
 
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  TmInt <$> integer
 >       <|>  parens expr
->       <|>  braces (TmBrace <$> tyNum)
-
-
+>       <|>  braces (TmBrace <$> tyNum) 
 
 > isVar :: String -> Bool
 > isVar = isLower . head
@@ -162,13 +187,13 @@ Terms
 >     reservedOp "\\"
 >     ss <- many1 tmVarName
 >     reservedOp "->"
->     t <- fexp
+>     t <- expr
 >     return $ wrapLam ss t
-
-> wrapLam [] t = t
-> wrapLam (s:ss) t = lam s $ wrapLam ss t
-
-> lam s = Lam s . bind s
+>   where
+>     wrapLam [] t      = t
+>     wrapLam (s:ss) t  = lam s $ wrapLam ss t
+>
+>     lam s = Lam s . bind s
 
 
 Programs

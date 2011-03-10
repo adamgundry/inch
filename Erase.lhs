@@ -53,6 +53,7 @@
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
+> eraseTm (Let ds t)   = Let <$> traverse eraseFunDecl ds <*> eraseTm t
 > eraseTm (t :? ty)    = (:?) <$> eraseTm t <*> (tmOf <$> eraseType ty)
 
 This is a bit of a hack; we really ought to extend the syntax of terms:
@@ -68,22 +69,25 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > eraseCon :: Constructor -> Contextual a Constructor
 > eraseCon (c ::: t) = ((c :::) . tmOf) <$> eraseType t
 
-> erasePat :: Pattern -> Contextual a Pattern
+> erasePat :: Pat Kind TyName x -> Contextual a (Pat Kind TyName x)
 > erasePat (Pat ps Trivial t) = Pat (map erasePatTm ps) Trivial <$> eraseTm t
 
-> erasePatTm :: PatternTerm -> PatternTerm
+> erasePatTm :: PatTerm Kind TyName x -> PatTerm Kind TyName x
 > erasePatTm (PatBrace Nothing k)   = PatCon (show k) []
 > erasePatTm (PatBrace (Just a) 0)  = PatVar a
 > erasePatTm (PatBrace (Just a) k)  = PatCon "+" [PatVar a, PatCon (show k) []]
 > erasePatTm (PatCon c ps) = PatCon c (map erasePatTm ps)
 > erasePatTm t = t
 
+> eraseFunDecl :: FunDecl Kind TyName x -> Contextual t (FunDecl Kind TyName x)
+> eraseFunDecl (FunDecl x mt ps) =
+>     FunDecl x <$> traverse (\ t -> tmOf <$> eraseType t) mt
+>               <*> traverse erasePat ps
+
 > eraseDecl :: Declaration -> Contextual a Declaration
 > eraseDecl (DD (DataDecl s k cs)) =
 >     DD <$> (DataDecl s <$> eraseKind k <*> traverse eraseCon cs)
-> eraseDecl (FD (FunDecl x mt ps)) =
->     FD <$> (FunDecl x <$> traverse (\ t -> tmOf <$> eraseType t) mt
->                       <*> traverse erasePat ps)
+> eraseDecl (FD f) = FD <$> eraseFunDecl f
 
 > eraseProg :: Program -> Contextual a Program
 > eraseProg = traverse eraseDecl

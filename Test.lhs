@@ -12,8 +12,8 @@
 >             -> [a] -> Int -> Int -> String
 > test f [] yes no = "Passed " ++ show yes ++ " tests, failed " ++ show no ++ " tests."
 > test f (x:xs) yes no = case f x of
->     Right s  -> "PASS: " ++ s ++ "\n" ++ test f xs (yes+1) no
->     Left s   -> "FAIL: " ++ s ++ "\n" ++ test f xs yes (no+1)
+>     Right s  -> "PASS:\n" ++ s ++ "\n" ++ test f xs (yes+1) no
+>     Left s   -> "FAIL:\n" ++ s ++ "\n" ++ test f xs yes (no+1)
 
 > {-
 > test :: (a -> Either String String)
@@ -100,6 +100,9 @@
 >   "f :: forall a. pi (m :: Num) . a -> Vec a\nf {0} a = VNil\nf {n} a = VCons a (f {n-1} a)" :
 >   "x = 0" :
 >   "x = plus 0 1" :
+>   "x = let a = 1\n in a" :
+>   "x = let a = \\ x -> f x y\n in let b = 2\n  in a" :
+>   "x = let y :: forall a. a -> a\n        y = \\ z -> z\n    in y" :
 >   []
 
 
@@ -204,6 +207,11 @@
 >   ("data Ex where Ex :: pi (n :: Num) . Ex\nf (Ex {n}) = n", True) : 
 >   ("data Ex where Ex :: pi (n :: Num) . Ex\ndata T :: Num -> * where T :: pi (n :: Num) . T n\nf (Ex {n}) = T {n}", False) :
 >   ("data Ex where Ex :: pi (n :: Num) . Ex\ndata T :: Num -> * where T :: pi (n :: Num) . T n\nf (Ex {n+1}) = T {n}", False) : 
+>   ("f = let g = \\ x -> x\n in g g", True) :
+>   ("f = let x = x\n in x", True) :
+>   ("f = let x = 0\n in x", True) :
+>   ("f = let x = 0\n in f", True) :
+>   ("f = let g x y = y\n in g f", True) :
 >   []
 
 
