@@ -6,6 +6,7 @@
 > import Control.Monad hiding (mapM_)
 > import Data.Foldable 
 > import Data.Maybe
+> import Data.Monoid
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
 
@@ -79,6 +80,9 @@
 > instance FV a => FV (TyDef a) where
 >     alpha <? t = any (alpha <?) t
 
+> instance FV a => FV (TyNum a) where
+>     alpha <? t = any (alpha <?) t
+
 > instance FV Suffix where
 >     alpha <? t = any (alpha <?) t
 
@@ -92,6 +96,13 @@
 >     alpha <? IsPos n   = alpha <? n
 >     alpha <? IsZero n  = alpha <? n
 
+> instance FV a => FV [a] where
+>     alpha <? as = any (alpha <?) as
+
+> instance (FV a, Trav3 t) => FV (t k a x) where
+>     alpha <? t = getAny $ getConst $ trav3 (Const . Any . (alpha <?))
+>                                            (Const . Any . (alpha <?))
+>                                            (const $ Const $ Any False) t
 
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- niceType t

@@ -163,6 +163,10 @@
 > bimap :: Trav3 t => (a -> b) -> (x -> y) -> t k a x -> t k b y
 > bimap fa fx = bind3 (NumVar . fa) (\ k a -> TyVar k (fa a)) fx
 
+> mangle :: Trav3 t => (TyNum a -> TyNum b) ->
+>                 (Ty k a -> Ty l b) -> (x -> y) ->
+>                 t k a x -> t l b y
+> mangle fn fa fx = unId . trav3 (Id . fn) (Id . fa) (Id . fx)
 
 > replaceTy :: Eq a => Kind -> a -> Ty Kind a -> Ty Kind a -> Ty Kind a
 > replaceTy KindNum a t = bindTy f g
@@ -174,6 +178,15 @@
 > replaceTy l a t = bindTy NumVar f
 >   where f k b  | a == b     = t
 >                | otherwise  = TyVar k b
+
+> replaceTyNum :: Eq a => a -> TyNum a -> TyNum a -> TyNum a
+> replaceTyNum a n = (>>= f)
+>   where f b | a == b     = n
+>             | otherwise  = NumVar b
+
+> replace3 :: (Eq a, Trav3 t) => Kind -> a -> Ty Kind a -> t Kind a x -> t Kind a x
+> replace3 KindNum a t  = mangle (replaceTyNum a (toNum t)) (replaceTy KindNum a t) id
+> replace3 k a t        = mangle id (replaceTy k a t) id
 
 
 > type Prog k a x       = [Decl k a x]

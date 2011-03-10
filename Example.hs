@@ -1,9 +1,9 @@
 {-# OPTIONS_GHC -F -pgmF ./toy #-}
-{-# LANGUAGE RankNTypes, GADTs, KindSignatures #-}
+{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables #-}
 
 {-
 Things that would be nice:
-* Let bindings or where clauses
+* Pattern-matching let bindings (not functions)
 * Automatic translation of GADT notation into local equality constraints
 * Mutually recursive binding groups
 * Nat kind (desugars to Num with inequality constraint)

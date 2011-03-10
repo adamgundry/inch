@@ -28,106 +28,6 @@
 > import KindCheck
 
 
-> {-
-
-If the current term is a lambda, |goLam ty| enters its body, assigning
-the type |ty| to the bound variable.
-
-> goLam :: Contextual (Term, Maybe Type) ()
-> goLam = do
->     (Lam x t, mty)  <- getT
->     (dom, cod)      <- case mty of
->         Just ty  -> splitFun ty
->         Nothing  -> (,) <$> unknownTyVar ("_dom" ::: Set) <*> unknownTyVar ("_cod" ::: Set)
->     putT (unbind x t, Just cod)
->     modifyContext (:< Layer (LamBody (x ::: dom) ()))
-
-
-If the current term is an application, |goAppLeft| enters the
-function.
-
-> goAppLeft :: Contextual (Term, Maybe Type) ()
-> goAppLeft = do
->     (TmApp f s, mty)  <- getT
->     putT (f, Nothing)
->     modifyContext (:< Layer (AppLeft () s mty))
-
-
-If the current term is an annotation, |goAnnotLeft| enters the term
-being annotated.
-
-> goAnnotLeft :: Contextual (Term, Maybe Type) ()
-> goAnnotLeft = do
->     (t :? uty, mty) <- getT
->     aty <- case mty of
->         Just ty  -> subsCheck ty uty
->         Nothing  -> instantiate uty
->     putT (t, Just aty)
->     modifyContext (:< Layer (AnnotLeft () uty))
-
-
-The function |goUp tau _Xi| is called when the term at the current
-location has been given type |tau|, and it proceeds up and then right
-to find the next type inference problem.
-
-The accumulator |_Xi| collects variable definitions that |tau| may
-depend on, and hence must be reinserted into the context once the new
-location is found.
-
-
-> goUp :: [Entry] -> Contextual () Type
-> goUp _Xi = do
->     st@(St{tValue = (t, Just ty)}) <- get
->     case context st of
->       (es :< Layer l) ->
->         case l of      
->             AppLeft () (TmBrace n) mty -> do
->                 case ty of
->                     Bind Pi x KindNum aty -> do
->                         putContext (es <><< _Xi)
->                         nm <- fresh "_n" (Some (TyNum n) ::: KindNum)
->                         aty' <- instantiate (unbind nm aty)
->                         case mty of
->                             Just ty  -> unify ty aty'
->                             Nothing  -> return ()
->                         putT (TmApp t (TmBrace n), Just aty')
->                         goUp []
->                     _ -> fail $ "Bad dependent application: type "
->                              ++ render ty ++ " of " ++ render t
->                              ++ " is not good"
->             AppLeft () a mty -> do
->                 putContext (es <><< _Xi)
->                 (dom, cod) <- splitFun ty
->                 case mty of
->                     Just ty  -> unify ty cod
->                     Nothing  -> return ()
->                 modifyContext (:< Layer (AppRight (t ::: dom --> cod) ()))
->                 putT (a, Just dom)
->                 inferType
->             AppRight (f ::: sigma) () -> do
->                 putContext (es <><< _Xi)
->                 (dom, cod) <- splitFun sigma
->                 putT (TmApp f t, Just cod)
->                 goUp []
->             LamBody (x ::: sigma) () -> do
->                 put st{tValue = (Lam x (bind x t), Just (sigma --> ty)),
->                        context = es}
->                 goUp _Xi
->             AnnotLeft () uty -> do
->                 put st{tValue = (t :? uty, Just ty),
->                        context = es}
->                 goUp _Xi
->             PatternTop _ _ _ _ -> do
->                 put st{context = context st <><< _Xi}
->                 return ty
->       (es :< e) -> do
->           put st{context = es}
->           goUp (e : _Xi)
->       B0 -> error (  "Ran out of context when going up from " 
->                      ++ (show t) ++ " : " ++ (show ty))
-> -}
-
-
 > subsCheck :: Type -> Type -> Contextual a Type
 > subsCheck s t = do
 >     t  <- specialise t
@@ -165,24 +65,21 @@ location is found.
 
 > checkInfer mty (TmApp f s) = do
 >     f ::: fty   <- infer f
->     (dom, cod)  <- splitFun fty
+>     (dom, cod)  <- splitFun $ Just fty
 >     s           <- check dom s
 >     traverse (unify cod) mty
 >     return $ TmApp f s ::: cod
 
 > checkInfer mty (Lam x t) = do
->     (dom, cod) <- case mty of
->         Just ty  -> splitFun ty
->         Nothing  -> (,) <$> unknownTyVar ("_dom" ::: Set) <*> unknownTyVar ("_cod" ::: Set)
+>     (dom, cod) <- splitFun mty
 >     b <- withLayer (LamBody (x ::: dom) ()) $ check cod (unbind x t)
 >     return $ Lam x (bind x b) ::: dom --> cod
 
 > checkInfer mty (Let ds t) = do
 >     ds <- traverse checkFunDecl ds
->     t ::: ty <- withLayer (LetBody (map funDeclToBinding ds) ()) $ do
->         g <- getContext
->         -- mtrace $ "checkInfer Let: " ++ render g
->         checkInfer mty t
+>     -- mtrace . ("checkInfer Let:\n" ++) . renderMe =<< getContext
+>     t ::: ty <- withLayer (LetBody (map funDeclToBinding ds) ()) $ checkInfer mty t
+>     -- mtrace . ("checkInfer Let 2:\n" ++) . renderMe =<< getContext
 >     return $ Let ds t ::: ty
 
 > checkInfer mty (t :? xty) = do
@@ -211,18 +108,13 @@ location is found.
 > check ty t = inLocation (text "in expression" <+> prettyHigh t) $ tmOf <$> checkInfer (Just ty) t
 
 
-> splitFun :: Type -> Contextual a (Type, Type)
-> splitFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
-> {-
-> splitFun (Qual q t) = do
->     q' <- normalisePred q
->     modifyContext (:< Constraint Given q')
->     splitFun t
-> -}
-> splitFun t = do
->     a <- unknownTyVar $ "_dom" ::: Set
->     b <- unknownTyVar $ "_cod" ::: Set
->     unify (a --> b) t
+> splitFun :: Maybe Type -> Contextual a (Type, Type)
+> splitFun (Just (TyApp (TyApp (TyB Arr) s) t)) = return (s, t)
+> splitFun mty = do
+>     n <- freshName
+>     a <- unknownTyVar $ "_dom" ++ show n ::: Set
+>     b <- unknownTyVar $ "_cod" ++ show n ::: Set
+>     traverse (unify (a --> b)) mty
 >     return (a, b)
 
 
@@ -298,64 +190,6 @@ location is found.
 
 
 
-> {-
-> solveConstraints :: Bool -> Contextual t ()
-> solveConstraints try = do
->   g <- getContext
->   -- mtrace $ "solveConstraints: " ++ render (expandContext g)
->   seekTruth [] []
->  where
->   seekTruth :: [NormalPredicate] -> [NormalPredicate] -> Contextual t ()
->   seekTruth hs ps = do
->     g <- getContext
->     case g of
->       B0         -> do
->           cs <- catMaybes <$> traverse (deduce hs) ps
->           unless (null cs) $ fail $ "solveConstraints: out of scope error: "
->                                       ++ show (fsepPretty cs)
->       (g :< xD)  -> putContext g >> case xD of
->           Constraint Given h   -> seekTruth (h:hs) ps >> modifyContext (:< xD)
->           Constraint Wanted p  -> seekTruth hs (p:ps)
->           A (a := Some d ::: KindNum) -> do
->               dn <- typeToNum d
->               seekTruth (subsPreds a dn hs) (subsPreds a dn ps)
->               modifyContext (:< xD)
->           A (a := d ::: KindNum) -> case findRewrite a hs of
->               Just n   -> do
->                   seekTruth (subsPreds a n hs) (subsPreds a n ps)
->                   modifyContext (:< xD)
->               Nothing  -> do
->                   let (aps, qs) = partition (a <?) ps
->                   seekTruth (filter (not . (a <?)) hs) qs
->                   modifyContext (:< xD)
->                   -- mtrace $ "hs: " ++ show hs
->                   --          ++ "\na: " ++ show (prettyVar a)
->                   --          ++ "\naps: " ++ show (fsepPretty aps)
->                   --          ++ "\nqs: " ++ show (fsepPretty qs)
->                   cs <- catMaybes <$> traverse (deduce hs) aps
->                   modifyContext (<><< map (Constraint Wanted) cs)
->           Layer (PatternTop _ _ ks ws) -> seekTruth (ks ++ hs) (ws ++ ps)
->           _ -> seekTruth hs ps >> modifyContext (:< xD)
-
->   deduce :: [NormalPredicate] -> NormalPredicate -> Contextual t (Maybe NormalPredicate)
->   deduce hs (IsZero n)  | isZero n                 = return Nothing
->   deduce hs (IsPos n)   | Just k <- getConstant n  = 
->         if k >= 0  then  return Nothing
->                    else  fail $ "Impossible constraint 0 <= " ++ show k
->   deduce hs p = do
->       f <- toFormula hs p
->       if P.check f
->           then return Nothing
->           else if try
->                then return $ Just p
->                else do
->         g <- getContext
->         fail $ "Could not deduce " ++ render p
->                    ++ " from [" ++ show (fsepPretty hs) ++ "]"
->                    -- ++ " in context\n" ++ render g
-
-> -}
-
 > toFormula :: [NormalPredicate] -> NormalPredicate -> Contextual t P.Formula
 > toFormula hs p = do
 >     g <- getContext
@@ -386,23 +220,23 @@ location is found.
 >     numToTerm (Neg n)       = - numToTerm n
 
 
-> generalise :: Type -> Contextual t Type
-> generalise t = do
+> generalise :: Type -> [Pattern] -> Contextual t (Type, [Pattern])
+> generalise t ps = do
 >     g <- getContext
->     (g', t') <- help g t
+>     (g', tps) <- help g (t, ps)
 >     putContext g'
->     return t'
+>     return tps
 >   where
->     help g@(_ :< Layer FunTop)            t = return (g, t)
->     help g@(_ :< Layer (PatternTop _ _ _ _)) t = return (g, t)
->     help (g :< A (an := d ::: k)) t | an <? t = case d of
+>     help g@(_ :< Layer FunTop)               tps = return (g, tps)
+>     help g@(_ :< Layer (PatternTop _ _ _ _)) tps = return (g, tps)
+>     help (g :< A (an := d ::: k)) (t, ps) | an <? t || an <? ps = case d of
 >         Exists  -> fail $ "Illegal existential " ++ show (prettyVar an) ++
->                           "\nwhen generalising type " ++ renderMe t
->         Some d  -> help g (replaceTy k an d t)
->         _       -> help g (Bind All (fst an) k (bind an t))
->     help (g :< A _) t = help g t
->     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
->     help (g :< Constraint Given _)        t = help g t
+>                           "\nwhen generalising type " ++ renderMe t ++ " and patterns " ++ show (vcatPretty ps)
+>         Some d  -> help g (replaceTy k an d t, map (replace3 k an d) ps)
+>         _       -> help g (Bind All (fst an) k (bind an t), ps)
+>     help (g :< A _) tps = help g tps
+>     help (g :< Constraint Wanted p)       (t, ps)  = help g (Qual (reifyPred p) t, ps)
+>     help (g :< Constraint Given _)        tps      = help g tps
 >     help g t = fail $ "ERROR: Can't help " ++ renderMe g
 
 
@@ -414,19 +248,20 @@ location is found.
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar $ "_sty" ::: Set
->     pattys  <- traverse (checkPat True (s ::: sty) sty) pats
->     ty'     <- simplifyTy <$> generalise sty
->     return $ FunDecl s (Just ty') (map tmOf pattys)
+>     pattys  <- map tmOf <$> traverse (checkPat True (s ::: sty) sty) pats
+>     (ty', pattys') <- generalise sty pattys
+>     return $ FunDecl s (Just $ simplifyTy ty') pattys'
 
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty ::: k <- inLocation (text "in type" <+> prettyHigh st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 >     sty'  <- instS True id Given Fixed sty
->     pattys <- traverse (checkPat False (s ::: sty) sty') pats
->     let ty = tyOf (head pattys)
->     ty' <- simplifyTy <$> generalise ty 
->     return (FunDecl s (Just sty) (map tmOf pattys))
+>     pts <- traverse (checkPat False (s ::: sty) sty') pats
+>     let ty = tyOf (head pts)
+>         pattys = map tmOf pts
+>     (ty', pattys') <- generalise ty pattys
+>     return $ FunDecl s (Just $ simplifyTy sty) pattys'
 
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation (text $ "in declaration of " ++ s) $ fail $ "No alternative"
@@ -487,7 +322,7 @@ location is found.
 >
 > checkPatTerms top sat (PatVar v : ps) = do
 >     sat <- mapPatWriter $ inst True id Fixed sat
->     (s, t) <- lift $ splitFun sat
+>     (s, t) <- lift $ splitFun $ Just sat
 >     tell ([v ::: s], [])
 >     (pts, ty) <- checkPatTerms top t ps
 >     return ((PatVar v ::: s) : pts, ty)
@@ -495,7 +330,7 @@ location is found.
 > checkPatTerms top sat (PatCon c xs : ps) =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c xs)) $ do
 >     sat <- mapPatWriter $ inst True id Fixed sat
->     (s, t) <- lift $ splitFun sat
+>     (s, t) <- lift $ splitFun $ Just sat
 >     sc   <- lookupTmCon c
 >     cty  <- existentialise $ mapPatWriter $ inst True (++ "_pat_inst") Hole sc
 >     unless (length xs == args cty) $
@@ -507,7 +342,7 @@ location is found.
 >     return ((PatCon c (map tmOf pts) ::: s) : pps, ty)
 >  
 > checkPatTerms top sat (PatIgnore : ps) = do
->     (s, t) <- lift $ splitFun sat
+>     (s, t) <- lift $ splitFun $ Just sat
 >     (pts, ty) <- checkPatTerms top t ps
 >     return ((PatIgnore ::: s) : pts, ty)
 >

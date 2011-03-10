@@ -102,7 +102,7 @@
 >   "x = plus 0 1" :
 >   "x = let a = 1\n in a" :
 >   "x = let a = \\ x -> f x y\n in let b = 2\n  in a" :
->   "x = let y :: forall a. a -> a\n        y = \\ z -> z\n    in y" :
+>   "x = let y :: forall a. a -> a\n        y = \\ z -> z\n        f = f\n  in y" :
 >   []
 
 
@@ -212,6 +212,9 @@
 >   ("f = let x = 0\n in x", True) :
 >   ("f = let x = 0\n in f", True) :
 >   ("f = let g x y = y\n in g f", True) :
+>   ("f x = let y = x\n in y", True) :
+>   ("f x = let y z = x\n          a = a\n  in y (x a)", True) :
+>   ("f :: forall a. a -> a\nf x = x :: a", True) :
 >   []
 
 
