@@ -18,20 +18,21 @@
 > import Error
 
 
-> data TmLayer a x  =  PatternTop  {  ptFun    :: x ::: Ty Kind a
->                                  ,  ptBinds  :: [x ::: Ty Kind a]
+> data TmLayer k a x  =  PatternTop  {  ptFun  :: x ::: Ty k a
+>                                  ,  ptBinds  :: [x ::: Ty k a]
 >                                  ,  ptPreds  :: [NormPred a]
 >                                  ,  ptConstraints :: [NormPred a]
 >                                  }
->                   |  AppLeft () (Tm Kind a x) (Maybe (Ty Kind a))
->                   |  AppRight (Tm Kind a x ::: Ty Kind a) ()
->                   |  LamBody (x ::: Ty Kind a) ()
->                   |  AnnotLeft () (Ty Kind a)
+>                   |  AppLeft () (Tm k a x) (Maybe (Ty k a))
+>                   |  AppRight (Tm k a x ::: Ty k a) ()
+>                   |  LamBody (x ::: Ty k a) ()
+>                   |  AnnotLeft () (Ty k a)
 >                   |  FunTop
 >     deriving (Eq, Show)
 
-> type TermLayer = TmLayer TyName TmName
+> type TermLayer = TmLayer Kind TyName TmName
 
+> {-
 > bindLayer :: (Ord a, Ord b) => (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
 > bindLayer f (PatternTop (x ::: t) yts ps cs) =
 >     PatternTop (x ::: bindTy f t)
@@ -43,7 +44,13 @@
 > bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: bindTy f ty) ()
 > bindLayer f (AnnotLeft () ty)           = AnnotLeft () (bindTy f ty)
 > bindLayer f FunTop                      = FunTop
+> -}
 
+
+> instance Trav3 TmLayer where
+>     trav3 fn fa fx (AppLeft () tm mty) = AppLeft () <$> trav3 fn fa fx tm
+>         <*> maybe (pure Nothing) (fmap Just . fa) mty
+>     trav3 fn fa fx FunTop = pure $ FunTop
 
 
 > data CStatus = Given | Wanted
@@ -51,10 +58,10 @@
 
 > type TyEnt a = a := TyDef a ::: Kind
 
-> data Ent a x  =  A      (TyEnt a)
->               |  Layer  (TmLayer a x)
->               |  Func   x (Ty Kind a)
->               |  Constraint CStatus (NormPred a)
+> data Ent k a x  =  A      (TyEnt a)
+>                 |  Layer  (TmLayer k a x)
+>                 |  Func   x (Ty Kind a)
+>                 |  Constraint CStatus (NormPred a)
 >   deriving Show
 
 > data TyDef a = Hole | Some (Ty Kind a) | Fixed | Exists
@@ -65,7 +72,7 @@
 > defToMaybe _         = Nothing
 
 > type TypeDef = TyDef TyName
-> type Entry = Ent TyName TmName
+> type Entry = Ent Kind TyName TmName
 > type TyEntry = TyEnt TyName
 > type Context = Bwd Entry
 > type Suffix = Fwd TyEntry
@@ -176,11 +183,18 @@ Data constructors
 
 
 
-> seekTy B0 a = error "seekTy: missing!"
-> seekTy (g :< A (b := d ::: k)) a | a == b = case d of
->                                               Some t  -> t
->                                               _       -> var k a
-> seekTy (g :< _) a = seekTy g a
+> seekTy :: Context -> TyName -> Type
+> seekTy (g :< A (b := d ::: k))  a | a == b  = case d of  Some t  -> t
+>                                                          _       -> var k a
+> seekTy (g :< _)                 a           = seekTy g a
+> seekTy B0                       a           = error "seekTy: missing!"
+
+
+> seekNum :: Context -> TyName -> TypeNum
+> seekNum (g :< A (b := d ::: KindNum))  a | a == b  = case d of  Some t  -> toNum t
+>                                                                 _       -> NumVar a
+> seekNum (g :< _)                       a           = seekNum g a
+> seekNum B0                             a           = error "seekNum: missing!"
 
 
 > expandContext :: Context -> Context
@@ -188,31 +202,36 @@ Data constructors
 > expandContext (g :< A (a := Some t ::: k))  = expandContext g
 > expandContext (g :< a@(A _))                = expandContext g :< a
 > expandContext (g :< Constraint s p)           =
->     expandContext g :< Constraint s (bindNormPred (normalNum . toNum . seekTy g) p)
+>     expandContext g :< Constraint s (bindNormPred (normalNum . seekNum g) p)
 > expandContext (g :< Func x ty) =
->     expandContext g :< Func x (bindTy (\ _ -> seekTy g) ty)
+>     expandContext g :< Func x (bindTy (seekNum g) (const $ seekTy g) ty)
 > expandContext (g :< Layer l) =
->     expandContext g :< Layer (bindLayer (\ _ -> seekTy g) l)
+>     expandContext g :< Layer (bind3 (seekNum g) (const $ seekTy g) id l)
+
+
+> expandTyVar :: Context -> Kind -> TyName -> Type
+> expandTyVar g k a = case seek g a of
+>     Some d  -> expandType g d
+>     _       -> TyVar k a
+>   where
+>     seek (g :< A (b := d ::: _))  a | a == b  = d
+>     seek (g :< _)                 a           = seek g a
+>     seek B0                       a           = error "expandTyVar: erk"
 
 > expandType :: Context -> Type -> Type
-> expandType g t = bindTy (expandTyVar g) t
->   where
->     expandTyVar :: Context -> Kind -> TyName -> Type
->     expandTyVar g k a = maybe (TyVar k a) (bindTy (expandTyVar g)) $ defToMaybe $ seek g a
-
->     seek B0 a = error "expandType: erk"
->     seek (g :< A (b := d ::: _)) a | a == b = d
->     seek (g :< _) a = seek g a
-
+> expandType g t = bindTy (expandNumVar g) (expandTyVar g) t
+    
 > expandNum :: Context -> TypeNum -> TypeNum
 > expandNum g n = n >>= expandNumVar g
->   where
->     expandNumVar :: Context -> TyName -> TypeNum
->     expandNumVar g a = maybe (NumVar a) ((>>= expandNumVar g) . toNum) $ defToMaybe $ seek g a
 
->     seek B0 a = error "expandNum: erk"
->     seek (g :< A (b := d ::: KindNum)) a | a == b = d
->     seek (g :< _) a = seek g a
+> expandNumVar :: Context -> TyName -> TypeNum
+> expandNumVar g a = case seek g a of
+>     Some d  -> expandNum g (toNum d)
+>     _       -> NumVar a
+>   where
+>     seek (g :< A (b := d ::: KindNum))  a | a == b  = d
+>     seek (g :< _)                       a           = seek g a
+>     seek B0                             a           = error "expandNumVar: erk"
 
 > expandPred :: Context -> Predicate -> Predicate
 > expandPred g (n :<=: m) = expandNum g n :<=: expandNum g m

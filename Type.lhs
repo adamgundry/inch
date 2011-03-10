@@ -66,25 +66,6 @@
 > mkTyCon "->"       = TyB Arr
 > mkTyCon c     = TyCon c
 
-> bindTy :: (Kind -> a -> Ty Kind b) -> Ty Kind a -> Ty Kind b
-> bindTy g (TyVar k a)     = g k a
-> bindTy g (TyCon c)       = TyCon c
-> bindTy g (TyApp f s)     = TyApp (bindTy g f) (bindTy g s)
-> bindTy g (TyB b)         = TyB b
-> bindTy g (TyNum n)       = TyNum (n >>= (toNum . g KindNum))
-> bindTy g (Qual p t)      = Qual (bindPred (toNum . g KindNum) p) (bindTy g t)
-> bindTy g (Bind b x k t)  = Bind b x k (bindTy (wkKind g) t)
-
-> substTy :: Eq a => a -> Ty Kind a -> Ty Kind a -> Ty Kind a
-> substTy a t = bindTy f
->   where f k b  | a == b     = t
->                | otherwise  = TyVar k b
-
-
-> wkKind :: (k -> a -> Ty k b) -> (k -> S a -> Ty k (S b))
-> wkKind g k Z      = TyVar k Z
-> wkKind g k (S a)  = fmap S (g k a)
-
 > s --> t = TyApp (TyApp (TyB Arr) s) t
 > infixr 5 -->
 

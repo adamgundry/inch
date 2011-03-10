@@ -35,9 +35,18 @@
 >   where f b | a == b     = t
 >             | otherwise  = return b
 
-> wk :: (Functor m, Monad m) => (a -> m b) -> (S a -> m (S b))
-> wk g Z      = return Z
+> wk :: Applicative f => (a -> f b) -> (S a -> f (S b))
+> wk g Z      = pure Z
 > wk g (S a)  = fmap S (g a)
+
+
+Really we want g to be a pointed functor!
+
+> wkwk :: (Applicative f, Functor g) =>
+>     (S b -> g (S b)) -> (a -> f (g b)) -> (S a -> f (g (S b)))
+> wkwk p g Z      = pure $ p Z
+> wkwk p g (S a)  = fmap S <$> g a
+
 
 > data a :=   b  = a :=   b
 >     deriving (Eq, Show, Functor, Foldable, Traversable)

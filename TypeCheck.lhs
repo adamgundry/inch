@@ -358,7 +358,7 @@ location is found.
 >     help (g :< A (an := d ::: k)) t | an <? t = case d of
 >         Exists  -> fail $ "Illegal existential " ++ show (prettyVar an) ++
 >                           "\nwhen generalising type " ++ render t
->         Some d  -> help g (substTy an d t)
+>         Some d  -> help g (replaceTy k an d t)
 >         _       -> help g (Bind All (fst an) k (bind an t))
 >     help (g :< A _) t = help g t
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)

@@ -53,4 +53,4 @@
 
 
 > scopeCheckTypes :: STerm -> Contextual () Term
-> scopeCheckTypes = traverseTypes (checkNumKind B0) (\ t -> tmOf <$> inferKind B0 t)
+> scopeCheckTypes = trav3 (checkNumKind B0) (\ t -> tmOf <$> inferKind B0 t) pure

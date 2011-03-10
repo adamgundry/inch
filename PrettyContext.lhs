@@ -13,7 +13,7 @@
 >     pretty (a := d ::: k) _ = prettyVar a <+> text ":="
 >       <+> prettyHigh d <+> text ":" <+> prettyHigh k
 
-> instance (Show a, Show x, PrettyVar a, PrettyVar x) => Pretty (Ent a x) where
+> instance (Show k, Show a, Show x, PrettyVar a, PrettyVar x) => Pretty (Ent k a x) where
 >   pretty (A a) _ = prettyHigh a
 >   pretty (Layer l)    _ = prettyHigh l
 >   pretty (Func f ty)  _ = prettyVar f <+> text "::" <+> prettyHigh ty
@@ -26,7 +26,7 @@
 >   pretty Exists    _ = text "Ex"
 >   pretty (Some t)  l = pretty t l
 
-> instance (Show a, Show x, PrettyVar x, PrettyVar a) => Pretty (TmLayer a x) where
+> instance (Show k, Show a, Show x, PrettyVar x, PrettyVar a) => Pretty (TmLayer k a x) where
 >   pretty (PatternTop (s ::: sty) bs ps cs) _ = text "<PatternTop>"
 >       $$ prettyVar s <+> text "::" <+> prettyHigh sty
 >       $$ brackets (fsep $ punctuate (text ",") $ map (\ (x ::: ty) -> prettyVar x <+> text "::" <+> prettyHigh ty) bs)

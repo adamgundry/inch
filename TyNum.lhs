@@ -3,6 +3,7 @@
 > module TyNum where
 
 > import Control.Applicative
+> import Control.Monad
 > import Data.Foldable
 > import Data.Traversable
 
@@ -40,6 +41,12 @@
 >     m :*: n     >>= f = (m >>= f) :*: (n >>= f)
 >     Neg n       >>= f = Neg (n >>= f)
 
+> instance Applicative TyNum where
+>     pure = return
+>     (<*>) = ap
+
+
+
 > simplifyNum :: TyNum a -> TyNum a
 > simplifyNum (n :+: m) = case (simplifyNum n, simplifyNum m) of
 >     (NumConst k,  NumConst l)  -> NumConst (k+l)
@@ -75,10 +82,6 @@
 >     (:<=:) :: TyNum a -> TyNum a -> Pred a
 >     (:==:) :: TyNum a -> TyNum a -> Pred a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
-
-> bindPred :: (a -> TyNum b) -> Pred a -> Pred b
-> bindPred g (n :<=: m)  = (n >>= g) :<=: (m >>= g)
-> bindPred g (n :==: m)  = (n >>= g) :==: (m >>= g)
 
 > simplifyPred :: Pred a -> Pred a
 > simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n

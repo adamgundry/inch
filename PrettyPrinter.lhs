@@ -5,7 +5,6 @@
 > import Data.Foldable
 > import Data.List
 > import Text.PrettyPrint.HughesPJ
-> import Data.Bifunctor
 
 > import TyNum
 > import Type
@@ -162,7 +161,7 @@
 >     pretty (Pat vs Trivial e) _ = hsep (map prettyLow vs) <+> text "="
 >                                       <+> prettyHigh e
 
-> instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm a x) where
+> instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm k a x) where
 >     pretty (PatVar x)    = const $ prettyVar x
 >     pretty (PatCon c []) = const $ text c
 >     pretty (PatCon "+" [a, b]) = wrapDoc AppSize $
