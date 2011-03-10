@@ -31,8 +31,8 @@
 >     Right (p, mn) -> case typeCheck p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
 >             Right (p'', st) -> Right $ modHeader mn ++ show (prettyProgram p'')
->             Left err        -> Left $ "erase error:\n" ++ render err ++ "\n"
+>             Left err        -> Left $ "erase error:\n" ++ renderMe err ++ "\n"
 
 >         Left err -> Left $ "type-checking failed:\n"
->                             ++ render err ++ "\n"
+>                             ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "parse error:\n" ++ show err ++ "\n"

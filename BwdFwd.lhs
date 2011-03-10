@@ -19,8 +19,8 @@
 >     F0         `mappend` ys = ys
 >     (x :> xs)  `mappend` ys = x :> (xs `mappend` ys)
 
-> (<+>) :: Monoid a => a -> a -> a
-> (<+>) = mappend
+> (<.>) :: Monoid a => a -> a -> a
+> (<.>) = mappend
 
 > (<>>) :: Bwd a -> Fwd a -> Fwd a
 > infixl 8 <>>

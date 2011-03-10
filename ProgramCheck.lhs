@@ -9,6 +9,7 @@
 > import Data.List
 > import Data.Maybe
 > import Data.Traversable
+> import Text.PrettyPrint.HughesPJ
 
 > import BwdFwd
 > import TyNum
@@ -35,7 +36,7 @@
 >     traverse checkDecl xs
 >   where
 >     makeTyCon :: SDataDeclaration -> Contextual () ()
->     makeTyCon (DataDecl t k cs) = inLocation ("in data type " ++ t) $ do
+>     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ do
 >         unless (targetsSet k) $ errKindTarget k
 >         insertTyCon t k
 
@@ -48,11 +49,11 @@
 >     return $ FD f
 
 > checkDataDecl :: SDataDeclaration -> Contextual () DataDeclaration
-> checkDataDecl (DataDecl t k cs) = inLocation ("in data type " ++ t) $
+> checkDataDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
 >     DataDecl t k <$> traverse (checkConstructor t) cs
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
-> checkConstructor t (c ::: ty) = inLocation ("in constructor " ++ c) $ do
+> checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
 >     (ty' ::: k) <- inferKind B0 ty
 >     unless (k == Set) $ errKindNotSet k
 >     unless (ty' `targets` t) $ errConstructorTarget ty'

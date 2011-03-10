@@ -8,7 +8,7 @@
 
 > import TyNum
 > import Type
-> import BwdFwd hiding ((<+>))
+> import BwdFwd
 > import Syntax
 > import Kit
 
@@ -34,8 +34,8 @@
 > prettyProgram = vcat . intersperse (text " ") . map (prettyHigh . bimap fst id)
 
 
-> render :: Pretty a => a -> String
-> render x = renderStyle style{lineLength=80} (prettyHigh x)
+> renderMe :: Pretty a => a -> String
+> renderMe x = renderStyle style{lineLength=80} (prettyHigh x)
 
 
 > class Ord a => PrettyVar a where

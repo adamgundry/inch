@@ -7,6 +7,7 @@
 > import Data.Foldable 
 > import Data.Maybe
 > import Prelude hiding (any, mapM_)
+> import Text.PrettyPrint.HughesPJ
 
 > import BwdFwd
 > import TyNum
@@ -53,7 +54,7 @@
 >             m
 >             modifyContext $ (:< xD) . (:< Constraint Wanted p)
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
->     B0 -> inLocation ("when solving " ++ render p) $
+>     B0 -> inLocation (text "when solving" <+> prettyHigh p) $
 >               fail $ "onTopNum: ran out of context"
 
 > restore :: Contextual t Extension
@@ -96,8 +97,8 @@
 >                 t' <- niceType t
 >                 u' <- niceType u
 >                 g <- getContext
->                 return $ "when unifying\n        " ++ render t
->                     ++ "\n    and\n        " ++ render u)
+>                 return $ text "when unifying" <+> prettyHigh t
+>                              <+> text"and" <+> prettyHigh u)
 >                     -- ++ "\n    in context " ++ render g)
 
 > unifyTypes :: Type -> Type -> Contextual t ()
@@ -177,7 +178,7 @@
 > rigidHull (TyCon c)              = return (TyCon c, F0)
 > rigidHull (TyApp f s)            = do  (f',  xs  )  <- rigidHull f
 >                                        (s',  ys  )  <- rigidHull s
->                                        return (TyApp f' s', xs <+> ys)
+>                                        return (TyApp f' s', xs <.> ys)
 > rigidHull (TyB b) = return (TyB b, F0)
 > rigidHull (TyNum d)          = do  beta <- freshS "_i"
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
@@ -197,7 +198,7 @@
 > rigidHull (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull t
 
 
-> rigidHull b = fail $ "rigidHull can't cope with " ++ render b
+> rigidHull b = fail $ "rigidHull can't cope with " ++ renderMe b
 
 > pairsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
 > pairsToSuffix = fmap ((:= Hole ::: KindNum) . fst)
@@ -213,7 +214,7 @@
 
 >     (True,   True,   _)             ->  fail "Occurrence detected!"
 
->     (True,   False,  Hole)          ->  replace (_Xi <+> ((alpha := Some tau ::: k) :> F0))
+>     (True,   False,  Hole)          ->  replace (_Xi <.> ((alpha := Some tau ::: k) :> F0))
 >     (True,   False,  Some upsilon)  ->  modifyContext (<>< _Xi)
 >                                         >>  unifyTypes upsilon tau
 >                                         >>  restore
@@ -221,7 +222,7 @@
 
 >     (False,  True,   Some upsilon)  ->  do
 >         (upsilon', xs) <- rigidHull upsilon
->         solve alpha (pairsToSuffix xs <+> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
+>         solve alpha (pairsToSuffix xs <.> ((gamma := Some upsilon' ::: k) :> _Xi)) tau
 >         unifyPairs xs
 >         replace F0
 >     (False,  True,   _)             ->  solve alpha ((gamma := d ::: k) :> _Xi) tau

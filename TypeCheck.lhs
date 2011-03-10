@@ -9,6 +9,7 @@
 > import Data.List
 > import Data.Maybe
 > import Data.Traversable
+> import Text.PrettyPrint.HughesPJ
 
 > import qualified Data.Integer.Presburger as P
 
@@ -204,10 +205,10 @@ location is found.
 >     extract (g :< e)        = extract g :< e
 
 > infer :: STerm -> Contextual () (Term ::: Type)
-> infer t = inLocation ("in expression " ++ render t) $ checkInfer Nothing t
+> infer t = inLocation (text "in expression" <+> prettyHigh t) $ checkInfer Nothing t
 
 > check :: Type -> STerm -> Contextual () Term
-> check ty t = inLocation ("in expression " ++ render t) $ tmOf <$> checkInfer (Just ty) t
+> check ty t = inLocation (text "in expression" <+> prettyHigh t) $ tmOf <$> checkInfer (Just ty) t
 
 
 > splitFun :: Type -> Contextual a (Type, Type)
@@ -287,7 +288,7 @@ location is found.
 >
 >     want :: [NormalPredicate] -> Contextual t ()
 >     want [] = return ()
->     want (p:ps) | nonsense p  = fail $ "Impossible constraint " ++ render p
+>     want (p:ps) | nonsense p  = fail $ "Impossible constraint " ++ renderMe p
 >                 | otherwise   = modifyContext (:< Constraint Wanted p)
 >                                 >> want ps
 >
@@ -396,13 +397,13 @@ location is found.
 >     help g@(_ :< Layer (PatternTop _ _ _ _)) t = return (g, t)
 >     help (g :< A (an := d ::: k)) t | an <? t = case d of
 >         Exists  -> fail $ "Illegal existential " ++ show (prettyVar an) ++
->                           "\nwhen generalising type " ++ render t
+>                           "\nwhen generalising type " ++ renderMe t
 >         Some d  -> help g (replaceTy k an d t)
 >         _       -> help g (Bind All (fst an) k (bind an t))
 >     help (g :< A _) t = help g t
 >     help (g :< Constraint Wanted p)       t = help g (Qual (reifyPred p) t)
 >     help (g :< Constraint Given _)        t = help g t
->     help g t = fail $ "ERROR: Can't help " ++ render g
+>     help g t = fail $ "ERROR: Can't help " ++ renderMe g
 
 
 
@@ -411,15 +412,15 @@ location is found.
 > checkFunDecl :: SFunDeclaration -> Contextual () FunDeclaration
 
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
->   inLocation ("in declaration of " ++ s) $ withLayer FunTop $ do
+>   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar $ "_sty" ::: Set
 >     pattys  <- traverse (checkPat True (s ::: sty) sty) pats
 >     ty'     <- simplifyTy <$> generalise sty
 >     return $ FunDecl s (Just ty') (map tmOf pattys)
 
 > checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
->   inLocation ("in declaration of " ++ s) $ withLayer FunTop $ do
->     sty ::: k <- inLocation ("in type " ++ render st) $ inferKind B0 st
+>   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
+>     sty ::: k <- inLocation (text "in type" <+> prettyHigh st) $ inferKind B0 st
 >     unless (k == Set) $ errKindNotSet k
 >     sty'  <- instS True id Given Fixed sty
 >     pattys <- traverse (checkPat False (s ::: sty) sty') pats
@@ -428,13 +429,13 @@ location is found.
 >     return (FunDecl s (Just sty) (map tmOf pattys))
 
 > checkFunDecl (FunDecl s _ []) =
->   inLocation ("in declaration of " ++ s) $ fail $ "No alternative"
+>   inLocation (text $ "in declaration of " ++ s) $ fail $ "No alternative"
 
 
 
 > checkPat :: Bool -> String ::: Type -> Type -> SPattern -> Contextual () (Pattern ::: Type)
 > checkPat try (s ::: sc) sty (Pat xs g t) =
->   inLocation ("in alternative " ++ s ++ " " ++ render (Pat xs g t)) $ do
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $ do
 >    ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms True sty xs
 >    rty <- specialise rty
 >    withLayer (PatternTop (s ::: sc) bs ps []) $ do
@@ -442,12 +443,12 @@ location is found.
 >     let  xtms ::: xtys  = unzipAsc xs'
 >          ty             = xtys /-> rty
 
->     -- mtrace . (s ++) . (" checkPat context: " ++) . render . expandContext =<< getContext
+>     -- mtrace . (s ++) . (" checkPat context: " ++) . renderMe . expandContext =<< getContext
 >     unifySolveConstraints
 >     solveConstraints try
 >
 >     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
->     -- mtrace . (s ++) . (" checkPat ty: " ++) . render =<< niceType ty
+>     -- mtrace . (s ++) . (" checkPat ty: " ++) . renderMe =<< niceType ty
 >     return $ Pat xtms Trivial t' ::: ty
 
 > unifySolveConstraints :: Contextual t ()
@@ -492,7 +493,7 @@ location is found.
 >     return ((PatVar v ::: s) : pts, ty)
 >
 > checkPatTerms top sat (PatCon c xs : ps) =
->   inLocation ("in pattern " ++ render (PatCon c xs)) $ do
+>   inLocation (text "in pattern" <+> prettyHigh (PatCon c xs)) $ do
 >     sat <- mapPatWriter $ inst True id Fixed sat
 >     (s, t) <- lift $ splitFun sat
 >     sc   <- lookupTmCon c
@@ -541,4 +542,4 @@ location is found.
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
 
 > checkPatTerms top ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "
->                            ++ render p ++ " against type " ++ render ty
+>                            ++ renderMe p ++ " against type " ++ renderMe ty

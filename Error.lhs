@@ -51,7 +51,7 @@
 >     pretty (Fail s)                    _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
-> throw e = E.throwError (e, [] :: [String])
+> throw e = E.throwError (e, [] :: [Doc])
 
 > missingTyVar a            = throw (MissingTyVar a)
 > missingNumVar a           = throw (MissingNumVar a)
@@ -73,19 +73,19 @@
                             
 
 > type Error = Err Kind TyName TmName
-> type ErrorData = (Error, [String])
+> type ErrorData = (Error, [Doc])
 
 > instance E.Error ErrorData where
 >     noMsg     = (Fail "Unknown error", [])
 >     strMsg s  = (Fail s, [])
 
 > instance Pretty ErrorData where
->     pretty (e, ss) _ = hang (prettyHigh e) 4 (vcat $ reverse $ map text ss)
+>     pretty (e, ss) _ = hang (prettyHigh e) 4 (vcat $ reverse ss)
 
 
 
-> inLocation :: (E.MonadError ErrorData m) => String -> m a -> m a
+> inLocation :: (E.MonadError ErrorData m) => Doc -> m a -> m a
 > inLocation s m = m `E.catchError` (\ (e, ss) -> E.throwError (e, s:ss))
 
-> inLoc :: (E.MonadError ErrorData m) => m a -> m String -> m a
+> inLoc :: (E.MonadError ErrorData m) => m a -> m Doc -> m a
 > inLoc m ms = m `E.catchError` (\ (e, ss) -> ms >>= \ s -> E.throwError (e, s:ss))

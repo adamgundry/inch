@@ -221,10 +221,10 @@
 >     Right (p, _)   -> case typeCheck p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
 >             Right (p'', st) -> Right $ "Erased program:\n" ++ show (prettyProgram p'')
->             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ render err ++ "\n"
+>             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
 
 >         Left err -> Right $ "Skipping rejected program:\n"
->                             ++ s ++ "\n" ++ render err ++ "\n"
+>                             ++ s ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
 > eraseCheckTest = runTest eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
