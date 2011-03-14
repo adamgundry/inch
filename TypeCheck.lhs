@@ -56,12 +56,16 @@
 > checkInfer Nothing    (TmInt k) = return $ TmInt k ::: TyB NumTy
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
->     f ::: Bind Pi x KindNum aty   <- infer f   
->     n     <- checkNumKind B0 n
->     nm    <- fresh "_n" (Some (TyNum n) ::: KindNum)
->     aty'  <- instantiate (unbind nm aty)
->     traverse (unify aty') mty
->     return $ TmApp f (TmBrace n) ::: aty'
+>     f ::: fty   <- infer f   
+>     case fty of
+>         Bind Pi x KindNum aty -> do
+>             n     <- checkNumKind B0 n
+>             nm    <- fresh "_n" (Some (TyNum n) ::: KindNum)
+>             aty'  <- instantiate (unbind nm aty)
+>             traverse (unify aty') mty
+>             return $ TmApp f (TmBrace n) ::: aty'
+>         _ -> fail $ "Inferred type " ++ renderMe fty ++ " of " ++
+>                  renderMe f ++ " is not a pi-type with numeric domain"
 
 > checkInfer mty (TmApp f s) = do
 >     f ::: fty   <- infer f
@@ -102,10 +106,10 @@
 >     extract (g :< e)        = extract g :< e
 
 > infer :: STerm -> Contextual () (Term ::: Type)
-> infer t = inLocation (text "in expression" <+> prettyHigh t) $ checkInfer Nothing t
+> infer t = inLocation (text "in inferred expression" <+> prettyHigh t) $ checkInfer Nothing t
 
 > check :: Type -> STerm -> Contextual () Term
-> check ty t = inLocation (text "in expression" <+> prettyHigh t) $ tmOf <$> checkInfer (Just ty) t
+> check ty t = inLocation (text "in checked expression" <+> prettyHigh t) $ tmOf <$> checkInfer (Just ty) t
 
 
 > splitFun :: Maybe Type -> Contextual a (Type, Type)

@@ -130,9 +130,9 @@
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
 >   ++ "  Cons :: forall a (m n :: Num). 0 <= m, n ~ (m + 1) => a -> Vec m a -> Vec n a\n"
 
-> vec2Decl = "data Vec :: Num -> * -> * where\n"
->   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
->   ++ "  Cons :: forall a (n :: Num). 1 <= n => a -> Vec (n-1) a -> Vec n a\n"
+> vec2Decl = "data Vec :: * -> Num -> * where\n"
+>   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec a n\n"
+>   ++ "  Cons :: forall a (n :: Num). 1 <= n => a -> Vec a (n-1) -> Vec a n\n"
 
 > natDecl = "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\n"
 
@@ -160,8 +160,8 @@
 >   ("f :: forall a. a\nf x = x", False) :
 >   ("f :: forall a. a -> a\nf x = x :: a", True) :
 >   ("f :: forall a. a -> (a -> a)\nf x y = y", True) :
->   -- ("f :: (forall a. a) -> (forall b. b -> b)\nf x y = y", True) :
->   -- ("f :: forall b. (forall a. a) -> (b -> b)\nf x y = y", True) :
+>   ("f :: (forall a. a) -> (forall b. b -> b)\nf x y = y", True) :
+>   ("f :: forall b. (forall a. a) -> (b -> b)\nf x y = y", True) :
 >   ("data One where A :: Two -> One\ndata Two where B :: One -> Two", True) :
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :
@@ -184,9 +184,9 @@
 >   (vecDecl ++ "id :: forall a (n :: Num) . Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   (vecDecl ++ "id :: forall a (n m :: Num) . Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", False) :
 >   (vecDecl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
->   (vec2Decl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
+>   (vec2Decl ++ "id :: forall a (n m :: Num) . n ~ m => Vec a n -> Vec a m\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
 >   ("f :: forall a. 0 ~ 1 => a\nf = f", False) :
->   ("x = y\ny = x", True) :
+>   -- ("x = y\ny = x", True) :
 >   ("f :: forall a . pi (m :: Num) . a -> a\nf {0} x = x\nf {n} x = x", True) :
 >   ("f :: forall a . a -> (pi (m :: Num) . a)\nf x {m} = x", True) :
 >   (vecDecl ++ "vec :: forall a . pi (m :: Num) . 0 <= m => a -> Vec m a\nvec {0} x = Nil\nvec {n+1} x = Cons x (vec {n} x)", True) :
@@ -215,6 +215,16 @@
 >   ("f x = let y = x\n in y", True) :
 >   ("f x = let y z = x\n          a = a\n  in y (x a)", True) :
 >   ("f :: forall a. a -> a\nf x = x :: a", True) :
+>   ("f :: forall b. (forall a. a -> a) -> b -> b\nf c = c\ng = f (\\ x -> x)", True) :
+>   ("f :: forall b. (forall a. a -> a) -> b -> b\nf c = c\ng = f (\\ x y -> x)", False) :
+>   ("f :: forall b. (forall a. a -> a) -> b -> b\nf c = c c\ng = f (\\ x -> x) (\\ x y -> y)", True) :
+>   ("f :: forall b. (forall a. a -> a -> a) -> b -> b\nf c x = c x x\ng = f (\\ x y -> x)", True) :
+>   (vec2Decl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 1 <= m => a -> f (m-1) -> f m) -> Vec a n -> f n\nvfold = vfold\nvbuild :: forall (n :: Num) a . Vec a n -> Vec a n\nvbuild = vfold Nil Cons", True) :
+>   (vec2Decl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 1 <= m => a -> f (m-1) -> f m) -> Vec a n -> f n\nvfold = vfold\nvbuild = vfold Nil Cons", True) :
+>   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . a -> a\ng {m} = \\ x -> x\ny = f g", True) :
+>   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
+>   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . m <= 3, 0 <= m => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
+>   ("f :: forall (b :: Num -> *) (n :: Num) . 0 <= n, n <= 3 => (forall (a :: Num -> *) (m :: Num) . 0 <= m, m <= 3 => a m -> a m) -> b n -> b n\nf h = h\ng :: forall (a :: Num -> *) (m :: Num) . m <= 3, 0 <= m => a m -> a m\ng = \\ x -> x\ny = f g", True) :
 >   []
 
 

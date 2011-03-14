@@ -85,7 +85,12 @@
 
 > simplifyPred :: Pred a -> Pred a
 > simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
-> simplifyPred (m :==: n) = simplifyNum m :==: simplifyNum n
+> simplifyPred (m :==: n) = case (simplifyNum m, simplifyNum n) of
+>     (m' :+: Neg n', NumConst 0)  -> m' :==: n'
+>     (Neg n' :+: m', NumConst 0)  -> m' :==: n'
+>     (NumConst 0, m' :+: Neg n')  -> m' :==: n'
+>     (NumConst 0, Neg n' :+: m')  -> m' :==: n'
+>     (m', n')                     -> m' :==: n'
 
 
 

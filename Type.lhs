@@ -5,6 +5,7 @@
 
 > import Data.Foldable
 > import Data.Traversable
+> import Data.List
 
 > import Kit
 > import TyNum
@@ -88,14 +89,16 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var k        = TyVar k
 
 
-> simplifyTy :: Ty k a -> Ty k a
-> simplifyTy (TyNum n)       = TyNum (simplifyNum n)
-> simplifyTy (TyApp f s)     = TyApp (simplifyTy f) (simplifyTy s)
-> simplifyTy (Bind b x k t)  = Bind b x k (simplifyTy t)
-> simplifyTy (Qual p t)      = case simplifyTy t of
->     Bind b x k t'  -> Bind b x k $ simplifyTy (Qual (fmap S p) t')
->     t'             -> Qual (simplifyPred p) t'
-> simplifyTy t               = t
+
+> simplifyTy :: Ord a => Ty k a -> Ty k a
+> simplifyTy = simplifyTy' []
+>   where
+>     simplifyTy' :: Ord a => [Pred a] -> Ty k a -> Ty k a
+>     simplifyTy' ps (TyNum n)       = nub ps /=> TyNum (simplifyNum n)
+>     simplifyTy' ps (TyApp f s)     = nub ps /=> TyApp (simplifyTy f) (simplifyTy s)
+>     simplifyTy' ps (Bind b x k t)  = Bind b x k (simplifyTy' (map (fmap S) ps) t)
+>     simplifyTy' ps (Qual p t)      = simplifyTy' (simplifyPred p:ps) t
+>     simplifyTy' ps t               = nub ps /=> t
 
 
 
