@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneDeriving, FlexibleContexts #-}
 
 module ExampleExtras where
 
@@ -13,3 +13,7 @@ deriving instance Show Fin
 deriving instance Show Tm
 deriving instance Show Tm'
 deriving instance Show Shape
+deriving instance Show a => Show (FlipVec a)
+deriving instance Show a => Show (Ex a)
+deriving instance Show (f (g a)) => Show (Comp f g a)
+deriving instance Show a => Show (List a)

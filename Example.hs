@@ -9,6 +9,8 @@ Things that would be nice:
 * Nat kind (desugars to Num with inequality constraint)
 * Fix lexically-scoped type variables, without name munging
 * Higher-order unification
+* Type synonyms
+* GHC LINE pragmas that make some kind of sense
 -}
 
 module Example where
@@ -21,6 +23,7 @@ i        = s k k
 app f s  = f s
 comp f g = \ x -> f (g x)
 fix f    = f (fix f)
+flp      = \ f x y -> f y x
 
 -- Data types
 
@@ -108,9 +111,7 @@ vzipWith f (VCons x xs) (VCons y ys) = VCons (f x y) (vzipWith f xs ys)
 
 
 vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 ->
-    (forall (m :: Num) . a -> f m -> f (m + 1)) -> Vec n a -> f n
--- vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 ->
---    (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> Vec n a -> f n
+    (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> Vec n a -> f n
 vfold n c VNil         = n
 vfold n c (VCons x xs) = c x (vfold n c xs)
 
@@ -125,9 +126,19 @@ vsum2 :: forall (n :: Num) . (Integer -> Integer -> Integer) ->
 vsum2 plus = vfold 0 plus
 -}
 
-{-
+
+data FlipVec :: * -> Num -> * where
+  FV :: forall a (n :: Num) . Vec n a -> FlipVec a n   
+
+unFV (FV xs) = xs
+
 vbuild :: forall (n :: Num) a . Vec n a -> Vec n a
-vbuild = vfold VNil VCons
+-- vbuild xs = unFV (vfold (FV VNil) (\ y ys -> FV (VCons y (unFV ys))) xs)
+vbuild = comp unFV (vfold (FV VNil) (\ y -> comp FV (comp (VCons y) unFV)))
+
+{-
+vbuild2 :: forall (n :: Num) a . Vec n a -> Vec n a
+vbuild2 = vfold VNil VCons
 -}
 
 
@@ -157,6 +168,12 @@ pairMap f g (Pair a b) = Pair (f a) (g b)
 vsplit :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)
 vsplit {0}   xs           = Pair VNil xs
 vsplit {n+1} (VCons x xs) = pairMap (VCons x) i (vsplit {n} xs)
+
+vsplit2 :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)
+vsplit2 {0}   xs           = Pair VNil xs
+vsplit2 {n+1} (VCons x xs) = let  f (Pair ys zs)  = Pair (VCons x ys) zs
+                                  xs'             = vsplit2 {n} xs
+                             in f xs'
 
 vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a
 vtake {0}   _            = VNil
@@ -253,17 +270,20 @@ foldTm2 v l a (V' {i}) = v {i}
 foldTm2 v l a (L' b)   = l (foldTm2 v l a b)
 foldTm2 v l a (A' f s) = a (foldTm2 v l a f) (foldTm2 v l a s)
 
-{-
+
 foldTm3 :: forall (a :: Num -> *) (m :: Num) . 
     (forall (k :: Num) . pi (n :: Num) . 0 <= n, n <= k => a k) ->
     (forall (k :: Num) . 0 <= k => a (k+1) -> a k) ->
     (forall (k :: Num) . a k -> a k -> a k) ->
         Tm' m -> a m
--}
+foldTm3 v l a (V' {i}) = v {i}
+foldTm3 v l a (L' b) = l (foldTm3 v l a b)
+foldTm3 v l a (A' f s) = a (foldTm3 v l a f) (foldTm3 v l a s)
+
 
 {-
 rebuildTm :: forall (m :: Num) . Tm m -> Tm m
-rebuildTm = foldTm2 V' L' A'
+rebuildTm = foldTm3 V' L' A'
 -}
 
 
@@ -349,15 +369,20 @@ data Ex :: (Num -> *) -> * where
 unEx :: forall (f :: Num -> *) a . (forall (n :: Num) . f n -> a) -> Ex f -> a
 unEx g (Ex x) = g x
 
-data IntVec :: Num -> * where
-  IV :: forall (n :: Num) . Vec n Integer -> IntVec n
+mapEx :: forall (f g :: Num -> *) . (forall (n :: Num) . f n -> g n) -> Ex f -> Ex g
+mapEx g (Ex x) = Ex (g x)
 
-len :: Ex IntVec -> Nat
-len (Ex (IV VNil))         = Zero
-len (Ex (IV (VCons x xs))) = Suc (len (Ex (IV (VCons x xs))))
 
-ivappend :: Ex IntVec -> Ex IntVec -> Ex IntVec
-ivappend (Ex (IV xs)) (Ex (IV ys)) = Ex (IV (vappend xs ys))
+len :: forall a. Ex (FlipVec a) -> Nat
+len (Ex (FV VNil))         = Zero
+len (Ex (FV (VCons x xs))) = Suc (len (Ex (FV (VCons x xs))))
+
+evappend (Ex (FV xs)) (Ex (FV ys)) = Ex (FV (vappend xs ys))
+evmap f = mapEx (comp FV (comp (vmap f) unFV))
+evsing x = Ex (FV (VCons x VNil))
+
+evconcat (Ex (FV VNil)) = Ex (FV VNil)
+evconcat (Ex (FV (VCons xs xss))) = evappend xs (evconcat (Ex (FV xss)))
 
 
 data ExPi where
@@ -380,3 +405,61 @@ data SillyPair :: * -> * where
 
 unSP :: ExSet SillyPair -> Integer
 unSP (ExSet (SillyPair a f)) = f a
+
+
+-- Local let binding
+
+f x = let y z = x
+          a = a
+      in y (x a)
+
+
+
+-- Typeclass encoding (higher rank goodness)
+
+data Mon :: (* -> *) -> * where
+  Mon :: forall (m :: * -> *) . (forall a . a -> m a) ->
+             (forall a b . m a -> (a -> m b) -> m b) -> Mon m
+
+ret (Mon r b) = r
+bnd (Mon r b) = b
+ext (Mon ret bnd) f ma = bnd ma f
+
+monMap :: forall (m :: * -> *) a b . Mon m -> (a -> b) -> (m a -> m b)
+monMap (Mon ret bnd) f = ext (Mon ret bnd) (comp ret f)
+
+
+data List :: * -> * where
+  Nil  :: forall a. List a
+  Cons :: forall a. a -> List a -> List a
+
+listMap :: forall a b. (a -> b) -> List a -> List b
+listMap f Nil = Nil
+listMap f (Cons x xs) = Cons (f x) (listMap f xs)
+
+append :: forall a. List a -> List a -> List a
+append Nil ys = ys
+append (Cons x xs) ys = Cons x (append xs ys)
+
+listConcat :: forall a. List (List a) -> List a
+listConcat Nil = Nil
+listConcat (Cons xs xss) = append xs (listConcat xss)
+
+
+
+data Comp :: ((Num -> *) -> *) -> (* -> Num -> *) -> * -> * where
+  C :: forall (g :: (Num -> *) -> *) x (f :: (* -> Num -> *)).
+           g (f x) -> Comp g f x
+
+unC (C a) = a
+
+listMon :: Mon (Comp Ex FlipVec)
+listMon = Mon (comp C evsing) (\ xs f -> C (evconcat (evmap (comp unC f) (unC xs))))
+
+
+trav :: forall (m :: * -> *) a b . Mon m -> (a -> m b) -> List a -> m (List b)
+trav (Mon ret bnd) f Nil = ret Nil
+trav (Mon ret bnd) f (Cons x xs) = bnd (f x) (\ y -> 
+    bnd (trav (Mon ret bnd) f xs) (\ ys -> ret (Cons y ys)))
+-- trav m f (Cons x xs) = bnd m (f x) (\ y -> 
+--     bnd m (trav m f xs) (\ ys -> ret m (Cons y ys)))
