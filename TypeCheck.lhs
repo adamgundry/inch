@@ -290,14 +290,16 @@
 
 > unifySolveConstraints :: Contextual t ()
 > unifySolveConstraints = do
->     ns <- collectEqualities <$> getContext
+>     (g, ns) <- runWriter . collectEqualities <$> getContext
+>     putContext g
 >     traverse (unifyZero F0) ns
 >     return ()
 >   where
->     collectEqualities :: Context -> [NormalNum]
->     collectEqualities B0 = []
->     collectEqualities (g :< Constraint Wanted (IsZero n)) = n : collectEqualities g
->     collectEqualities (g :< _) = collectEqualities g
+>     collectEqualities :: Context -> Writer [NormalNum] Context
+>     collectEqualities B0 = return B0
+>     collectEqualities (g :< Constraint Wanted (IsZero n)) = tell [n]
+>         >> collectEqualities g
+>     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
 
 
 > mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
