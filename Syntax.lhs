@@ -105,9 +105,13 @@
 >     TyNum a -> f (TyNum b)
 > travTyNum fn = subsTyNum ((NumVar <$>) . fn)
 
+> travPred :: Applicative f =>
+>     (TyNum a -> f (TyNum b)) -> Pred a -> f (Pred b)
+> travPred f (m :==: n) = (:==:) <$> f m <*> f n
+> travPred f (m :<=: n) = (:<=:) <$> f m <*> f n
 
 > class Trav3 t where
->     trav3 :: Applicative f => (TyNum a -> f (TyNum b)) ->
+>     trav3 :: (Ord a, Ord b, Applicative f) => (TyNum a -> f (TyNum b)) ->
 >                 (Ty k a -> f (Ty l b)) -> (x -> f y) ->
 >                 t k a x -> f (t l b y)
 
@@ -156,19 +160,19 @@
 > bindPred :: (a -> TyNum b) -> Pred a -> Pred b
 > bindPred f = unId . subsPred (Id . f)
 
-> bind3 :: Trav3 t => (a -> TyNum b) -> (k -> a -> Ty k b) -> (x -> y) -> t k a x -> t k b y
+> bind3 :: (Ord a, Ord b, Trav3 t) => (a -> TyNum b) -> (k -> a -> Ty k b) -> (x -> y) -> t k a x -> t k b y
 > bind3 fn fa fx = unId . trav3 (subsTyNum (Id . fn)) (subsTy (Id . fn) ((Id .) . fa)) (Id . fx)
 
 
-> bimap :: Trav3 t => (a -> b) -> (x -> y) -> t k a x -> t k b y
+> bimap :: (Ord a, Ord b, Trav3 t) => (a -> b) -> (x -> y) -> t k a x -> t k b y
 > bimap fa fx = bind3 (NumVar . fa) (\ k a -> TyVar k (fa a)) fx
 
-> mangle :: Trav3 t => (TyNum a -> TyNum b) ->
+> mangle :: (Ord a, Ord b, Trav3 t) => (TyNum a -> TyNum b) ->
 >                 (Ty k a -> Ty l b) -> (x -> y) ->
 >                 t k a x -> t l b y
 > mangle fn fa fx = unId . trav3 (Id . fn) (Id . fa) (Id . fx)
 
-> replaceTy :: Eq a => Kind -> a -> Ty Kind a -> Ty Kind a -> Ty Kind a
+> replaceTy :: Ord a => Kind -> a -> Ty Kind a -> Ty Kind a -> Ty Kind a
 > replaceTy KindNum a t = bindTy f g
 >   where  f b  | a == b          = t'
 >               | otherwise       = NumVar b
@@ -184,7 +188,7 @@
 >   where f b | a == b     = n
 >             | otherwise  = NumVar b
 
-> replace3 :: (Eq a, Trav3 t) => Kind -> a -> Ty Kind a -> t Kind a x -> t Kind a x
+> replace3 :: (Ord a, Trav3 t) => Kind -> a -> Ty Kind a -> t Kind a x -> t Kind a x
 > replace3 KindNum a t  = mangle (replaceTyNum a (toNum t)) (replaceTy KindNum a t) id
 > replace3 k a t        = mangle id (replaceTy k a t) id
 

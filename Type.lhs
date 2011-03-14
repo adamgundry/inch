@@ -87,8 +87,6 @@ context, then |d| must be of the form |TyNum n| for some |n|.
 > var KindNum  = TyNum . NumVar
 > var k        = TyVar k
 
-This is inefficient, but ensures Binds go outside Quals. Perhaps we
-should use a better representation?
 
 > simplifyTy :: Ty k a -> Ty k a
 > simplifyTy (TyNum n)       = TyNum (simplifyNum n)

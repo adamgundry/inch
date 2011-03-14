@@ -99,10 +99,13 @@
 > instance FV a => FV [a] where
 >     alpha <? as = any (alpha <?) as
 
-> instance (FV a, Trav3 t) => FV (t k a x) where
->     alpha <? t = getAny $ getConst $ trav3 (Const . Any . (alpha <?))
+> instance (FV a, Ord a, Trav3 t) => FV (t k a x) where
+>     alpha <? t = getAny $ getKonst $ trav3 (Const . Any . (alpha <?))
 >                                            (Const . Any . (alpha <?))
 >                                            (const $ Const $ Any False) t
+>       where
+>         getKonst :: Const a (t l () y) -> a
+>         getKonst = getConst
 
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- niceType t

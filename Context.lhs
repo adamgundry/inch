@@ -9,6 +9,7 @@
 > import Data.Foldable
 > import Data.Monoid
 > import qualified Data.Map as Map
+> import Data.Traversable
 
 > import BwdFwd
 > import TyNum
@@ -49,6 +50,13 @@
 
 
 > instance Trav3 TmLayer where
+>     trav3 fn fa fx (PatternTop b bs hs ps) =
+>         PatternTop <$> travBind b
+>                    <*> traverse travBind bs
+>                    <*> traverse ((normalPred <$>) . travPred fn . reifyPred) hs
+>                    <*> traverse ((normalPred <$>) . travPred fn . reifyPred) ps
+>       where
+>         travBind (x ::: ty) = (:::) <$> fx x <*> fa ty
 >     trav3 fn fa fx (AppLeft () tm mty) = AppLeft () <$> trav3 fn fa fx tm
 >         <*> maybe (pure Nothing) (fmap Just . fa) mty
 >     trav3 fn fa fx FunTop = pure $ FunTop

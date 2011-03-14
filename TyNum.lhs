@@ -108,8 +108,8 @@
 > normaliseNum (Neg n)       = negateNExp <$> normaliseNum n
 
 
-> reifyNum :: (Ord a, Show a) => NormNum a -> TyNum a
-> reifyNum = simplifyNum . foldNExp (\ k n m -> NumConst k * NumVar n + m) NumConst
+> reifyNum :: Ord a => NormNum a -> TyNum a
+> reifyNum = simplifyNum . foldNExp (\ k n m -> NumConst k :*: NumVar n :+: m) NumConst
 
 > normalNum :: Ord a => TyNum a -> NormNum a
 > normalNum n = either error id $ normaliseNum n
@@ -129,7 +129,7 @@
 > substNormPred a n (IsPos m)   = IsPos   $ substNum a n m
 > substNormPred a n (IsZero m)  = IsZero  $ substNum a n m
 
-> reifyPred :: (Ord a, Show a) => NormPred a -> Pred a
+> reifyPred :: Ord a => NormPred a -> Pred a
 > reifyPred (IsPos n) = NumConst 0 :<=: reifyNum n
 > reifyPred (IsZero n) = reifyNum n :==: NumConst 0
 
@@ -138,3 +138,5 @@
 > normalisePred :: (Ord a, Applicative m, Monad m) => Pred a -> m (NormPred a)
 > normalisePred (m :<=: n) = IsPos <$> normaliseNum (n :+: Neg m)
 > normalisePred (m :==: n) = IsZero <$> normaliseNum (n :+: Neg m)
+
+> normalPred p = either error id $ normalisePred p
