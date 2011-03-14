@@ -3,6 +3,7 @@
 
 > module Error where
 
+> import Data.List
 > import qualified Control.Monad.Error as E
 > import Text.PrettyPrint.HughesPJ
 
@@ -28,7 +29,9 @@
 >     NonNumericVar      :: a -> Err k a x
 >     CannotUnify        :: Ty k a -> Ty k a -> Err k a x
 >     UnifyFixed         :: a -> Ty k a -> Err k a x
->     UnifyNumFixed      :: a -> TyNum a -> Err k a x         
+>     UnifyNumFixed      :: a -> TyNum a -> Err k a x
+>     CannotDeduce       :: [NormPred a] -> [NormPred a] -> Err k a x
+>     BadExistential     :: a -> Ty k a -> [Pat k a x] -> Err k a x
 >     Fail               :: String -> Err k a x
 
 > instance Pretty Error where
@@ -45,9 +48,29 @@
 >     pretty (DuplicateTyCon t)          _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t)          _ = text $ "Duplicate data constructor " ++ t
 >     pretty (NonNumericVar a)           _ = text "Type variable" <+> prettyVar a <+> text "is not numeric"
->     pretty (CannotUnify t u)           _ = text "Cannot unify" $$ nest 2 (prettyHigh t) $$ text "with" $$ nest 2 (prettyHigh u)
+>     pretty (CannotUnify t u)           _ = sep  [  text "Cannot unify"
+>                                                 ,  nest 2 (prettyHigh t)
+>                                                 ,  text "with"
+>                                                 ,  nest 2 (prettyHigh u)
+>                                                 ]
 >     pretty (UnifyFixed a t)            _ = text "Cannot unify fixed variable" <+> prettyVar a <+> text "with" <+> prettyHigh t
 >     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettyVar a <+> text "to unify" <+> prettyHigh n <+> text "with 0"
+>     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
+>                                                 ,  nest 2 (fsepPretty (nub qs))
+>                                                 ,  text "in empty context"
+>                                                 ]
+>     pretty (CannotDeduce hs qs)        _ = sep  [  text "Could not deduce"
+>                                                 ,  nest 2 (fsepPretty (nub qs))
+>                                                 ,  text "from hypotheses"
+>                                                 ,  nest 2 (fsepPretty (nub hs))
+>                                                 ]
+>     pretty (BadExistential a t ps)     _ = sep  [  text "Illegal existential"
+>                                                        <+> prettyVar a
+>                                                 ,  text "when generalising type"
+>                                                 ,  nest 2 (prettyHigh t)
+>                                                 ,  text "and patterns"
+>                                                 ,  nest 2 (vcatPretty ps)
+>                                                 ]
 >     pretty (Fail s)                    _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Error -> m a
@@ -70,6 +93,8 @@
 > errCannotUnify t u        = throw (CannotUnify t u)
 > errUnifyFixed a t         = throw (UnifyFixed a t)
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
+> errCannotDeduce hs qs     = throw (CannotDeduce hs qs)
+> errBadExistential a t ps  = throw (BadExistential a t ps)
                             
 
 > type Error = Err Kind TyName TmName

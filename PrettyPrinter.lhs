@@ -35,7 +35,10 @@
 
 
 > renderMe :: Pretty a => a -> String
-> renderMe x = renderStyle style{lineLength=80} (prettyHigh x)
+> renderMe x = renderStyle style{ribbonsPerLine=1.2, lineLength=80} (prettyHigh x)
+
+> d1 <++> d2 = sep [d1, nest 2 d2]
+> infix 2 <++>
 
 
 > class Ord a => PrettyVar a where
@@ -93,7 +96,7 @@
 >     pretty (TyVar k a)              = const $ prettyVar a
 >     pretty (TyCon c)                = const $ text c
 >     pretty (TyApp (TyApp (TyB Arr) s) t)  = wrapDoc ArrSize $ 
->         pretty s AppSize <+> text "->" <+> pretty t ArrSize
+>         pretty s AppSize <+> text "->" <++> pretty t ArrSize
 >     pretty (TyApp f s)  = wrapDoc AppSize $ 
 >         pretty f AppSize <+> pretty s ArgSize
 >     pretty (TyB b)          = pretty b
@@ -108,7 +111,7 @@
 >     alphaConvert [(a, a ++ "'")] (unbind (injectVar a) t)
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
->         <+> text "." <+> pretty t ArrSize
+>         <+> text "." <++> pretty t ArrSize
 >   where
 >     prettyBits []             = empty
 >     prettyBits ((a, k) : aks) = prettyRun k empty ((a, k) : aks)
@@ -119,7 +122,7 @@
 > prettyQual :: PrettyVar a => Bwd (Pred a) -> Ty k a -> Size -> Doc
 > prettyQual ps (Qual p t) = prettyQual (ps :< p) t
 > prettyQual ps t = wrapDoc ArrSize $
->     prettyPreds (trail ps) <+> text "=>" <+> pretty t ArrSize
+>     prettyPreds (trail ps) <+> text "=>" <++> pretty t ArrSize
 >   where
 >     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
 
@@ -131,7 +134,7 @@
 >         pretty f AppSize <+> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
 >     pretty (Lam x t)   = prettyLam (text x) (unbind (injectVar x) t)
->     pretty (Let ds t)  = wrapDoc ArgSize $ text "let" <+> vcatPretty ds $$ text "in" <+> prettyHigh t
+>     pretty (Let ds t)  = wrapDoc ArgSize $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
 >     pretty (t :? ty)   = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
@@ -189,4 +192,5 @@
 
 
 > fsepPretty xs  = fsep . punctuate (text ",") . map prettyHigh $ xs
-> vcatPretty xs  = vcat . intersperse (text " ") . map prettyHigh $ xs
+> vcatSpacePretty xs  = vcat . intersperse (text " ") . map prettyHigh $ xs
+> vcatPretty xs  = vcat . map prettyHigh $ xs

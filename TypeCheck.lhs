@@ -158,8 +158,7 @@
 >     case (qs, try) of
 >       ([],   _      ) -> return ()
 >       (_:_,  True   ) -> want qs
->       (_:_,  False  ) -> fail $ "Could not deduce\n    [" ++ show (fsepPretty qs)
->                              ++ "]\nfrom\n    [" ++ show (fsepPretty hs) ++ "]"
+>       (_:_,  False  ) -> errCannotDeduce hs qs
 >   where
 >     formulaic hs p = (not . P.check) <$> toFormula hs p
 >
@@ -230,8 +229,7 @@
 >     help g@(_ :< Layer FunTop)               tps = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _)) tps = return (g, tps)
 >     help (g :< A (an := d ::: k)) (t, ps) | an <? t || an <? ps = case d of
->         Exists  -> fail $ "Illegal existential " ++ show (prettyVar an) ++
->                           "\nwhen generalising type " ++ renderMe t ++ " and patterns " ++ show (vcatPretty ps)
+>         Exists  -> errBadExistential an t ps
 >         Some d  -> help g (replaceTy k an d t, map (replace3 k an d) ps)
 >         _       -> help g (Bind All (fst an) k (bind an t), ps)
 >     help (g :< A _) tps = help g tps

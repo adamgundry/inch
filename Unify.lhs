@@ -108,8 +108,8 @@
 >                 t' <- niceType t
 >                 u' <- niceType u
 >                 g <- getContext
->                 return $ text "when unifying" <+> prettyHigh t
->                              <+> text"and" <+> prettyHigh u)
+>                 return $ sep [text "when unifying", nest 4 (prettyHigh t),
+>                              text "and", nest 4 (prettyHigh u)])
 >                     -- ++ "\n    in context " ++ render g)
 
 > unifyTypes :: Type -> Type -> Contextual t ()
