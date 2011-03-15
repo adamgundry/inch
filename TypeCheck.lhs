@@ -32,8 +32,14 @@
 > subsCheck s t = do
 >     t  <- specialise t
 >     s  <- instantiate s
->     unify s t
->     return t
+>     case (s, t) of
+>         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 -> do
+>             nm <- fresh (a1 ++ "_sc") (Fixed ::: k1)
+>             subsCheck (unbind nm t1) (unbind nm t2)
+>             return t -- ?
+>         _ -> do
+>             unify s t
+>             return t
 
 
 > checkInfer :: Maybe Type -> STerm -> Contextual () (Term ::: Type)
@@ -70,8 +76,9 @@
 > checkInfer mty (TmApp f s) = do
 >     f ::: fty   <- infer f
 >     (dom, cod)  <- splitFun $ Just fty
+>     dom         <- specialise dom
 >     s           <- check dom s
->     traverse (unify cod) mty
+>     traverse (subsCheck cod) mty
 >     return $ TmApp f s ::: cod
 
 > checkInfer mty (Lam x t) = do

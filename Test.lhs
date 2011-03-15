@@ -225,6 +225,8 @@
 >   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
 >   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . m <= 3, 0 <= m => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
 >   ("f :: forall (b :: Num -> *) (n :: Num) . 0 <= n, n <= 3 => (forall (a :: Num -> *) (m :: Num) . 0 <= m, m <= 3 => a m -> a m) -> b n -> b n\nf h = h\ng :: forall (a :: Num -> *) (m :: Num) . m <= 3, 0 <= m => a m -> a m\ng = \\ x -> x\ny = f g", True) :
+>   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf g h = g h", True) : 
+>   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf = f", True) : 
 >   []
 
 

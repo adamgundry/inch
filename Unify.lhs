@@ -51,9 +51,11 @@
 >         Layer pt@(PatternTop _ _ (_:_) cs) -> do
 >             m
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
+> {-
 >         Constraint Given _ -> do
 >             m
 >             modifyContext $ (:< xD) . (:< Constraint Wanted p)
+> -}
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
 >     B0 -> inLocation (text "when solving" <+> prettyHigh p) $
 >               fail $ "onTopNum: ran out of context"
@@ -145,9 +147,12 @@
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
 
 
+
+> {-
 > unifyTypes (Bind b1 a1 k1 t1) (Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 = do
 >     nm <- fresh (a1 ++ "_u") (Fixed ::: KindNum)
 >     unifyTypes (unbind nm t1) (unbind nm t2)
+> -}
 
 > {-
 > unifyTypes (Bind b a k ty) tau = do
@@ -157,7 +162,12 @@
 > unifyTypes tau (Bind b a k ty) = do
 >     nm <- fresh a (Hole ::: k)
 >     unifyTypes tau (unbind nm ty)
+> -}
 
+
+> -- unifyTypes (Qual p s) (Qual q t) | p == q = unifyTypes s t
+
+> {-
 > unifyTypes (Qual p t) tau = do
 >     p <- normalisePred p
 >     modifyContext (:< Constraint Wanted p)
@@ -166,7 +176,15 @@
 >     p <- normalisePred p
 >     modifyContext (:< Constraint Wanted p)
 >     unifyTypes tau t
+> -}
 
+> {-
+> unifyTypes (Qual p s) (Qual q t) = do
+>     unifyTypes s t
+>     g <- getContext
+>     let p' = expandPred g p
+>         q' = expandPred g q
+>     unless (p' == q') $ fail $ "Mismatched qualifiers " ++ renderMe p' ++ " and " ++ renderMe q'
 > -}
 
 > unifyTypes (TyNum m)      (TyNum n)              = unifyNum m n
