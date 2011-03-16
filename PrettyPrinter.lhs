@@ -114,10 +114,9 @@
 >         <+> text "." <++> pretty t ArrSize
 >   where
 >     prettyBits []             = empty
->     prettyBits ((a, k) : aks) = prettyRun k empty ((a, k) : aks)
->     prettyRun l d ((a, k) : aks) | k == l = prettyRun l (d <+> text a) aks
->     prettyRun Set  d aks = d <+> prettyBits aks
->     prettyRun l    d aks = parens (d <+> text "::" <+> prettyHigh l) <+> prettyBits aks
+>     prettyBits ((a, Set) : aks) = text a <+> prettyBits aks
+>     prettyBits ((a, k) : aks) = parens (text a <+> text "::" <+> prettyHigh k) <+> prettyBits aks
+
 
 > prettyQual :: PrettyVar a => Bwd (Pred a) -> Ty k a -> Size -> Doc
 > prettyQual ps (Qual p t) = prettyQual (ps :< p) t
