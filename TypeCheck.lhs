@@ -33,13 +33,22 @@
 >     t  <- specialise t
 >     s  <- instantiate s
 >     case (s, t) of
+>         (TyApp (TyApp (TyB Arr) s1) s2, _) -> do
+>             (t1, t2) <- splitFun $ Just t
+>             subsCheck t1 s1
+>             subsCheck s2 t2
+>             return ()
+>         (_, TyApp (TyApp (TyB Arr) t1) t2) -> do
+>             (s1, s2) <- splitFun $ Just s
+>             subsCheck t1 s1
+>             subsCheck s2 t2
+>             return ()
 >         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 -> do
 >             nm <- fresh (a1 ++ "_sc") (Fixed ::: k1)
 >             subsCheck (unbind nm t1) (unbind nm t2)
->             return t -- ?
->         _ -> do
->             unify s t
->             return t
+>             return ()
+>         _ -> unify s t
+>     return t -- ?
 
 
 > checkInfer :: Maybe Type -> STerm -> Contextual () (Term ::: Type)

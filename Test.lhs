@@ -227,6 +227,17 @@
 >   ("f :: forall (b :: Num -> *) (n :: Num) . 0 <= n, n <= 3 => (forall (a :: Num -> *) (m :: Num) . 0 <= m, m <= 3 => a m -> a m) -> b n -> b n\nf h = h\ng :: forall (a :: Num -> *) (m :: Num) . m <= 3, 0 <= m => a m -> a m\ng = \\ x -> x\ny = f g", True) :
 >   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf g h = g h", True) : 
 >   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf = f", True) : 
+>   ("f :: (Integer -> (forall a. a -> a)) -> (forall b . (b -> b) -> (b -> b))\nf x = x 0", True) :
+>   ("f :: (Integer -> Integer -> (pi (m :: Num) . forall a. a -> a)) -> Integer -> (pi (m :: Num) . forall d b . (b -> b) -> (b -> b))\nf x = x 0", True) :
+>   ("f :: (forall a. a) -> (forall a. a) -> (forall a.a)\nf x y = x\ng = let loop = loop\n    in f loop", True) :
+>   ("f :: (forall a. a) -> (forall a. a) -> (forall a.a)\nf x y = x\ng = let loop = loop\n    in f loop\nh :: Integer\nh = g 0", False) :
+>   ("loop :: forall a. a\nloop = loop\nf :: (forall a. a) -> (forall a. a) -> (forall a.a)\nf x y = x\ng = f loop\nh :: Integer\nh = g 0", False) :
+>   ("f :: (forall a. a) -> (forall a. a) -> (forall a.a)\nf x y = x\ng :: (forall x . x) -> (forall y. y -> y)\ng = let loop = loop\n    in f loop", True) :
+>   ("f :: (forall a. a) -> (forall a. a) -> (forall a.a)\nf x y = x\ng :: (forall x . x -> x) -> (forall y. y)\ng = let loop = loop\n    in f loop", False) :
+>   ("data High where High :: (forall a. a) -> High\nf (High x) = x", True) :
+>   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x", True) :
+>   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf :: Higher -> (forall a. a) -> Integer\nf (Higher x) = x", True) :
+>   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x\nx = f (Higher (\\ zzz -> 0)) 0", False) :
 >   []
 
 

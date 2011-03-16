@@ -281,10 +281,8 @@ foldTm3 v l a (L' b) = l (foldTm3 v l a b)
 foldTm3 v l a (A' f s) = a (foldTm3 v l a f) (foldTm3 v l a s)
 
 
-{-
-rebuildTm :: forall (m :: Num) . Tm m -> Tm m
+rebuildTm :: forall (m :: Num) . Tm' m -> Tm' m
 rebuildTm = foldTm3 V' L' A'
--}
 
 
 
@@ -407,11 +405,51 @@ unSP :: ExSet SillyPair -> Integer
 unSP (ExSet (SillyPair a f)) = f a
 
 
--- Local let binding
+-- Local let binding and other random stuff
 
 f x = let y z = x
           a = a
       in y (x a)
+
+localLet = let i x  = x
+               j    = \ x -> x
+           in (i i) (j j)
+
+rank2 :: (forall a . a -> a) -> Integer
+rank2 = \ f -> f f f 0
+
+
+predtrans :: (pi (n :: Num) . 0 <= n => Bools) -> (pi (n :: Num) . 0 <= n => Bools)
+predtrans p {0}   = TT
+predtrans p {n+1} = let andy TT TT = TT
+                        andy _ _ = FF
+                    in andy (predtrans p {n}) (p {n})
+
+peven :: pi (n :: Num) . 0 <= n => Bools
+peven {0} = TT
+peven {1} = FF
+peven {n+2} = peven {n}
+
+
+thingy :: (pi (n :: Num) . 0 <= n => forall a. a -> Vec n a) -> Vec 5 Integer
+thingy f = f {5} 42
+
+vec' :: pi (n :: Num) . 0 <= n => forall a . a -> Vec n a
+vec' {n} a = vec2 {n} a
+
+useThingy = thingy vec'
+-- useThingy2 = thingy vec2
+
+rank3 :: forall b. ((forall a. a) -> b) -> b
+rank3 f = let loop = loop
+          in f loop
+
+ 
+functorCompose :: forall (f g :: * -> *) .
+    (forall a b . (a -> b) -> f a -> f b) ->
+    (forall a b . (a -> b) -> g a -> g b) ->
+    (forall a b . (a -> b) -> f (g a) -> f (g b))
+functorCompose fmap gmap = comp fmap gmap
 
 
 
@@ -423,10 +461,14 @@ data Mon :: (* -> *) -> * where
 
 ret (Mon r b) = r
 bnd (Mon r b) = b
-ext (Mon ret bnd) f ma = bnd ma f
+ext (Mon r b) f ma = b ma f
 
 monMap :: forall (m :: * -> *) a b . Mon m -> (a -> b) -> (m a -> m b)
 monMap (Mon ret bnd) f = ext (Mon ret bnd) (comp ret f)
+
+
+readerMon :: forall t. Mon ((->) t)
+readerMon = Mon (\ a b -> a) (\ f g t -> g (f t) t) 
 
 
 data List :: * -> * where
@@ -436,6 +478,9 @@ data List :: * -> * where
 listMap :: forall a b. (a -> b) -> List a -> List b
 listMap f Nil = Nil
 listMap f (Cons x xs) = Cons (f x) (listMap f xs)
+
+listListAlmostMap = functorCompose listMap
+listListMap = listListAlmostMap listMap
 
 append :: forall a. List a -> List a -> List a
 append Nil ys = ys
