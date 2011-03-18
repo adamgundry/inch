@@ -256,10 +256,14 @@
 > eraseCheckTest = runTest eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 
-> checkEx = do
->     s <- readFile "Example.hs"
+> check fn = do
+>     s <- readFile fn
 >     putStrLn $ test parseCheck [(s, True)] 0 0
 
-> eraseEx = do
->     s <- readFile "Example.hs"
+> checkEx = check "Example.hs"
+
+> erase fn = do
+>     s <- readFile fn
 >     putStrLn $ test eraseCheck [s] 0 0
+
+> eraseEx = erase "Example.hs"
