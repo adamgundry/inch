@@ -103,6 +103,12 @@
 >   "x = let a = 1\n in a" :
 >   "x = let a = \\ x -> f x y\n in let b = 2\n  in a" :
 >   "x = let y :: forall a. a -> a\n        y = \\ z -> z\n        f = f\n  in y" :
+>   "f :: 0 <= 1 => Integer\nf = 1" :
+>   "f :: forall (m n :: Num) . (m <= n => Integer) -> Integer\nf = f" :
+>   "f :: 0 + m <= n + 1 => Integer\nf = f" :
+>   "f :: 0 < 1 => a\nf = f" :
+>   "f :: 0 > 1 => a\nf = f" :
+>   "f :: 1 >= 0, a + 3 > 7 => a\nf = f" :
 >   []
 
 

@@ -74,7 +74,7 @@ Types
 > tyConName  = identLike False "type constructor"
 > tyVar      = TyVar () <$> tyVarName
 > tyCon      = mkTyCon <$> tyConName
-> tyExp      = tyAll <|> tyPi <|> tyExpArr
+> tyExp      = tyAll <|> tyPi <|> tyQual <|> tyExpArr
 > tyAll      = tyQuant "forall" (Bind All)
 > tyPi       = tyQuant "pi" (Bind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
@@ -86,26 +86,30 @@ Types
 >            <|>  parens (reservedOp "->" *> pure (TyB Arr) <|> tyExp)
 
 > numVarName   = identLike True "numeric type variable"
-> tyNum        = tyNumTerm `chainr1` tyPlusMinus
-> tyPlusMinus  =    reservedOp "+" *> return (+)
->              <|>  specialOp "-" *> return (-)
->              <|>  reservedOp "*" *> return (*)
-> tyNumTerm    =    NumVar <$> numVarName
->              <|>  NumConst <$> try integer
->              <|>  Neg <$> (specialOp "-" *> tyNumTerm)
->              <|>  parens tyNum
-> 
+
+> tyNum = buildExpressionParser
+>     [
+>         [binary "*" (:*:) AssocLeft],    
+>         [binary "+" (:+:) AssocLeft, binary "-" (-) AssocLeft]
+>     ]
+>     tyNumTerm
+
+> tyNumTerm  =    NumVar <$> numVarName
+>            <|>  NumConst <$> try integer
+>            <|>  Neg <$> (specialOp "-" *> tyNumTerm)
+>            <|>  parens tyNum
+
+> binary  name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
+> prefix  name fun       = Prefix (do{ reservedOp name; return fun })
+> postfix name fun       = Postfix (do{ reservedOp name; return fun })
+
 
 > tyQuant q f = do
 >     reserved q
 >     aks <- many1 $ foo <$> quantifiedVar
 >     reservedOp "."
->     mps <- optional $ try predicates
 >     t <- tyExp
->     let t' = case mps of
->                  Just ps  -> foldr Qual t ps
->                  Nothing  -> t
->     return $ foldr (\ (a, k) t -> f a k (bind a t)) t' $ join aks
+>     return $ foldr (\ (a, k) ty -> f a k (bind a ty)) t $ join aks
 >   where
 >     foo :: ([as], k) -> [(as, k)]
 >     foo (as, k) = map (\ a -> (a, k)) as
@@ -113,17 +117,28 @@ Types
 > quantifiedVar  =    parens ((,) <$> many1 tyVarName <* doubleColon <*> kind)
 >                <|>  (\ a -> ([a] , Set)) <$> tyVarName
 
+> tyQual = do
+>     ps <- try predicates
+>     t <- tyExp
+>     return $ foldr Qual t ps
 
 > predicates = (predicate `sepBy1` reservedOp ",") <* reservedOp "=>"
 
 > predicate = do
->     n   <- tyNumTerm
->     op  <- lePred <|> eqPred
->     m   <- tyNumTerm
+>     n   <- tyNum
+>     op  <- predOp
+>     m   <- tyNum
 >     return $ op n m
 
-> lePred = reservedOp "<=" *> pure (:<=:)
-> eqPred = reservedOp "~" *> pure (:==:)
+> predOp = eqPred <|> lPred <|> lePred <|> gPred <|> gePred
+
+> eqPred  = reservedOp  "~"   *> pure (:==:)
+> lPred   = specialOp   "<"   *> pure (\ m n -> (m :+: 1) :<=: n)
+> lePred  = specialOp   "<="  *> pure (:<=:)
+> gPred   = specialOp   ">"   *> pure (\ m n -> (n :+: 1) :<=: m)
+> gePred  = specialOp   ">="  *> pure (flip (:<=:))
+
+
 
 
 
