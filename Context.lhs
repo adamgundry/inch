@@ -244,8 +244,7 @@ Data constructors
 >     seek B0                             a           = error "expandNumVar: erk"
 
 > expandPred :: Context -> Predicate -> Predicate
-> expandPred g (n :<=: m) = expandNum g n :<=: expandNum g m
-> expandPred g (n :==: m) = expandNum g n :==: expandNum g m
+> expandPred g = mapPred (expandNum g)
 
 > niceType :: Type -> Contextual t Type
 > niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext

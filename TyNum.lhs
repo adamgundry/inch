@@ -78,20 +78,34 @@
 >     signum       = error "no signum"
 
 
+> data Comparator = LE | LS | GE | GR | EL
+>   deriving (Eq, Show)
+
 > data Pred a where
->     (:<=:) :: TyNum a -> TyNum a -> Pred a
->     (:==:) :: TyNum a -> TyNum a -> Pred a
+>     P  :: Comparator -> TyNum a -> TyNum a -> Pred a
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> simplifyPred :: Pred a -> Pred a
-> simplifyPred (m :<=: n) = simplifyNum m :<=: simplifyNum n
-> simplifyPred (m :==: n) = case (simplifyNum m, simplifyNum n) of
->     (m' :+: Neg n', NumConst 0)  -> m' :==: n'
->     (Neg n' :+: m', NumConst 0)  -> m' :==: n'
->     (NumConst 0, m' :+: Neg n')  -> m' :==: n'
->     (NumConst 0, Neg n' :+: m')  -> m' :==: n'
->     (m', n')                     -> m' :==: n'
+> (%==%) = P EL
+> (%<=%) = P LE
+> (%<%)  = P LS
+> (%>=%) = P GE
+> (%>%)  = P GR
 
+> travPred :: Applicative f =>
+>     (TyNum a -> f (TyNum b)) -> Pred a -> f (Pred b)
+> travPred f (P c m n) = P c <$> f m <*> f n
+
+> mapPred :: (TyNum a -> TyNum b) -> Pred a -> Pred b
+> mapPred f = unId . travPred (Id . f)
+
+> simplifyPred :: Pred a -> Pred a
+> simplifyPred (P EL m n) = case (simplifyNum m, simplifyNum n) of
+>     (m' :+: Neg n', NumConst 0)  -> m' %==% n'
+>     (Neg n' :+: m', NumConst 0)  -> m' %==% n'
+>     (NumConst 0, m' :+: Neg n')  -> m' %==% n'
+>     (NumConst 0, Neg n' :+: m')  -> m' %==% n'
+>     (m', n')                     -> m' %==% n'
+> simplifyPred p = mapPred simplifyNum p
 
 
 > type NormNum a = NExp a
@@ -135,13 +149,16 @@
 > substNormPred a n (IsZero m)  = IsZero  $ substNum a n m
 
 > reifyPred :: Ord a => NormPred a -> Pred a
-> reifyPred (IsPos n) = NumConst 0 :<=: reifyNum n
-> reifyPred (IsZero n) = reifyNum n :==: NumConst 0
+> reifyPred (IsPos n) = NumConst 0 %<=% reifyNum n
+> reifyPred (IsZero n) = reifyNum n %==% NumConst 0
 
 > type NormalPredicate = NormPred TyName
 
 > normalisePred :: (Ord a, Applicative m, Monad m) => Pred a -> m (NormPred a)
-> normalisePred (m :<=: n) = IsPos <$> normaliseNum (n :+: Neg m)
-> normalisePred (m :==: n) = IsZero <$> normaliseNum (n :+: Neg m)
+> normalisePred (P LE m n)  = IsPos <$> normaliseNum (n :+: Neg m)
+> normalisePred (P LS m n)  = IsPos <$> normaliseNum (n :+: Neg (m :+: NumConst 1))
+> normalisePred (P GE m n)  = IsPos <$> normaliseNum (m :+: Neg n)
+> normalisePred (P GR m n)  = IsPos <$> normaliseNum (m :+: Neg (n :+: NumConst 1))
+> normalisePred (P EL m n)  = IsZero <$> normaliseNum (n :+: Neg m)
 
 > normalPred p = either error id $ normalisePred p

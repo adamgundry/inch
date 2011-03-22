@@ -83,10 +83,15 @@
 >         text "-" <+> pretty n ArgSize
 
 > instance PrettyVar a => Pretty (Pred a) where
->     pretty (n :<=: m) = wrapDoc AppSize $
->         pretty n ArgSize <+> text "<=" <+> pretty m ArgSize
->     pretty (n :==: m) = wrapDoc AppSize $
->         pretty n ArgSize <+> text "~" <+> pretty m ArgSize
+>     pretty (P c n m) = wrapDoc AppSize $
+>         pretty n ArgSize <+> pretty c ArgSize <+> pretty m ArgSize
+
+> instance Pretty Comparator where
+>     pretty LS _ = text "<"
+>     pretty LE _ = text "<=" 
+>     pretty GR _ = text ">"
+>     pretty GE _ = text ">="
+>     pretty EL _ = text "~"
 
 > instance Pretty BuiltinTyCon where
 >     pretty Arr   _ = parens (text "->")

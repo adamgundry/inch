@@ -290,8 +290,14 @@
 >     apply xs = bindPred (NumVar . fromJust . flip lookup xs)
 >                
 >     predToFormula :: Pred P.Term -> P.Formula
->     predToFormula (m :==: n)  = numToTerm m P.:=: numToTerm n
->     predToFormula (m :<=: n)  = numToTerm m P.:<=: numToTerm n
+>     predToFormula (P c m n) = compToFormula c (numToTerm m) (numToTerm n)
+
+>     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
+>     compToFormula EL  = (P.:=:)
+>     compToFormula LE  = (P.:<=:)
+>     compToFormula LS  = (P.:<:)
+>     compToFormula GE  = (P.:>=:)
+>     compToFormula GR  = (P.:>:)
 
 >     numToTerm :: TyNum P.Term -> P.Term
 >     numToTerm (NumConst k)  = fromInteger k

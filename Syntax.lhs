@@ -75,8 +75,7 @@
 > subsPred :: Applicative f =>
 >     (a -> f (TyNum b)) ->
 >     Pred a -> f (Pred b)
-> subsPred fn (m :<=: n)  = (:<=:) <$> subsTyNum fn m <*> subsTyNum fn n
-> subsPred fn (m :==: n)  = (:==:) <$> subsTyNum fn m <*> subsTyNum fn n
+> subsPred fn (P c m n) = P c <$> subsTyNum fn m <*> subsTyNum fn n
  
 > subsTy :: Applicative f =>
 >     (a -> f (TyNum b)) ->
@@ -104,11 +103,6 @@
 >     (a -> f b) ->
 >     TyNum a -> f (TyNum b)
 > travTyNum fn = subsTyNum ((NumVar <$>) . fn)
-
-> travPred :: Applicative f =>
->     (TyNum a -> f (TyNum b)) -> Pred a -> f (Pred b)
-> travPred f (m :==: n) = (:==:) <$> f m <*> f n
-> travPred f (m :<=: n) = (:<=:) <$> f m <*> f n
 
 > class Trav3 t where
 >     trav3 :: (Ord a, Ord b, Applicative f) => (TyNum a -> f (TyNum b)) ->

@@ -132,11 +132,11 @@ Types
 
 > predOp = eqPred <|> lPred <|> lePred <|> gPred <|> gePred
 
-> eqPred  = reservedOp  "~"   *> pure (:==:)
-> lPred   = specialOp   "<"   *> pure (\ m n -> (m :+: 1) :<=: n)
-> lePred  = specialOp   "<="  *> pure (:<=:)
-> gPred   = specialOp   ">"   *> pure (\ m n -> (n :+: 1) :<=: m)
-> gePred  = specialOp   ">="  *> pure (flip (:<=:))
+> eqPred  = reservedOp  "~"   *> pure (%==%)
+> lPred   = specialOp   "<"   *> pure (%<%)
+> lePred  = specialOp   "<="  *> pure (%<=%)
+> gPred   = specialOp   ">"   *> pure (%>%)
+> gePred  = specialOp   ">="  *> pure (%>=%)
 
 
 

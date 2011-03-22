@@ -48,8 +48,7 @@
 > checkNumKind g (Neg n) = Neg <$> checkNumKind g n
 
 > checkPredKind :: Bwd (TyName ::: Kind) -> Pred String -> Contextual t Predicate
-> checkPredKind g (n :<=: m) = (:<=:) <$> checkNumKind g n <*> checkNumKind g m
-> checkPredKind g (n :==: m) = (:==:) <$> checkNumKind g n <*> checkNumKind g m
+> checkPredKind g = travPred (checkNumKind g)
 
 
 > scopeCheckTypes :: STerm -> Contextual () Term
