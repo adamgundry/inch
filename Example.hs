@@ -3,7 +3,7 @@
 
 {-
 Things that would be nice:
-* Pattern-matching let bindings (not functions)
+* Pattern-matching let and lambda bindings
 * Automatic translation of GADT notation into local equality constraints
 * Mutually recursive binding groups
 * Nat kind (desugars to Num with inequality constraint)
@@ -11,6 +11,8 @@ Things that would be nice:
 * Higher-order unification
 * Type synonyms
 * GHC LINE pragmas that make some kind of sense
+* Sigma-types
+* Guards
 -}
 
 module Example where

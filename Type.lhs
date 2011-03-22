@@ -12,9 +12,15 @@
 
 
 
-> type Type             = Ty Kind TyName
+> type Type    = Ty Kind TyName
+> type Tau     = Type
+> type Sigma   = Type
+> type Rho     = Type
 
-> type SType            = Ty () String
+> type SType   = Ty () String
+> type STau    = SType
+> type SSigma  = SType
+> type SRho    = SType
 
 
 > data Kind where

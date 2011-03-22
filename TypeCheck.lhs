@@ -28,50 +28,89 @@
 > import KindCheck
 
 
-> subsCheck :: Type -> Type -> Contextual a Type
+> subsCheck :: Sigma -> Sigma -> Contextual a ()
 > subsCheck s t = do
+>     -- mtrace $ "subsCheck:\n    " ++ renderMe s ++ "\n    " ++ renderMe t
 >     t  <- specialise t
 >     s  <- instantiate s
 >     case (s, t) of
 >         (TyApp (TyApp (TyB Arr) s1) s2, _) -> do
->             (t1, t2) <- splitFun $ Just t
+>             (t1, t2) <- splitFun t
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->             return ()
 >         (_, TyApp (TyApp (TyB Arr) t1) t2) -> do
->             (s1, s2) <- splitFun $ Just s
+>             (s1, s2) <- splitFun s
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->             return ()
 >         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 -> do
 >             nm <- fresh (a1 ++ "_sc") (Fixed ::: k1)
 >             subsCheck (unbind nm t1) (unbind nm t2)
->             return ()
 >         _ -> unify s t
->     return t -- ?
 
 
-> checkInfer :: Maybe Type -> STerm -> Contextual () (Term ::: Type)
+> instSigma :: Sigma -> Maybe Rho -> Contextual () Rho
+> instSigma s Nothing   = instantiate s
+> instSigma s (Just r)  = subsCheck s r >> return r
+
+> checkSigma :: Sigma -> STerm -> Contextual () Term
+> checkSigma s e = do
+>     modifyContext (:< Layer GenMark)
+>     s' <- specialise s
+>     as <- getNames <$> getContext
+>     t <- checkRho s' e
+>     unifySolveConstraints
+>     qs <- solveConstraints True
+>     g <- getContext
+>     -- mtrace $ "checkSigma: " ++ renderMe g
+>     putContext =<< help as g (map Right qs)
+>     return t
+>   where
+>     getNames (_ :< Layer GenMark) = []
+>     getNames (g :< A (a := _ ::: _)) = a : getNames g
+>     getNames (g :< e) = getNames g
+
+>     help :: [TyName] -> Context -> [Either TyEntry NormalPredicate] ->
+>         Contextual () Context
+>     help [] (g :< Layer GenMark) h = return $ g <><| h
+>     help as (g :< Layer GenMark) h = fail $ "Bad as " ++ show as
+>     help as (g :< A (a := Fixed ::: k)) h  | a <? h = fail "Bad h"
+>                                            | otherwise = help (delete a as) g h
+>     help as (g :< A (a := Some d ::: k)) h = help as g (map (rep k a d) h)
+>     help as (g :< A a) h = help as g (Left a : h)
+>     help as (g :< Constraint Wanted p) h = help as g (Right p : h) 
+>     help as (g :< Constraint Given p) h = help as g h
+>     help as B0 h = error "checkSigma help: ran out of context"
+
+>     g <><| h = g <><< map toEnt h
+>     toEnt (Left a) = A a
+>     toEnt (Right p)  = Constraint Wanted p
+
+>     rep :: Kind -> TyName -> Type -> Either TyEntry NormalPredicate
+>                -> Either TyEntry NormalPredicate
+>     rep k a t (Left (b := Some d ::: l)) =
+>         Left (b := Some (replaceTy k a t d) ::: l)
+>     rep k a t (Left e) = Left e
+>     rep KindNum a t (Right p) =
+>         Right (substNormPred a (normalNum $ toNum t) p)
+>     rep k a t (Right p) = Right p
+
+> checkInfer :: Maybe Rho -> STerm -> Contextual () (Term ::: Rho)
 
 > checkInfer mty (TmVar x) = do
 >     sc  <- tyOf <$> lookupTmVar x
->     ty  <- case mty of
->         Just ity  -> subsCheck sc ity
->         Nothing   -> instantiate sc
+>     ty  <- instSigma sc mty
 >     return $ TmVar x ::: ty
 
 > checkInfer mty (TmCon c) = do
 >     sc  <- lookupTmCon c
->     ty  <- case mty of
->         Just ity  -> subsCheck sc ity
->         Nothing   -> instantiate sc
+>     ty  <- instSigma sc mty
 >     return $ TmCon c ::: ty
 
-> checkInfer (Just ty)  (TmInt k) = unify ty (TyB NumTy) >> return (TmInt k ::: TyB NumTy)
-> checkInfer Nothing    (TmInt k) = return $ TmInt k ::: TyB NumTy
+> checkInfer mty (TmInt k) = instSigma (TyB NumTy) mty >>
+>                            return (TmInt k ::: TyB NumTy)
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
->     f ::: fty   <- infer f   
+>     f ::: fty   <- inferRho f   
 >     case fty of
 >         Bind Pi x KindNum aty -> do
 >             n     <- checkNumKind B0 n
@@ -83,17 +122,21 @@
 >                  renderMe f ++ " is not a pi-type with numeric domain"
 
 > checkInfer mty (TmApp f s) = do
->     f ::: fty   <- infer f
->     (dom, cod)  <- splitFun $ Just fty
->     dom         <- specialise dom
->     s           <- check dom s
->     traverse (subsCheck cod) mty
+>     f ::: fty   <- inferRho f
+>     (dom, cod)  <- splitFun fty
+>     s           <- checkSigma dom s
+>     instSigma cod mty
 >     return $ TmApp f s ::: cod
 
-> checkInfer mty (Lam x t) = do
->     (dom, cod) <- splitFun mty
->     b <- withLayer (LamBody (x ::: dom) ()) $ check cod (unbind x t)
->     return $ Lam x (bind x b) ::: dom --> cod
+> checkInfer (Just r) (Lam x t) = do
+>     (dom, cod) <- splitFun r
+>     b <- withLayer (LamBody (x ::: dom) ()) $ checkRho cod (unbind x t)
+>     return $ Lam x (bind x b) ::: r
+
+> checkInfer Nothing (Lam x t) = do
+>     a <- unknownTyVar $ x ::: Set
+>     b ::: ty <- withLayer (LamBody (x ::: a) ()) $ inferRho (unbind x t)
+>     return $ Lam x (bind x b) ::: a --> ty
 
 > checkInfer mty (Let ds t) = do
 >     ds <- traverse checkFunDecl ds
@@ -103,12 +146,10 @@
 >     return $ Let ds t ::: ty
 
 > checkInfer mty (t :? xty) = do
->     uty ::: _ <- inferKind B0 xty
->     aty <- case mty of
->         Just ty  -> subsCheck ty uty
->         Nothing  -> instantiate uty
->     t <- check aty t
->     return $ (t :? uty) ::: aty
+>     sc ::: _  <- inferKind B0 xty
+>     t         <- checkSigma sc t
+>     r         <- instSigma sc mty
+>     return $ (t :? sc) ::: r
 
 > checkInfer mty (TmBrace n) = fail "Braces aren't cool"
 
@@ -118,23 +159,34 @@
 > withLayer :: TermLayer -> Contextual () t -> Contextual () t
 > withLayer l m = modifyContext (:< Layer l) *> m <* modifyContext extract
 >   where
->     extract (g :< Layer _)  = g
->     extract (g :< e)        = extract g :< e
+>     extract (g :< Layer l') | matchLayer l l'  = g
+>     extract (g :< e)                           = extract g :< e
 
-> infer :: STerm -> Contextual () (Term ::: Type)
-> infer t = inLocation (text "in inferred expression" <+> prettyHigh t) $ checkInfer Nothing t
+>     matchLayer (PatternTop (x ::: _) _ _ _) (PatternTop (y ::: _) _ _ _) = x == y
+>     matchLayer FunTop FunTop = True
+>     matchLayer (LamBody (x ::: _) ()) (LamBody (y ::: _) ()) = x == y
+>     matchLayer (LetBody _ _) (LetBody _ _) = True
+>     matchLayer (AnnotLeft _ _) (AnnotLeft _ _) = True
+>     matchLayer (AppLeft _ _ _) (AppLeft _ _ _) = True
+>     matchLayer (AppRight _ _) (AppRight _ _) = True
+>     matchLayer _ _ = False
 
-> check :: Type -> STerm -> Contextual () Term
-> check ty t = inLocation (text "in checked expression" <+> prettyHigh t) $ tmOf <$> checkInfer (Just ty) t
+> inferRho :: STerm -> Contextual () (Term ::: Rho)
+> inferRho t = inLocation (text "in inferred expression" <+> prettyHigh t) $
+>     checkInfer Nothing t
+
+> checkRho :: Type -> STerm -> Contextual () Term
+> checkRho ty t = inLocation (text "in checked expression" <+> prettyHigh t) $
+>     tmOf <$> checkInfer (Just ty) t
 
 
-> splitFun :: Maybe Type -> Contextual a (Type, Type)
-> splitFun (Just (TyApp (TyApp (TyB Arr) s) t)) = return (s, t)
-> splitFun mty = do
+> splitFun :: Rho -> Contextual a (Sigma, Rho)
+> splitFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
+> splitFun ty = do
 >     n <- freshName
 >     a <- unknownTyVar $ "_dom" ++ show n ::: Set
 >     b <- unknownTyVar $ "_cod" ++ show n ::: Set
->     traverse (unify (a --> b)) mty
+>     unify (a --> b) ty
 >     return (a, b)
 
 
@@ -167,7 +219,7 @@
 > instantiate = instS True (++ "_inst") Wanted Hole
 
 
-> solveConstraints :: Bool -> Contextual t ()
+> solveConstraints :: Bool -> Contextual t [NormalPredicate]
 > solveConstraints try = do
 >     g <- getContext
 >     let (g', hs, ps) = collect g [] []
@@ -176,8 +228,8 @@
 >     -- mtrace $ "solveConstraints: ps = " ++ show (fsepPretty ps)
 >     qs <- filterM (formulaic hs) ps
 >     case (qs, try) of
->       ([],   _      ) -> return ()
->       (_:_,  True   ) -> want qs
+>       ([],   _      ) -> return []
+>       (_:_,  True   ) -> return qs
 >       (_:_,  False  ) -> errCannotDeduce hs qs
 >   where
 >     formulaic hs p = (not . P.check) <$> toFormula hs p
@@ -193,10 +245,20 @@
 >             <:< A e
 >     collect (g :< l@(Layer (PatternTop _ _ ks ws))) hs ps = 
 >         collect g (ks ++ hs) (ws ++ ps) <:< l
+>     collect (g :< Layer GenMark) hs ps = (g :< Layer GenMark, collectHyps g [] ++ hs, ps)
 >     collect (g :< e) hs ps = collect g hs ps <:< e
 >
+>     collectHyps B0 hs = hs
+>     collectHyps (g :< Constraint Given h) hs = collectHyps g (h:hs)
+>     collectHyps (g :< _) hs = collectHyps g hs
+
 >     (g, a, b) <:< e = (g :< e, a, b)
->
+
+
+> solveOrSuspend :: Bool -> Contextual t ()
+> solveOrSuspend False  = solveConstraints False >> return ()
+> solveOrSuspend True   = want =<< solveConstraints True
+>   where
 >     want :: [NormalPredicate] -> Contextual t ()
 >     want [] = return ()
 >     want (p:ps) | nonsense p  = fail $ "Impossible constraint " ++ renderMe p
@@ -247,15 +309,16 @@
 >     return tps
 >   where
 >     help g@(_ :< Layer FunTop)               tps = return (g, tps)
->     help g@(_ :< Layer (PatternTop _ _ _ _)) tps = return (g, tps)
+>     -- help g@(_ :< Layer (PatternTop _ _ _)) tps = return (g, tps)
 >     help (g :< A (an := d ::: k)) (t, ps) | an <? t || an <? ps = case d of
 >         Exists  -> errBadExistential an t ps
 >         Some d  -> help g (replaceTy k an d t, map (replace3 k an d) ps)
 >         _       -> help g (Bind All (fst an) k (bind an t), ps)
+>     help (g :< Layer (LamBody _ _)) tps = help g tps
 >     help (g :< A _) tps = help g tps
 >     help (g :< Constraint Wanted p)       (t, ps)  = help g (Qual (reifyPred p) t, ps)
 >     help (g :< Constraint Given _)        tps      = help g tps
->     help g t = fail $ "ERROR: Can't help " ++ renderMe g
+>     help g t = fail $ "generalise: can't help " ++ renderMe g
 
 
 
@@ -266,43 +329,49 @@
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar $ "_sty" ::: Set
->     pattys  <- map tmOf <$> traverse (checkPat True (s ::: sty) sty) pats
->     (ty', pattys') <- generalise sty pattys
->     return $ FunDecl s (Just $ simplifyTy ty') pattys'
+>     pattys  <- traverse (inferAlt True (s ::: sty)) pats
+>     let ptms ::: ptys = unzipAsc pattys
+>     traverse (unify sty) ptys
+>     g <- getContext
+>     (ty', ptms') <- generalise sty ptms
+>     return $ FunDecl s (Just $ simplifyTy ty') ptms'
 
-> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = 
+> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
->     sty ::: k <- inLocation (text "in type" <+> prettyHigh st) $ inferKind B0 st
->     unless (k == Set) $ errKindNotSet k
->     sty'  <- instS True id Given Fixed sty
->     pts <- traverse (checkPat False (s ::: sty) sty') pats
->     let ty = tyOf (head pts)
->         pattys = map tmOf pts
->     (ty', pattys') <- generalise ty pattys
->     return $ FunDecl s (Just $ simplifyTy sty) pattys'
+>     sty ::: k <- inLocation (text $ "in type of " ++ s) $ inferKind B0 st
+>     unless (k == Set) $ errKindNotSet k     
+>     sty' <- specialise sty
+>     pattys <- traverse (checkAlt False (s ::: sty) sty') pats
+>     let ptms ::: ptys = unzipAsc pattys
+>     (ty', ptms') <- generalise (head ptys) ptms
+>     return $ FunDecl s (Just sty) ptms'
 
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation (text $ "in declaration of " ++ s) $ fail $ "No alternative"
 
 
 
-> checkPat :: Bool -> String ::: Type -> Type -> SPattern -> Contextual () (Pattern ::: Type)
-> checkPat try (s ::: sc) sty (Pat xs g t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $ do
->    ((xs', rty), (bs, ps)) <- runWriterT $ checkPatTerms True sty xs
->    rty <- specialise rty
->    withLayer (PatternTop (s ::: sc) bs ps []) $ do
->     t'  <- check rty t
->     let  xtms ::: xtys  = unzipAsc xs'
->          ty             = xtys /-> rty
-
->     -- mtrace . (s ++) . (" checkPat context: " ++) . renderMe . expandContext =<< getContext
+> checkAlt :: Bool -> String ::: Sigma -> Rho -> SPattern ->
+>     Contextual () (Pattern ::: Type)
+> checkAlt try (s ::: sc) sty (Pat xs g t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
+>   withLayer (PatternTop (s ::: sc) [] [] []) $ do
+>     (xs, rty) <- checkPat True sty xs
+>     t  <- checkRho rty t
 >     unifySolveConstraints
->     solveConstraints try
->
->     -- mtrace . (s ++) . (" checkPat context: " ++) . show . prettyHigh =<< getContext
->     -- mtrace . (s ++) . (" checkPat ty: " ++) . renderMe =<< niceType ty
->     return $ Pat xtms Trivial t' ::: ty
+>     solveOrSuspend try
+>     return $ Pat xs Trivial t ::: sty
+
+> inferAlt :: Bool -> String ::: Sigma -> SPattern ->
+>     Contextual () (Pattern ::: Type)
+> inferAlt try (s ::: sc) (Pat xs g t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
+>   withLayer (PatternTop (s ::: sc) [] [] []) $ do
+>     (xs, t ::: r, ty) <- inferPat t xs
+>     unifySolveConstraints
+>     solveOrSuspend try
+>     return $ Pat xs Trivial t ::: ty
+
 
 > unifySolveConstraints :: Contextual t ()
 > unifySolveConstraints = do
@@ -313,6 +382,7 @@
 >   where
 >     collectEqualities :: Context -> Writer [NormalNum] Context
 >     collectEqualities B0 = return B0
+>     collectEqualities (g :< Layer FunTop) = return $ g :< Layer FunTop
 >     collectEqualities (g :< Constraint Wanted (IsZero n)) = tell [n]
 >         >> collectEqualities g
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
@@ -321,8 +391,11 @@
 > mapPatWriter w = mapWriterT (\ xcs -> xcs >>= \ (x, cs) -> return (x, ([], cs))) w
 
 
+> {-
 > existentialise :: ContextualWriter ([TmName ::: Type], [NormalPredicate]) t Type
 >     -> ContextualWriter ([TmName ::: Type], [NormalPredicate]) t Type
+> -}
+
 > existentialise m = do
 >     modifyContext (:< Layer FunTop) -- hackish
 >     ty <- m
@@ -334,57 +407,133 @@
 >                                         | otherwise  = help ty g :< A (a := Exists ::: k)
 >     help ty (g :< e)                                 = help ty g :< e
 
-> checkPatTerms :: Bool -> Type -> [SPatternTerm] ->
->     ContextualWriter ([TmName ::: Type], [NormalPredicate]) ()
->     ([PatternTerm ::: Type], Type)
->
-> checkPatTerms top t [] = return ([], t)
->
-> checkPatTerms top sat (PatVar v : ps) = do
->     sat <- mapPatWriter $ inst True id Fixed sat
->     (s, t) <- lift $ splitFun $ Just sat
->     tell ([v ::: s], [])
->     (pts, ty) <- checkPatTerms top t ps
->     return ((PatVar v ::: s) : pts, ty)
->
-> checkPatTerms top sat (PatCon c xs : ps) =
->   inLocation (text "in pattern" <+> prettyHigh (PatCon c xs)) $ do
->     sat <- mapPatWriter $ inst True id Fixed sat
->     (s, t) <- lift $ splitFun $ Just sat
+ 
+ 
+> checkPat :: Bool -> Rho -> [SPatternTerm] -> Contextual () ([PatternTerm], Rho)
+
+> checkPat top ty [] = return ([], ty)
+
+> checkPat top ty (PatVar v : ps) = do
+>     (dom, cod) <- splitFun ty
+>     modifyContext (:< Layer (LamBody (v ::: dom) ()))
+>     (xs, r) <- checkPat top cod ps
+>     return (PatVar v : xs, r)
+
+> checkPat top ty (PatCon c as : ps) =
+>   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>     (dom, cod) <- splitFun ty
 >     sc   <- lookupTmCon c
->     cty  <- existentialise $ mapPatWriter $ inst True (++ "_pat_inst") Hole sc
->     unless (length xs == args cty) $
->         errConUnderapplied c (args cty) (length xs)
->     (pts, aty)  <- checkPatTerms False cty xs
->     aty <- mapPatWriter $ inst True id Fixed aty
->     lift $ unify s aty
->     (pps, ty) <- checkPatTerms top t ps
->     return ((PatCon c (map tmOf pts) ::: s) : pps, ty)
->  
-> checkPatTerms top sat (PatIgnore : ps) = do
->     (s, t) <- lift $ splitFun $ Just sat
->     (pts, ty) <- checkPatTerms top t ps
->     return ((PatIgnore ::: s) : pts, ty)
+>     cty  <- existentialise $ instS True (++ "_pat_inst") Given Hole sc
+>     unless (length as == args cty) $
+>         errConUnderapplied c (args cty) (length as)
+>     (ys, s)  <- checkPat False cty as
+>     unify dom s
+>     -- aty <- mapPatWriter $ inst True id Fixed aty
+>     -- lift $ unify s aty
+>     (xs, r) <- checkPat top cod ps
+>     return (PatCon c ys : xs, r)
+
+> checkPat top ty (PatIgnore : ps) = do
+>     (dom, cod) <- splitFun ty
+>     (xs, r) <- checkPat top cod ps
+>     return (PatIgnore : xs, r)
+
+> checkPat top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
+>     nm <- freshS $ "_" ++ x ++ "aa"
+>     let d = if top || nm <? getTarget (unbind nm t) then Hole else Exists
+>     modifyContext (:< A (nm := d ::: KindNum))
+>     modifyContext (:< Constraint Given (IsZero (mkVar nm -~ mkConstant k)))
+>     aty <- instS True id Given Fixed (unbind nm t)
+>     (xs, r) <- checkPat top aty ps
+>     return (PatBrace Nothing k : xs, r)
+
+> checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
+>     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
+>     am <- freshS a
+>     let d = if top then Fixed
+>                    else if am <? getTarget (unbind am t) then Hole else Exists
+>     modifyContext (:< A (am := d ::: KindNum))
+>     aty <- instS True id Given Fixed (unbind am t)
+>     (xs, r) <- checkPat top aty ps
+>     return (PatBrace (Just a) 0 : xs, r)
+
+> checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
+>     nm <- freshS $ "_" ++ x ++ "oo"
+>     let (d, d') = if top || nm <? getTarget (unbind nm t)
+>                       then (Hole, Fixed)
+>                       else (Exists, Exists)
+>     modifyContext (:< A (nm := d ::: KindNum))
+>     am <- fresh a (d' ::: KindNum)
+>     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
+>     modifyContext (:< Constraint Given (IsPos (mkVar am)))
+>     modifyContext (:< Constraint Given (IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))))
+>     aty <- instS True id Given Fixed (unbind nm t)
+>     (xs, r) <- checkPat top aty ps
+>     return (PatBrace (Just a) k : xs, r)
+
+> checkPat top ty (p : _) =
+>     fail $ "checkPat: couldn't match pattern " ++ renderMe p
+>                ++ " against type " ++ renderMe ty
+
+
+> inferPat :: STerm -> [SPatternTerm] ->
+>     Contextual () ([PatternTerm], Term ::: Rho, Rho)
+
+> inferPat t [] = do
+>     t ::: r <- inferRho t
+>     return ([], t ::: r, r)
+
+> inferPat top (PatVar v : ps) = do
+>     a <- unknownTyVar $ "_a" ::: Set
+>     modifyContext (:< Layer (LamBody (v ::: a) ()))
+>     (xs, tr, ty) <- inferPat top ps
+>     return (PatVar v : xs, tr, a --> ty)
+
+> inferPat top (PatCon c as : ps) =
+>   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>     sc   <- lookupTmCon c
+>     cty  <- existentialise $ instS True (++ "_pat_inst") Given Hole sc
+>     unless (length as == args cty) $
+>         errConUnderapplied c (args cty) (length as)
+>     (ys, s) <- checkPat False cty as
+>     (xs, tr, ty)  <- inferPat top ps
+>     return (PatCon c ys : xs, tr, s --> ty)
+
+> inferPat top (PatIgnore : ps) = do
+>     b <- unknownTyVar $ "_b" ::: Set
+>     (xs, tr, ty) <- inferPat top ps
+>     return (PatIgnore : xs, tr, b --> ty)
+
+> inferPat top (p : _) =
+>     fail $ "inferPat: couldn't infer type of pattern " ++ renderMe p
+
+
+
+
 >
-> checkPatTerms top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
+
+
+> {-
+
+> inferCheckPat top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
 >     nm <- freshS $ "_" ++ x ++ "aa"
 >     let d = if top || nm <? getTarget (unbind nm t) then Hole else Exists
 >     modifyContext (:< A (nm := d ::: KindNum))
 >     tell ([], [IsZero (mkVar nm -~ mkConstant k)])
 >     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
->     (pts, ty) <- checkPatTerms top aty ps
+>     (pts, ty) <- inferCheckPat top aty ps
 >     return ((PatBrace Nothing k ::: TyNum (NumVar nm)) : pts, ty)
 
-> checkPatTerms top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
+> inferCheckPat top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
 >     tell ([a ::: TyB NumTy], [])
 >     am <- freshS a
 >     let d = if top || am <? getTarget (unbind am t) then Hole else Exists
 >     modifyContext (:< A (am := d ::: KindNum))
 >     aty <- mapPatWriter $ inst True id Fixed (unbind am t)
->     (pts, ty) <- checkPatTerms top aty ps
+>     (pts, ty) <- inferCheckPat top aty ps
 >     return ((PatBrace (Just a) 0 ::: TyNum (NumVar am)) : pts, ty)
 
-> checkPatTerms top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
+> inferCheckPat top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
 >     nm <- freshS $ "_" ++ x ++ "oo"
 >     let (d, d') = if top || nm <? getTarget (unbind nm t)
 >                       then (Hole, Fixed)
@@ -393,8 +542,10 @@
 >     am <- fresh a (d' ::: KindNum)
 >     tell ([a ::: TyB NumTy], [IsPos (mkVar am), IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))])
 >     aty <- mapPatWriter $ inst True id Fixed (unbind nm t)
->     (pts, ty) <- checkPatTerms top aty ps
+>     (pts, ty) <- inferCheckPat top aty ps
 >     return ((PatBrace (Just a) k ::: TyNum (NumVar nm)) : pts, ty)
 
-> checkPatTerms top ty (p : _) = fail $ "checkPatTerms: couldn't match pattern "
->                            ++ renderMe p ++ " against type " ++ renderMe ty
+> -}
+
+
+

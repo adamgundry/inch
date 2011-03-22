@@ -6,7 +6,7 @@
 > import Control.Monad hiding (mapM_)
 > import Data.Foldable 
 > import Data.Maybe
-> import Data.Monoid
+> import Data.Monoid hiding (All)
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
 
@@ -51,6 +51,10 @@
 >         Layer pt@(PatternTop _ _ (_:_) cs) -> do
 >             m
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
+>         Layer GenMark -> do
+>             m
+>             modifyContext (:< Layer GenMark)
+>             modifyContext (:< Constraint Wanted p)
 > {-
 >         Constraint Given _ -> do
 >             m
@@ -108,6 +112,16 @@
 >       where
 >         getKonst :: Const a (t l () y) -> a
 >         getKonst = getConst
+
+> instance (FV a, FV b) => FV (Either a b) where
+>     alpha <? Left x = alpha <? x
+>     alpha <? Right y = alpha <? y
+
+> (<??) :: TyName -> Entry -> Bool
+> a <?? (A e) = a <? e
+> a <?? (Constraint _ p) = a <? p
+> a <?? (Func _ ty) = a <? ty
+> a <?? (Layer l) = a <? l
 
 > unify t u = unifyTypes t u `inLoc` (do
 >                 t' <- niceType t
@@ -214,6 +228,10 @@
 > rigidHull (TyB b) = return (TyB b, F0)
 > rigidHull (TyNum d)          = do  beta <- freshS "_i"
 >                                    return (TyNum (NumVar beta), (beta, d) :> F0)
+> rigidHull (Bind All x k b) | k /= KindNum = do
+>     n <- freshName
+>     (t, cs) <- rigidHull (unbind ("magic", n) b)
+>     return (Bind All x k (bind ("magic", n) t), cs)
 
 > {-
 > rigidHull (Bind Pi x KindNum b) = do

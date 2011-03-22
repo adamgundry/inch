@@ -30,6 +30,7 @@
 >                   |  LetBody [x ::: Ty k a] ()
 >                   |  AnnotLeft () (Ty k a)
 >                   |  FunTop
+>                   |  GenMark
 >     deriving Show
 
 > type TermLayer = TmLayer Kind TyName TmName

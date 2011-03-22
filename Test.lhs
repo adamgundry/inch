@@ -244,6 +244,10 @@
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x", True) :
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf :: Higher -> (forall a. a) -> Integer\nf (Higher x) = x", True) :
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x\nx = f (Higher (\\ zzz -> 0)) 0", False) :
+>   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop (f {m} {n}) loop", True) :
+>   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop loop (f {m} {n})", False) :
+>   ("f :: forall a. 0 ~ 1 => a\nf = f", True) :
+>   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id (f {m} {n})", False) :
 >   []
 
 
