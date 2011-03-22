@@ -130,7 +130,7 @@
 >     pretty (TmCon s)    = const $ text s
 >     pretty (TmInt k)    = const $ integer k
 >     pretty (TmApp f s)  = wrapDoc AppSize $
->         pretty f AppSize <+> pretty s ArgSize
+>         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
 >     pretty (Lam x t)   = prettyLam (text x) (unbind (injectVar x) t)
 >     pretty (Let ds t)  = wrapDoc ArgSize $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
@@ -161,8 +161,8 @@
 >     pretty (s ::: ty) _ = text s <+> text "::" <+> prettyHigh ty
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (Pat k a x) where
->     pretty (Pat vs Trivial e) _ = hsep (map prettyLow vs) <+> text "="
->                                       <+> prettyHigh e
+>     pretty (Pat vs Trivial e) _ =
+>         hsep (map prettyLow vs) <+> text "=" <++> prettyHigh e
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm k a x) where
 >     pretty (PatVar x)    = const $ prettyVar x
