@@ -248,6 +248,11 @@
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop loop (f {m} {n})", False) :
 >   ("f :: forall a. 0 ~ 1 => a\nf = f", True) :
 >   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id (f {m} {n})", False) :
+>   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = Ex Refl", True) :
+>   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = f {n}", False) :
+>   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n+1} Refl", True) :
+>   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n} Refl", False) :
+>   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n}", False) :
 >   []
 
 

@@ -36,14 +36,14 @@ trichotomy {m+1} {n+1} a b c = trichotomy {m} {n} a b c
 
 
 tric2 :: forall (a :: Num -> Num -> *) .
-    (forall (m n :: Num) . 0 <= m, m <= (n-1) => a m n) ->
-    (forall (m   :: Num) . 0 <= m             => a m m) ->
-    (forall (m n :: Num) . 0 <= n, n <= (m-1) => a m n) ->
+    (forall (m n :: Num) . 0 <= m, m < n => a m n) ->
+    (forall (m   :: Num) . 0 <= m        => a m m) ->
+    (forall (m n :: Num) . 0 <= n, n < m => a m n) ->
         (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)
 tric2 a b c {0}   {n+1} = a
 tric2 a b c {0}   {0}   = b
 tric2 a b c {m+1} {0}   = c
-tric2 a b c {m+1} {n+1} = bottom -- tric2 a b c {m} {n}
+tric2 a b c {m+1} {n+1} = tric2 a b c {m} {n}
 
 
 l2x1 = Horiz {1} {1} (Stuff (Unit A)) (Stuff (Unit B))
@@ -83,8 +83,6 @@ horiz {w1} {w2} {d1} {d2} l1 l2 =
   in tric3 {d1} {d2} horizA (Horiz {w1} {w2} l1 l2) horizC
 -}
 
-
-
 horiz :: pi (w1 w2 d1 d2 :: Num) . 0 <= w1, 0 <= w2, 0 <= d1, 0 <= d2 =>
     Layout w1 d1 -> Layout w2 d2 -> Layout (w1 + w2) (d1+d2)
 horiz {w1} {w2} {d1} {d2} l1 l2 = 
@@ -102,13 +100,63 @@ horiz {w1} {w2} {d1} {d2} l1 l2 =
 
 
 
+
+data Max :: Num -> Num -> Num -> * where
+  Less :: forall (m n d :: Num) . m < n, m ~ d => Max m n d
+  Same :: forall (m n d :: Num) . m ~ d, n ~ d => Max m n d
+  More :: forall (m n d :: Num) . m > n, n ~ d => Max m n d
+
+data Ex :: (Num -> *) -> * where
+  Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
+
+findMax :: pi (m n :: Num) . 0 <= m, 0 <= n => Ex (Max m n)
+findMax {0}   {0}   = Ex Same
+findMax {0}   {n+1} = Ex Less
+findMax {m+1} {0}   = Ex More
+findMax {m+1} {n+1} = findMax {m} {n} -- why does this typecheck?
+
+
+horiz2 :: pi (w1 w2 d1 d2 :: Num) . 0 <= w1, 0 <= w2, 0 <= d1, 0 <= d2 =>
+    Layout w1 d1 -> Layout w2 d2 -> Ex (Layout (w1 + w2))
+horiz2 {w1} {w2} {d1} {d2} l1 l2 = 
+  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Ex (Layout (w1 + w2))
+      horizA {d} = Ex (Horiz {w1} {w2} l1 (Vert {d2} {d} l2 Empty))
+
+      horizB :: d1 ~ d2 => Ex (Layout (w1 + w2))
+      horizB = Ex (Horiz {w1} {w2} l1 l2)
+
+      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Ex (Layout (w1 + w2))
+      horizC {d} = Ex (Horiz {w1} {w2} (Vert {d1} {d} l1 Empty) l2)
+  in tric3 {d1} {d2} horizA horizB horizC
+
+
+
 data Option :: * -> * where
   Some :: forall a. a -> Option a
   None :: forall a. Option a
 
-click :: forall (w d :: Num) . pi (x y :: Num) .
+
+identAt :: forall (w d :: Num) . pi (x y :: Num) .
     0 <= x, 0 <= y, x < w, y < d => Layout w d -> Option Ident
-click {x} {y} (Stuff (Unit i)) = Some i
-click {x} {y} Empty            = None
-click {x} {y} (Horiz {w1} {w2} l1 l2) = bottom
-click {x} {y} (Vert  {d1} {d2} l1 l2) = bottom
+identAt {x} {y} (Stuff (Unit i)) = Some i
+identAt {x} {y} Empty            = None
+identAt {x} {y} (Horiz {w1} {w2} l1 l2) =
+    let fA :: pi (d :: Num) . 0 < d, d ~ x - w1 => Option Ident
+        fA {d} = identAt {d} {y} l2
+
+        fB :: x ~ w1 => Option Ident
+        fB = None
+
+        fC :: pi (d :: Num) . 0 < d, d ~ w1 - x => Option Ident
+        fC {d} = identAt {x} {y} l1
+    in tric3 {x} {w1} fA fB fC
+identAt {x} {y} (Vert {d1} {d2} l1 l2) =
+    let fA :: pi (d :: Num) . 0 < d, d ~ y - d1 => Option Ident
+        fA {d} = identAt {x} {d} l2
+
+        fB :: y ~ d1 => Option Ident -- x ~ w1 works???
+        fB = None
+
+        fC :: pi (d :: Num) . 0 < d, d ~ d1 - y => Option Ident
+        fC {d} = identAt {x} {y} l1
+    in tric3 {y} {d1} fA fB fC
