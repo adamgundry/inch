@@ -27,10 +27,11 @@
 >   pretty (Some t)  l = pretty t l
 
 > instance (Show k, Show a, Show x, PrettyVar x, PrettyVar a) => Pretty (TmLayer k a x) where
->   pretty (PatternTop (s ::: sty) bs ps cs) _ = text "<PatternTop>"
->       $$ prettyVar s <+> text "::" <+> prettyHigh sty
->       $$ brackets (fsep $ punctuate (text ",") $ map (\ (x ::: ty) -> prettyVar x <+> text "::" <+> prettyHigh ty) bs)
+>   pretty (PatternTop ssty bs ps cs) _ = text "<PatternTop>"
+>       $$ prettyHigh ssty
+>       $$ brackets (fsepPretty bs)
 >       $$ braces (fsepPretty ps) <> text "!"
 >       $$ braces (fsepPretty cs) <> text "?"
 >       $$ text "</PatternTop>"
+>   pretty (LetBody bs ()) _ = text "<LetBody>" $$ vcatPretty bs $$ text "</LetBody>"
 >   pretty l _ = text (show l)

@@ -1,4 +1,5 @@
-> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+> {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts,
+>              TypeOperators #-}
 
 > module PrettyPrinter where
 
@@ -162,8 +163,9 @@
 >     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyVar n <+> text "::" <+> prettyHigh ty) : map ((prettyVar n <+>) . prettyHigh) ps
 
 
-> instance PrettyVar a => Pretty (Con k a) where
->     pretty (s ::: ty) _ = text s <+> text "::" <+> prettyHigh ty
+> instance (PrettyVar x, Pretty p) => Pretty (x ::: p) where
+>   pretty (x ::: p) _ = prettyVar x <+> text "::" <+> prettyHigh p
+
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (Pat k a x) where
 >     pretty (Pat vs Trivial e) _ =
