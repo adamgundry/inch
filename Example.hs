@@ -446,8 +446,8 @@ thingy f = f {5} 42
 vec' :: pi (n :: Num) . 0 <= n => forall a . a -> Vec n a
 vec' {n} a = vec2 {n} a
 
-useThingy = thingy vec'
--- useThingy2 = thingy vec2
+useThingy   = thingy vec'
+useThingy2  = thingy vec2
 
 rank3 :: forall b. ((forall a. a) -> b) -> b
 rank3 f = let loop = loop

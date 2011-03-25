@@ -36,7 +36,11 @@
 > eraseType (TyB b) = return $ TyB b ::: builtinKind b
 > eraseType (Bind Pi x KindNum t)   = do
 >     t' ::: Set <- eraseType $ unbind (error "eraseType: erk") t
->     return (TyB NumTy --> t' ::: Set)
+>     return (insertNumArrow t' ::: Set)
+>   where
+>     insertNumArrow :: Ty k a -> Ty k a
+>     insertNumArrow (Bind All x k t) = Bind All x k (insertNumArrow t)
+>     insertNumArrow t = TyB NumTy --> t
 > eraseType (Bind All x KindNum t)  = eraseType $ unbind (error "eraseType: erk") t
 > eraseType (Bind b x k t)        = do
 >     an <- fresh x (Hole ::: k)

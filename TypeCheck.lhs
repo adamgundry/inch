@@ -412,8 +412,8 @@ status.
 >     t  <- checkRho rty t
 >     unifySolveConstraints
 >     solveConstraints
->     generalise (TyB Arr) [] -- to eat the leftovers
->     return $ Pat xs Trivial t
+>     (_, [p]) <- generalise (TyB Arr) [Pat xs Trivial t] -- to fix up variables
+>     return p
 
 > inferAlt :: String ::: Sigma -> SPattern ->
 >                 Contextual () (Pattern ::: Type)
