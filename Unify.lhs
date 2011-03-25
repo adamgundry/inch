@@ -359,3 +359,14 @@ We can insert a fresh variable into a unit thus:
 > insertFreshVar d = do
 >     beta <- freshS "_beta"
 >     return (d +~ mkVar beta, beta)
+
+
+
+> unifyFun :: Rho -> Contextual a (Sigma, Rho)
+> unifyFun (TyApp (TyApp (TyB Arr) s) t) = return (s, t)
+> unifyFun ty = do
+>     n <- freshName
+>     a <- unknownTyVar $ "_dom" ++ show n ::: Set
+>     b <- unknownTyVar $ "_cod" ++ show n ::: Set
+>     unify (a --> b) ty
+>     return (a, b)
