@@ -457,40 +457,35 @@ status.
 >     return (PatIgnore : xs, r)
 
 > checkPat top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
->     nm <- freshS $ "_" ++ x ++ "aa"
->     let d = if top then Fixed
->                    else if nm <? getTarget (unbind nm t) then Hole
->                                                          else Exists
->     modifyContext (:< A (nm := d ::: KindNum))
->     modifyContext (:< Constraint Given (IsZero (mkVar nm -~ mkConstant k)))
->     aty <- instS id Given Fixed (unbind nm t)
->     (xs, r) <- checkPat top aty ps
+>     nm       <- fresh ("_" ++ x ++ "aa") (Some (TyNum (NumConst k)) ::: KindNum)
+>     aty      <- instS id Given Fixed (unbind nm t)
+>     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace Nothing k : xs, r)
 
 > checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
->     am <- freshS a
->     let d = if top then Fixed
->                    else if am <? getTarget (unbind am t) then Hole
->                                                          else Exists
->     modifyContext (:< A (am := d ::: KindNum))
->     aty <- instS id Given Fixed (unbind am t)
->     (xs, r) <- checkPat top aty ps
+>     nm <- freshS a
+>     let  t'  = unbind nm t
+>          d   = if top || nm <? getTarget t'
+>                    then Fixed
+>                    else Exists
+>     modifyContext (:< A (nm := d ::: KindNum))
+>     aty      <- instS id Given Fixed t'
+>     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) 0 : xs, r)
 
 > checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
->     nm <- freshS $ "_" ++ x ++ "oo"
->     let (d, d') = if top then (Fixed, Fixed)
->                          else if nm <? getTarget (unbind nm t)
->                               then (Hole, Fixed)
->                               else (Exists, Exists)
->     modifyContext (:< A (nm := d ::: KindNum))
->     am <- fresh a (d' ::: KindNum)
 >     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
+>     nm <- freshS $ "_" ++ x ++ "_" ++ a ++ "_" ++ "oo"
+>     let  t'  = unbind nm t
+>          d   = if top || nm <? getTarget t'
+>                       then Fixed
+>                       else Exists
+>     am <- fresh a (d ::: KindNum)
+>     modifyContext (:< A (nm := Some (TyNum (NumVar am + NumConst k)) ::: KindNum))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
->     modifyContext (:< Constraint Given (IsZero (mkVar nm -~ (mkVar am +~ mkConstant k))))
->     aty <- instS id Given Fixed (unbind nm t)
->     (xs, r) <- checkPat top aty ps
+>     aty      <- instS id Given Fixed t'
+>     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) k : xs, r)
 
 > checkPat top ty (p : _) =

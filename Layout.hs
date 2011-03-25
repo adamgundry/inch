@@ -145,7 +145,7 @@ identAt {x} {y} (Vert {d1} {d2} l1 l2) =
     let fA :: pi (d :: Num) . 0 < d, d ~ y - d1 => Option Ident
         fA {d} = identAt {x} {d} l2
 
-        fB :: y ~ d1 => Option Ident -- x ~ w1 works???
+        fB :: y ~ d1 => Option Ident
         fB = None
 
         fC :: pi (d :: Num) . 0 < d, d ~ d1 - y => Option Ident

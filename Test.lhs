@@ -198,8 +198,10 @@
 >   (vecDecl ++ "vec :: forall a . pi (m :: Num) . 0 <= m => a -> Vec m a\nvec {0} x = Nil\nvec {n+1} x = Cons x (vec {n} x)", True) :
 >   (natDecl ++ "nat :: pi (n :: Num) . 0 <= n => Nat\nnat {0} = Zero\nnat{m+1} = Suc (nat {m})", True) :
 >   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf (C {i}) = C {i}", True) :
->   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
->   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
+>   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
+>   ("data T :: Num -> * where C :: forall (m :: Num) . pi (n :: Num) . m ~ n => T m\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
+>   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
+>   ("data T :: Num -> * where C :: forall (m :: Num) . pi (n :: Num) . m ~ n => T m\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
 >   ("f :: Integer -> Integer\nf x = x", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {n} = n", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {0} = 0\nf {n+1} = n", True) :
@@ -257,6 +259,11 @@
 >   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . 0 <= m, m < n => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . 0 <= n, n < m => a m n) -> (forall (m n :: Num) . 0 <= m, 0 <= n => a m n -> a (m+1) (n+1)) -> (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)\ntri a b c step {0}   {n+1} = a\ntri a b c step {0}   {0}   = b\ntri a b c step {m+1} {0}   = c\ntri a b c step {m+1} {n+1} = step (tri a b c step {m} {n})", True) :
 >   ("tri :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n => (pi (d :: Num) . 0 < d, d ~ m - n => a) -> (n ~ m => a) -> (pi (d :: Num) . 0 < d, d ~ n - m => a) -> a\ntri {0}   {0}   a b c = b\ntri {m+1} {0}   a b c = a {m+1}\ntri {0}   {n+1} a b c = c {n+1}\ntri {m+1} {n+1} a b c = tri {m} {n} a b c", True) :
 >   ("f :: forall a . pi (m n :: Num) . a\nf {m} {n} = let h :: m ~ n => a\n                h = h\n            in f {m} {n}", True) :
+>   ("f :: forall a (m n :: Num) . (m ~ n => a) -> a\nf x = x", False) :
+>   ("f :: forall a (m n :: Num) . ((m ~ n => a) -> a) -> (m ~ n => a) -> a\nf x y = x y", True) :
+>   ("f :: forall a (m n :: Num) . ((m ~ n => a) -> a) -> (m ~ n + 1 => a) -> a\nf x y = x y", False) :
+>   ("f :: forall a . pi (m n :: Num) . a\nf {m} {n} = let h :: m ~ n => a\n                h = h\n            in h", False) :
+>   ("f :: forall a . pi (m n :: Num) . ((m ~ 0 => a) -> a) -> a\nf {m} {n} x = let h :: m ~ n => a\n                  h = h\n            in x h", False) :
 >   []
 
 

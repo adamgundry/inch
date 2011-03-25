@@ -337,11 +337,16 @@ l3  = runLayers {0} {3} Zero
 -- Cartesian
 
 data Coord :: Num -> Num -> Num -> Num -> * where
-  Coord :: pi (l b r t :: Num) . l <= r, b <= t => Coord l b r t
+  Coord :: forall (lx bx rx tx :: Num) . 
+             pi (l b r t :: Num) . l <= r, b <= t,
+               lx ~ l, bx ~ b, rx ~ r, tx ~ t => Coord lx bx rx tx
 
 data Shape :: Num -> Num -> Num -> Num -> * where
-  Box :: pi (l b r t :: Num) . l <= r, b <= t => Shape l b r t
-  Above :: forall (l b r t b' :: Num) . Shape l b r t -> Shape l b' r b -> Shape l b' r t
+  Box :: forall (lx bx rx tx :: Num) .
+           pi (l b r t :: Num) . l <= r, b <= t,
+             lx ~ l, bx ~ b, rx ~ r, tx ~ t => Shape lx bx rx tx
+  Above :: forall (l b r t b' :: Num) .
+             Shape l b r t -> Shape l b' r b -> Shape l b' r t
 
 point :: pi (x y :: Num) . Shape x y x y
 point {x} {y} = Box {x} {y} {x} {y}
