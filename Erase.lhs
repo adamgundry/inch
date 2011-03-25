@@ -74,7 +74,19 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > eraseCon (c ::: t) = ((c :::) . tmOf) <$> eraseType t
 
 > erasePat :: Pat Kind TyName x -> Contextual a (Pat Kind TyName x)
-> erasePat (Pat ps Trivial t) = Pat (map erasePatTm ps) Trivial <$> eraseTm t
+> erasePat (Pat ps g t) = Pat (map erasePatTm ps) (eraseGuard g) <$> eraseTm t
+
+> eraseGuard :: Grd Kind TyName x -> Grd Kind TyName x
+> eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)
+>   where
+>     andExp a b = TmApp (TmApp (TmCon "(&&)") a) b
+>     toTm (P c m n) = TmApp (TmApp (TmCon (toS c)) (numToTm m)) (numToTm n)
+>     toS LE = "(<=)"
+>     toS LS = "(<)"
+>     toS GE = "(>=)"
+>     toS GR = "(>)"
+>     toS EL = "(==)"
+> eraseGuard g              = g
 
 > erasePatTm :: PatTerm Kind TyName x -> PatTerm Kind TyName x
 > erasePatTm (PatBrace Nothing k)   = PatCon (show k) []

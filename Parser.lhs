@@ -118,11 +118,11 @@ Types
 >                <|>  (\ a -> ([a] , Set)) <$> tyVarName
 
 > tyQual = do
->     ps <- try predicates
+>     ps <- try (predicates <* reservedOp "=>")
 >     t <- tyExp
 >     return $ foldr Qual t ps
 
-> predicates = (predicate `sepBy1` reservedOp ",") <* reservedOp "=>"
+> predicates = predicate `sepBy1` reservedOp ","
 
 > predicate = do
 >     n   <- tyNum
@@ -261,7 +261,7 @@ Programs
 >               unless (s == x) $ fail $ "expected pattern for " ++ show s
 >     pattern
 
-> pattern = Pat <$> many patTerm <* reservedOp "=" <*> pure Trivial <*> expr
+> pattern = Pat <$> many patTerm <*> patRest <*> expr
 
 > patTerm  =    parens (PatCon <$> dataConName <*> many patTerm)
 >          <|>  braces patBrace
@@ -278,6 +278,14 @@ Programs
 >                           Just _   -> reservedOp "+" *> integer
 >                           Nothing  -> integer
 >     return $ PatBrace ma (maybe 0 id mk)
+
+> patRest  =    reservedOp "=" *> pure NoGuard
+>          <|>  reservedOp "|" *> guarded <* reservedOp "="
+
+> guarded  =    NumGuard <$> braces predicates
+>          <|>  reserved "otherwise" *> pure NoGuard
+>          <|>  ExpGuard <$> expr
+
 
 > signature = I.lineFold $ do
 >     s <- try $ tmVarName <* doubleColon

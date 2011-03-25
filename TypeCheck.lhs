@@ -409,10 +409,11 @@ status.
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     sty <- specialise sc
 >     (xs, rty) <- checkPat True sty xs
+>     g <- checkGuard g
 >     t  <- checkRho rty t
 >     unifySolveConstraints
 >     solveConstraints
->     (_, [p]) <- generalise (TyB Arr) [Pat xs Trivial t] -- to fix up variables
+>     (_, [p]) <- generalise (TyB Arr) [Pat xs g t] -- to fix up variables
 >     return p
 
 > inferAlt :: String ::: Sigma -> SPattern ->
@@ -421,11 +422,22 @@ status.
 >   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     (xs, t ::: r, ty) <- inferPat t xs
+>     g <- checkGuard g
 >     unifySolveConstraints
 >     solveOrSuspend
->     return $ Pat xs Trivial t ::: ty
+>     return $ Pat xs g t ::: ty
 
 
+> checkGuard :: SGuard -> Contextual () Guard
+> checkGuard NoGuard        = return NoGuard
+> checkGuard (NumGuard ps)  = NumGuard <$> traverse learnPred ps
+>   where
+>     learnPred p = do
+>       p <- checkPredKind B0 p
+>       np <- normalisePred p
+>       modifyContext (:< Constraint Given np)
+>       return p
+> checkGuard (ExpGuard t)   = fail "checkGuard: can't cope with expression guards"
 
  
 > checkPat :: Bool -> Rho -> [SPatternTerm] ->

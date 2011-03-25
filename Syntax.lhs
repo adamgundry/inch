@@ -39,7 +39,7 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Pat k a x where
->     Pat :: [PatTerm k a x] -> Guard k a x -> Tm k a x -> Pat k a x
+>     Pat :: [PatTerm k a x] -> Grd k a x -> Tm k a x -> Pat k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data PatTerm k a x where
@@ -49,8 +49,10 @@
 >     PatBrace   :: Maybe x -> Integer -> PatTerm k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-> data Guard k a x where
->     Trivial :: Guard k a x
+> data Grd k a x where
+>     NoGuard   :: Grd k a x
+>     ExpGuard  :: Tm k a x -> Grd k a x
+>     NumGuard  :: [Pred a] -> Grd k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 
@@ -144,8 +146,10 @@
 >     trav3 fn fa fx PatIgnore        = pure PatIgnore
 >     trav3 fn fa fx (PatBrace mx k)  = PatBrace <$> traverse fx mx <*> pure k
 
-> instance Trav3 Guard where
->     trav3 fn fa fx Trivial = pure Trivial
+> instance Trav3 Grd where
+>     trav3 fn fa fx NoGuard        = pure NoGuard
+>     trav3 fn fa fx (ExpGuard t)   = ExpGuard <$> trav3 fn fa fx t
+>     trav3 fn fa fx (NumGuard ps)  = NumGuard <$> traverse (travPred fn) ps
 
 
 > bindTy :: (a -> TyNum b) -> (k -> a -> Ty k b) -> Ty k a -> Ty k b
@@ -198,6 +202,7 @@
 > type DataDeclaration  = DataDecl Kind TyName TmName
 > type FunDeclaration   = FunDecl Kind TyName TmName
 > type Program          = Prog Kind TyName TmName
+> type Guard            = Grd Kind TyName TmName
 
 > type STerm             = Tm () String String
 > type SConstructor      = Con () String
@@ -207,3 +212,4 @@
 > type SDataDeclaration  = DataDecl () String String
 > type SFunDeclaration   = FunDecl () String String
 > type SProgram          = Prog () String String
+> type SGuard            = Grd () String String

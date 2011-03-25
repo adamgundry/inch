@@ -12,7 +12,6 @@ Things that would be nice:
 * Type synonyms
 * GHC LINE pragmas that make some kind of sense
 * Sigma-types
-* Guards
 * Type-level lambda
 * Type application in user syntax
 -}

@@ -109,6 +109,10 @@
 >   "f :: 0 < 1 => a\nf = f" :
 >   "f :: 0 > 1 => a\nf = f" :
 >   "f :: 1 >= 0, a + 3 > 7 => a\nf = f" :
+>   "f x | gr x 0 = x" :
+>   "f x | {x > 0} = x" :
+>   "f x | {x > 0, x ~ 0} = x" :
+>   "f x | {x >= 0} = x\n    | {x <  0} = negate x" :
 >   []
 
 
@@ -264,6 +268,11 @@
 >   ("f :: forall a (m n :: Num) . ((m ~ n => a) -> a) -> (m ~ n + 1 => a) -> a\nf x y = x y", False) :
 >   ("f :: forall a . pi (m n :: Num) . a\nf {m} {n} = let h :: m ~ n => a\n                h = h\n            in h", False) :
 >   ("f :: forall a . pi (m n :: Num) . ((m ~ 0 => a) -> a) -> a\nf {m} {n} x = let h :: m ~ n => a\n                  h = h\n            in x h", False) :
+>   ("f :: pi (n :: Num) . Integer\nf {n} | {n >= 0} = n\nf {n} | {n < 0} = 0", True) :
+>   ("f :: pi (n :: Num) . Integer\nf {n} | {m ~ 0} = n", False) : 
+>   ("f :: pi (n :: Num) . Integer\nf {n} | {n > 0, n < 0} = f {n}\nf {n} | otherwise = 0", True) :
+>   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = 0", True) : 
+>   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = x", False) : 
 >   []
 
 

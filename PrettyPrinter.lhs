@@ -168,8 +168,17 @@
 
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (Pat k a x) where
->     pretty (Pat vs Trivial e) _ =
+>     pretty (Pat vs NoGuard e) _ =
 >         hsep (map prettyLow vs) <+> text "=" <++> prettyHigh e
+>     pretty (Pat vs g e) _ =
+>         hsep (map prettyLow vs) <+> text "|" <+> prettyHigh g
+>                                     <+> text "=" <++> prettyHigh e
+
+> instance (PrettyVar a, PrettyVar x) => Pretty (Grd k a x) where
+>     pretty NoGuard       = const (text "otherwise")
+>     pretty (ExpGuard t)  = pretty t
+>     pretty (NumGuard p)  = const $ braces (fsepPretty p)
+
 
 > instance (PrettyVar a, PrettyVar x) => Pretty (PatTerm k a x) where
 >     pretty (PatVar x)    = const $ prettyVar x

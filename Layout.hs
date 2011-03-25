@@ -14,6 +14,13 @@ trichotomy {0}   {0}   a b c = b
 trichotomy {m+1} {0}   a b c = c
 trichotomy {m+1} {n+1} a b c = trichotomy {m} {n} a b c
 
+trike :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
+    (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
+        a
+trike {m} {n} a b c | {m < n} = a
+trike {m} {n} a b c | {m ~ n} = b
+trike {m} {n} a b c | {m > n} = c
+
 tric2 :: forall (a :: Num -> Num -> *) .
     (forall (m n :: Num) . 0 <= m, m < n => a m n) ->
     (forall (m   :: Num) . 0 <= m        => a m m) ->
