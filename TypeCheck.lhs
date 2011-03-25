@@ -246,6 +246,7 @@
 >     collect (g :< l@(Layer (PatternTop _ _ ks ws))) hs ps = 
 >         collect g (ks ++ hs) (ws ++ ps) <:< l
 >     collect (g :< Layer GenMark) hs ps = (g :< Layer GenMark, collectHyps g [] ++ hs, ps)
+>     -- collect (g :< Layer FunTop) hs ps = (g :< Layer FunTop, collectHyps g [] ++ hs, ps)
 >     collect (g :< e) hs ps = collect g hs ps <:< e
 >
 >     collectHyps B0 hs = hs
@@ -350,6 +351,8 @@
 >     pattys <- traverse (checkAlt False (s ::: sty) sty') pats
 >     let ptms ::: ptys = unzipAsc pattys
 >     (ty', ptms') <- generalise (head ptys) ptms
+>     g <- getContext
+>     -- mtrace $ "Checked " ++ s ++ " with |g| = " ++ show (length (trail g))
 >     return $ FunDecl s (Just sty) ptms'
 
 > checkFunDecl (FunDecl s _ []) =
@@ -389,6 +392,7 @@
 >     collectEqualities :: Context -> Writer [NormalNum] Context
 >     collectEqualities B0 = return B0
 >     collectEqualities (g :< Layer FunTop) = return $ g :< Layer FunTop
+>     --collectEqualities (g :< Layer GenMark) = return $ g :< Layer GenMark
 >     collectEqualities (g :< Constraint Wanted (IsZero n)) = tell [n]
 >         >> collectEqualities g
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
@@ -446,7 +450,9 @@
 
 > checkPat top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
 >     nm <- freshS $ "_" ++ x ++ "aa"
->     let d = if top || nm <? getTarget (unbind nm t) then Hole else Exists
+>     let d = if top then Fixed
+>                    else if nm <? getTarget (unbind nm t) then Hole
+>                                                          else Exists
 >     modifyContext (:< A (nm := d ::: KindNum))
 >     modifyContext (:< Constraint Given (IsZero (mkVar nm -~ mkConstant k)))
 >     aty <- instS True id Given Fixed (unbind nm t)
@@ -457,7 +463,8 @@
 >     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
 >     am <- freshS a
 >     let d = if top then Fixed
->                    else if am <? getTarget (unbind am t) then Hole else Exists
+>                    else if am <? getTarget (unbind am t) then Hole
+>                                                          else Exists
 >     modifyContext (:< A (am := d ::: KindNum))
 >     aty <- instS True id Given Fixed (unbind am t)
 >     (xs, r) <- checkPat top aty ps
@@ -509,6 +516,13 @@
 >     b <- unknownTyVar $ "_b" ::: Set
 >     (xs, tr, ty) <- inferPat top ps
 >     return (PatIgnore : xs, tr, b --> ty)
+
+> inferPat top (PatBrace (Just a) 0 : ps) = do
+>     n <- fresh a (Hole ::: KindNum)
+>     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
+>     (xs, tr, ty) <- inferPat top ps
+>     return (PatBrace (Just a) 0 : xs, tr,
+>         Bind Pi a KindNum (bind n ty))
 
 > inferPat top (p : _) =
 >     fail $ "inferPat: couldn't infer type of pattern " ++ renderMe p
