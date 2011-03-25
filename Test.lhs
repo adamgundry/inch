@@ -253,6 +253,10 @@
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n} Refl", False) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n}", False) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n-1}", False) :
+>   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . 0 <= m, m < n => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . 0 <= n, n < m => a m n) -> (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)\ntri a b c {0}   {n+1} = a\ntri a b c {0}   {0}   = b\ntri a b c {m+1} {0}   = c\ntri a b c {m+1} {n+1} = tri a b c {m} {n}", False) :
+>   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . 0 <= m, m < n => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . 0 <= n, n < m => a m n) -> (forall (m n :: Num) . 0 <= m, 0 <= n => a m n -> a (m+1) (n+1)) -> (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)\ntri a b c step {0}   {n+1} = a\ntri a b c step {0}   {0}   = b\ntri a b c step {m+1} {0}   = c\ntri a b c step {m+1} {n+1} = step (tri a b c step {m} {n})", True) :
+>   ("tri :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n => (pi (d :: Num) . 0 < d, d ~ m - n => a) -> (n ~ m => a) -> (pi (d :: Num) . 0 < d, d ~ n - m => a) -> a\ntri {0}   {0}   a b c = b\ntri {m+1} {0}   a b c = a {m+1}\ntri {0}   {n+1} a b c = c {n+1}\ntri {m+1} {n+1} a b c = tri {m} {n} a b c", True) :
+>   ("f :: forall a . pi (m n :: Num) . a\nf {m} {n} = let h :: m ~ n => a\n                h = h\n            in f {m} {n}", True) :
 >   []
 
 

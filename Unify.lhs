@@ -48,7 +48,7 @@
 >       putContext _Gamma
 >       case xD of
 >         A (a := d ::: KindNum) -> ext xD =<< f (a := d ::: KindNum)
->         Layer pt@(PatternTop _ _ (_:_) cs) -> do
+>         Layer pt@(PatternTop _ _ _ cs) -> do
 >             m
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
 >         Layer GenMark -> do

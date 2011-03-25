@@ -6,6 +6,42 @@ module Layout where
 bottom = bottom
 
 
+trichotomy :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
+    (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
+        a
+trichotomy {0}   {n+1} a b c = a
+trichotomy {0}   {0}   a b c = b
+trichotomy {m+1} {0}   a b c = c
+trichotomy {m+1} {n+1} a b c = trichotomy {m} {n} a b c
+
+tric2 :: forall (a :: Num -> Num -> *) .
+    (forall (m n :: Num) . 0 <= m, m < n => a m n) ->
+    (forall (m   :: Num) . 0 <= m        => a m m) ->
+    (forall (m n :: Num) . 0 <= n, n < m => a m n) ->
+    (forall (m n :: Num) . 0 <= m, 0 <= n => a m n -> a (m+1) (n+1)) ->
+        (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)
+tric2 a b c step {0}   {n+1} = a
+tric2 a b c step {0}   {0}   = b
+tric2 a b c step {m+1} {0}   = c
+tric2 a b c step {m+1} {n+1} = step (tric2 a b c step {m} {n})
+
+diff :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
+    (pi (d :: Num) . d ~ m - n => a) -> a
+diff {m}   {0}   a = a {m}
+diff {0}   {n}   a = a { -n }
+diff {m+1} {n+1} a = diff {m} {n} a
+
+tric3 :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
+    (pi (d :: Num) . 0 < d, d ~ m - n => a) ->
+    (n ~ m => a) ->
+    (pi (d :: Num) . 0 < d, d ~ n - m => a) ->
+    a
+tric3 {0}   {0}   a b c = b
+tric3 {m+1} {0}   a b c = a {m+1}
+tric3 {0}   {n+1} a b c = c {n+1}
+tric3 {m+1} {n+1} a b c = tric3 {m} {n} a b c
+
+
 data Ident :: * where
   A :: Ident
   B :: Ident
@@ -25,63 +61,12 @@ data Layout :: Num -> Num -> * where
     pi (d1 d2 :: Num) . 0 <= d1, 0 <= d2, d ~ (d1 + d2) =>
     Layout w d1 -> Layout w d2 -> Layout w d
 
-
-trichotomy :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
-        a
-trichotomy {0}   {n+1} a b c = a
-trichotomy {0}   {0}   a b c = b
-trichotomy {m+1} {0}   a b c = c
-trichotomy {m+1} {n+1} a b c = trichotomy {m} {n} a b c
-
-
-tric2 :: forall (a :: Num -> Num -> *) .
-    (forall (m n :: Num) . 0 <= m, m < n => a m n) ->
-    (forall (m   :: Num) . 0 <= m        => a m m) ->
-    (forall (m n :: Num) . 0 <= n, n < m => a m n) ->
-        (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)
-tric2 a b c {0}   {n+1} = a
-tric2 a b c {0}   {0}   = b
-tric2 a b c {m+1} {0}   = c
-tric2 a b c {m+1} {n+1} = tric2 a b c {m} {n}
-
-
 l2x1 = Horiz {1} {1} (Stuff (Unit A)) (Stuff (Unit B))
 
 l1xn :: pi (n :: Num) . 1 <= n => Layout 1 n
 l1xn {n} = Vert {1} {n-1} (Stuff (Unit C)) Empty
 
 l1x2 = l1xn {2}
-
-
-diff :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (pi (d :: Num) . d ~ m - n => a) -> a
-diff {m}   {0}   a = a {m}
-diff {0}   {n}   a = a { -n }
-diff {m+1} {n+1} a = diff {m} {n} a
-
-tric3 :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (pi (d :: Num) . 0 < d, d ~ m - n => a) ->
-    (n ~ m => a) ->
-    (pi (d :: Num) . 0 < d, d ~ n - m => a) ->
-    a
-tric3 {0}   {0}   a b c = b
-tric3 {m+1} {0}   a b c = a {m+1}
-tric3 {0}   {n+1} a b c = c {n+1}
-tric3 {m+1} {n+1} a b c = tric3 {m} {n} a b c
-
-
-{-
-horiz :: pi (w1 w2 d1 d2 :: Num) . 0 <= w1, 0 <= w2, 0 <= d1, 0 <= d2 =>
-    Layout w1 d1 -> Layout w2 d2 -> Layout (w1 + w2) d1
-horiz {w1} {w2} {d1} {d2} l1 l2 = 
-  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Layout (w1 + w2) d1
-      horizA {d} = Horiz {w1} {w2} l1 (Vert {d2} {d} l2 Empty)
-
-      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Layout (w1 + w2) d2
-      horizC {d} = Horiz {w1} {w2} (Vert {d1} {d} l1 Empty) l2
-  in tric3 {d1} {d2} horizA (Horiz {w1} {w2} l1 l2) horizC
--}
 
 horiz :: pi (w1 w2 d1 d2 :: Num) . 0 <= w1, 0 <= w2, 0 <= d1, 0 <= d2 =>
     Layout w1 d1 -> Layout w2 d2 -> Layout (w1 + w2) (d1+d2)
@@ -109,11 +94,17 @@ data Max :: Num -> Num -> Num -> * where
 data Ex :: (Num -> *) -> * where
   Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
 
+stepMax :: forall (m n :: Num) . Ex (Max m n) -> Ex (Max (m+1) (n+1))
+stepMax (Ex Same) = Ex Same
+stepMax (Ex Less) = Ex Less
+stepMax (Ex More) = Ex More
+
 findMax :: pi (m n :: Num) . 0 <= m, 0 <= n => Ex (Max m n)
 findMax {0}   {0}   = Ex Same
 findMax {0}   {n+1} = Ex Less
 findMax {m+1} {0}   = Ex More
-findMax {m+1} {n+1} = findMax {m} {n} -- why does this typecheck?
+findMax {m+1} {n+1} = stepMax (findMax {m} {n})
+
 
 
 horiz2 :: pi (w1 w2 d1 d2 :: Num) . 0 <= w1, 0 <= w2, 0 <= d1, 0 <= d2 =>

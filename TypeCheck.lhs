@@ -105,11 +105,11 @@ status.
 
 
 
-> layerStops :: TermLayer -> Maybe ([NormalPredicate], [NormalPredicate])
-> layerStops FunTop                  = Just ([], [])
-> layerStops GenMark                 = Just ([], [])
-> layerStops (PatternTop _ _ hs ps)  = Just (hs, ps)
-> layerStops _                       = Nothing
+> layerStops :: TermLayer -> Maybe (TermLayer, [NormalPredicate], [NormalPredicate])
+> layerStops FunTop                   = Just (FunTop, [], [])
+> layerStops GenMark                  = Just (GenMark, [], [])
+> layerStops (PatternTop s bs hs ps)  = Just (PatternTop s bs [] [], hs, ps)
+> layerStops _                        = Nothing
 
 
 > unifySolveConstraints :: Contextual t ()
@@ -150,7 +150,7 @@ status.
 >         in   collect g (subsPreds a dn hs) (subsPreds a dn ps ) <:< A e
 >     collect (g :< Layer l) hs ps = case layerStops l of
 >         Nothing        -> collect g hs ps <:< Layer l
->         Just (ks, ws)  -> (g :< Layer l, collectHyps g (ks ++ hs), ws ++ ps)
+>         Just (l', ks, ws)  -> (g :< Layer l', collectHyps g (ks ++ hs), ws ++ ps)
 >     collect (g :< e) hs ps = collect g hs ps <:< e
 >
 >     collectHyps B0 hs = hs
