@@ -99,7 +99,19 @@
 >                       ,  tmCons :: Map.Map TmConName Type
 >                       }
 
-> initialState = St 0 () B0 Map.empty Map.empty
+
+Initial state
+
+> initialState = St 0 () B0 initTyCons initTmCons
+> initTyCons = Map.fromList $
+>   ("Bool", Set) :
+>   []
+> initTmCons = Map.fromList $
+>   ("True", TyCon "Bool") :
+>   ("False", TyCon "Bool") :
+>   []
+
+
 
 > type Contextual t a          = StateT (ZipState t) (Either ErrorData) a
 > type ContextualWriter w t a  = WriterT w (StateT (ZipState t) (Either ErrorData)) a

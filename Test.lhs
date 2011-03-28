@@ -119,7 +119,7 @@
 
 > parseCheck :: (String, Bool) -> Either String String
 > parseCheck (s, b) = case parse program "parseCheck" s of
->     Right (p, _)   -> case typeCheck p of
+>     Right (p, _)   -> case runCheckProg p of
 >         Right (p', st)
 >             | b      -> Right $ "Accepted good program:\n"
 >                                     ++ show (prettyProgram p') ++ "\n"
@@ -270,7 +270,7 @@
 >   ("f :: forall a . pi (m n :: Num) . ((m ~ 0 => a) -> a) -> a\nf {m} {n} x = let h :: m ~ n => a\n                  h = h\n            in x h", False) :
 >   ("f :: pi (n :: Num) . Integer\nf {n} | {n >= 0} = n\nf {n} | {n < 0} = 0", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {n} | {m ~ 0} = n", False) : 
->   ("f :: pi (n :: Num) . Integer\nf {n} | {n > 0, n < 0} = f {n}\nf {n} | otherwise = 0", True) :
+>   ("f :: pi (n :: Num) . Integer\nf {n} | {n > 0, n < 0} = f {n}\nf {n} | True = 0", True) :
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = 0", True) : 
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = x", False) : 
 >   []
@@ -279,7 +279,7 @@
 
 > eraseCheck :: String -> Either String String
 > eraseCheck s = case parse program "eraseCheck" s of
->     Right (p, _)   -> case typeCheck p of
+>     Right (p, _)   -> case runCheckProg p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
 >             Right (p'', st) -> Right $ "Erased program:\n" ++ show (prettyProgram p'')
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"

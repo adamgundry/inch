@@ -74,7 +74,7 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > eraseCon (c ::: t) = ((c :::) . tmOf) <$> eraseType t
 
 > erasePat :: Pat Kind TyName x -> Contextual a (Pat Kind TyName x)
-> erasePat (Pat ps g t) = Pat (map erasePatTm ps) (eraseGuard g) <$> eraseTm t
+> erasePat (Pat ps g t) = Pat (map erasePatTm ps) (eraseGuard <$> g) <$> eraseTm t
 
 > eraseGuard :: Grd Kind TyName x -> Grd Kind TyName x
 > eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)

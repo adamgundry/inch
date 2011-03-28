@@ -27,7 +27,7 @@
 > import TypeCheck
 
 
-> typeCheck p = runStateT (checkProg p) initialState
+> runCheckProg p = runStateT (checkProg p) initialState
 
 > checkProg :: SProgram -> Contextual () Program
 > checkProg xs = do

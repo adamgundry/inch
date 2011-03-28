@@ -39,7 +39,7 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Pat k a x where
->     Pat :: [PatTerm k a x] -> Grd k a x -> Tm k a x -> Pat k a x
+>     Pat :: [PatTerm k a x] -> Maybe (Grd k a x) -> Tm k a x -> Pat k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data PatTerm k a x where
@@ -50,7 +50,6 @@
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > data Grd k a x where
->     NoGuard   :: Grd k a x
 >     ExpGuard  :: Tm k a x -> Grd k a x
 >     NumGuard  :: [Pred a] -> Grd k a x
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
@@ -137,8 +136,9 @@
 
 > instance Trav3 Pat where
 >     trav3 fn fa fx (Pat pts r t) =
->         Pat <$> traverse (trav3 fn fa fx) pts <*> trav3 fn fa fx r
->                                               <*> trav3 fn fa fx t
+>         Pat <$> traverse (trav3 fn fa fx) pts
+>             <*> traverse (trav3 fn fa fx) r
+>             <*> trav3 fn fa fx t
 
 > instance Trav3 PatTerm where
 >     trav3 fn fa fx (PatVar x)       = PatVar <$> fx x
@@ -147,7 +147,6 @@
 >     trav3 fn fa fx (PatBrace mx k)  = PatBrace <$> traverse fx mx <*> pure k
 
 > instance Trav3 Grd where
->     trav3 fn fa fx NoGuard        = pure NoGuard
 >     trav3 fn fa fx (ExpGuard t)   = ExpGuard <$> trav3 fn fa fx t
 >     trav3 fn fa fx (NumGuard ps)  = NumGuard <$> traverse (travPred fn) ps
 

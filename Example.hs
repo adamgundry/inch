@@ -30,16 +30,23 @@ flp      = \ f x y -> f y x
 
 -- Data types
 
-data Bools where
-  TT :: Bools
-  FF :: Bools
-
 data Pair :: * -> * -> * where
   Pair :: forall a b. a -> b -> Pair a b
 
 data Nat where
   Zero :: Nat
   Suc :: Nat -> Nat
+
+
+
+-- Booleans
+
+andy True True = True
+andy _ _       = False
+
+silly x | andy x x = False
+silly x | True = True
+
 
 {-
 data Vec :: Num -> * -> * where
@@ -295,29 +302,29 @@ rebuildTm = foldTm3 V' L' A'
 data Layer :: Num -> * where
   Layer0 :: forall (m :: Num) . m ~ 0 => Nat    -> Layer m
   Layer1 :: forall (m :: Num) . m ~ 1 => Nat    -> Layer m
-  Layer2 :: forall (m :: Num) . m ~ 2 => Bools  -> Layer m
+  Layer2 :: forall (m :: Num) . m ~ 2 => Bool  -> Layer m
   Layer3 :: forall (m :: Num) . m ~ 3 => Nat    -> Layer m
 
 deserialize :: pi (m :: Num) . m <= 3 => Nat -> Layer m
 deserialize {0} n     = Layer0 n
 deserialize {1} n     = Layer1 n
-deserialize {2} Zero  = Layer2 TT
-deserialize {2} n     = Layer2 FF
+deserialize {2} Zero  = Layer2 True
+deserialize {2} n     = Layer2 False
 deserialize {3} n     = Layer3 n
 
 serialize :: forall (m :: Num) . Layer m -> Nat
 serialize (Layer0 n)   = n
 serialize (Layer1 n)   = n
-serialize (Layer2 TT)  = Zero
-serialize (Layer2 FF)  = Suc Zero
+serialize (Layer2 True)  = Zero
+serialize (Layer2 False)  = Suc Zero
 serialize (Layer3 n)   = n
 
 layer :: forall (m :: Num) . m <= 2 => Layer m -> Layer (m + 1)
 layer (Layer0 n)           = Layer1 (Suc n)
-layer (Layer1 (Suc Zero))  = Layer2 TT
-layer (Layer1 n)           = Layer2 FF
-layer (Layer2 TT)          = Layer3 Zero
-layer (Layer2 FF)          = Layer3 (Suc Zero)
+layer (Layer1 (Suc Zero))  = Layer2 True
+layer (Layer1 n)           = Layer2 False
+layer (Layer2 True)          = Layer3 Zero
+layer (Layer2 False)          = Layer3 (Suc Zero)
 
 doLayers :: forall (m :: Num) . pi (n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
 doLayers {0}   l = l
@@ -427,15 +434,15 @@ rank2 :: (forall a . a -> a) -> Integer
 rank2 = \ f -> f f f 0
 
 
-predtrans :: (pi (n :: Num) . 0 <= n => Bools) -> (pi (n :: Num) . 0 <= n => Bools)
-predtrans p {0}   = TT
-predtrans p {n+1} = let andy TT TT = TT
-                        andy _ _ = FF
+predtrans :: (pi (n :: Num) . 0 <= n => Bool) -> (pi (n :: Num) . 0 <= n => Bool)
+predtrans p {0}   = True
+predtrans p {n+1} = let andy True True = True
+                        andy _ _ = False
                     in andy (predtrans p {n}) (p {n})
 
-peven :: pi (n :: Num) . 0 <= n => Bools
-peven {0} = TT
-peven {1} = FF
+peven :: pi (n :: Num) . 0 <= n => Bool
+peven {0} = True
+peven {1} = False
 peven {n+2} = peven {n}
 
 

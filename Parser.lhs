@@ -279,11 +279,10 @@ Programs
 >                           Nothing  -> integer
 >     return $ PatBrace ma (maybe 0 id mk)
 
-> patRest  =    reservedOp "=" *> pure NoGuard
->          <|>  reservedOp "|" *> guarded <* reservedOp "="
+> patRest  =    reservedOp "=" *> pure Nothing
+>          <|>  reservedOp "|" *> (Just <$> guarded) <* reservedOp "="
 
 > guarded  =    NumGuard <$> braces predicates
->          <|>  reserved "otherwise" *> pure NoGuard
 >          <|>  ExpGuard <$> expr
 
 
