@@ -7,6 +7,7 @@
 > import Data.Traversable
 
 > import BwdFwd
+> import Error
 > import Kit
 > import Type
 > import TyNum
@@ -15,9 +16,9 @@
 > import TypeCheck
 
 
-> eraseKind :: (Applicative f, Monad f) => Kind -> f Kind
+> eraseKind :: Kind -> Contextual a Kind
 > eraseKind Set                  = pure Set
-> eraseKind KindNum              = fail "Cannot erase kind *"
+> eraseKind KindNum              = erk "Cannot erase kind *"
 > eraseKind (KindArr KindNum l)  = eraseKind l
 > eraseKind (KindArr k l)        = KindArr <$> eraseKind k <*> eraseKind l
 
@@ -31,7 +32,7 @@
 >             KindArr KindNum l        -> return $ f' ::: l
 >             KindArr k' l -> do
 >                 (s' ::: ks) <- eraseType s
->                 unless (k' == ks) $ fail "Kind mismatch"
+>                 unless (k' == ks) $ erk "Kind mismatch"
 >                 return $ TyApp f' s' ::: l
 > eraseType (TyB b) = return $ TyB b ::: builtinKind b
 > eraseType (Bind Pi x KindNum t)   = do

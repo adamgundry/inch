@@ -114,3 +114,7 @@
 
 > inLoc :: (E.MonadError ErrorData m) => m a -> m Doc -> m a
 > inLoc m ms = m `E.catchError` (\ (e, ss) -> ms >>= \ s -> E.throwError (e, s:ss))
+
+
+> erk :: (E.MonadError ErrorData m) => String -> m a
+> erk s = E.throwError (Fail s, [])

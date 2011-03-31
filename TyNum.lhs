@@ -9,7 +9,6 @@
 
 > import Kit
 > import Num
-> import Orphans
 
 > type TypeNum          = TyNum TyName
 > type Predicate        = Pred TyName

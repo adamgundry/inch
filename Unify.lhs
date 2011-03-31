@@ -16,7 +16,6 @@
 > import Syntax
 > import Context
 > import Num
-> import Orphans
 > import Kit
 > import Error
 > import PrettyPrinter
@@ -36,7 +35,7 @@
 >             putContext _Gamma
 >             onTop f
 >             modifyContext (:< xD)
->         B0 -> fail $ "onTop: ran out of context"
+>         B0 -> erk $ "onTop: ran out of context"
 
 > onTopNum ::  (NormalPredicate, Contextual t ()) ->
 >                  (TyEntry -> Contextual t Extension) ->
@@ -62,7 +61,7 @@
 > -}
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
 >     B0 -> inLocation (text "when solving" <+> prettyHigh p) $
->               fail $ "onTopNum: ran out of context"
+>               erk $ "onTopNum: ran out of context"
 
 > restore :: Contextual t Extension
 > restore = return Restore
@@ -135,7 +134,7 @@
 > -- unifyTypes s t | s == t = return ()
 > unifyTypes (TyB b) (TyB c) | b == c  = return ()
 > unifyTypes (TyVar KindNum alpha) (TyVar KindNum beta) = unifyNum (NumVar alpha) (NumVar beta)
-> unifyTypes (TyVar ka alpha) (TyVar kb beta) | ka /= kb   = fail "Kind mismatch in unify"
+> unifyTypes (TyVar ka alpha) (TyVar kb beta) | ka /= kb   = erk "Kind mismatch in unify"
 >                                             | otherwise  = onTop $
 >   \ (gamma := d ::: k) -> case
 >           (gamma == alpha, gamma == beta, d) of
@@ -155,7 +154,7 @@
 
 > unifyTypes (TyCon c1) (TyCon c2)
 >     | c1 == c2   = return ()
->     | otherwise  = fail $ "Mismatched type constructors " ++ c1
+>     | otherwise  = erk $ "Mismatched type constructors " ++ c1
 >                               ++ " and " ++ c2
 
 > unifyTypes (TyApp f1 s1) (TyApp f2 s2) = unifyTypes f1 f2 >> unifyTypes s1 s2
@@ -198,7 +197,7 @@
 >     g <- getContext
 >     let p' = expandPred g p
 >         q' = expandPred g q
->     unless (p' == q') $ fail $ "Mismatched qualifiers " ++ renderMe p' ++ " and " ++ renderMe q'
+>     unless (p' == q') $ erk $ "Mismatched qualifiers " ++ renderMe p' ++ " and " ++ renderMe q'
 > -}
 
 > unifyTypes (TyNum m)      (TyNum n)              = unifyNum m n
@@ -248,7 +247,7 @@
 > rigidHull (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull t
 
 
-> rigidHull b = fail $ "rigidHull can't cope with " ++ renderMe b
+> rigidHull b = erk $ "rigidHull can't cope with " ++ renderMe b
 
 > pairsToSuffix :: Fwd (TyName, TypeNum) -> Suffix
 > pairsToSuffix = fmap ((:= Hole ::: KindNum) . fst)
@@ -262,7 +261,7 @@
 >   \ (gamma := d ::: k) -> let occurs = gamma <? tau || gamma <? _Xi in case
 >     (gamma == alpha, occurs, d) of
 
->     (True,   True,   _)             ->  fail "Occurrence detected!"
+>     (True,   True,   _)             ->  erk "Occurrence detected!"
 
 >     (True,   False,  Hole)          ->  replace (_Xi <.> ((alpha := Some tau ::: k) :> F0))
 >     (True,   False,  Some upsilon)  ->  modifyContext (<>< _Xi)
@@ -290,15 +289,15 @@
 > typeToNum :: Type -> Contextual t NormalNum
 > typeToNum (TyNum n)          = normaliseNum n
 > typeToNum (TyVar KindNum a)  = lookupNormNumVar a
-> typeToNum t = fail $ "Bad type in numeric constraint: " ++ show t
+> typeToNum t = erk $ "Bad type in numeric constraint: " ++ show t
 
 > lookupNormNumVar :: TyName -> Contextual t NormalNum
 > lookupNormNumVar a = getContext >>= seek
 >   where
->     seek B0 = fail $ "Missing numeric variable " ++ show a
+>     seek B0 = erk $ "Missing numeric variable " ++ show a
 >     seek (g :< A (b := _ ::: k))
 >         | a == b && k == KindNum = return $ mkVar a
->         | a == b = fail $ "Type variable " ++ show a ++ " is not numeric"
+>         | a == b = erk $ "Type variable " ++ show a ++ " is not numeric"
 >     seek (g :< _) = seek g
 
 > constrainZero :: NormalNum -> Contextual t ()
@@ -336,7 +335,7 @@
 >                constrainZero e
 >                replace F0
 >                --g <- getContext
->                --fail $ "No way for " ++ render e ++ " in " ++
+>                --erk $ "No way for " ++ render e ++ " in " ++
 >                --           render g ++ "; " ++ render (alpha := d ::: KindNum) ++ " | " ++ render _Psi
 
 

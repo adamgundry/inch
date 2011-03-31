@@ -15,7 +15,6 @@
 > import TyNum
 > import Type
 > import Syntax
-> import Orphans
 > import Kit
 
 

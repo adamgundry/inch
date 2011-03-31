@@ -20,7 +20,6 @@
 > import Syntax
 > import Context
 > import Unify
-> import Orphans
 > import Kit
 > import Error
 > import PrettyPrinter
@@ -100,7 +99,7 @@ status.
 >     help (g :< Constraint Given _)   tps      = help g tps
 >     help (g :< Constraint Wanted p)  (t, ps)  =
 >         help g (Qual (reifyPred p) t, ps)
->     help g tps = fail $ "generalise: can't help " ++ renderMe g
+>     help g tps = erk $ "generalise: can't help " ++ renderMe g
 
 
 
@@ -173,7 +172,7 @@ status.
 >     want :: [NormalPredicate] -> Contextual t ()
 >     want [] = return ()
 >     want (p:ps)
->         | nonsense p  = fail $ "Impossible constraint " ++ renderMe p
+>         | nonsense p  = erk $ "Impossible constraint " ++ renderMe p
 >         | otherwise   = modifyContext (:< Constraint Wanted p)
 >                                 >> want ps
 >
@@ -266,9 +265,9 @@ status.
 >     help :: [TyName] -> Context -> [Either TyEntry NormalPredicate] ->
 >                 Contextual () Context
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
->     help as (g :< Layer GenMark) h  = fail $ "Bad as: " ++ show as
+>     help as (g :< Layer GenMark) h  = erk $ "Bad as: " ++ show as
 >     help as (g :< A (a := Fixed ::: k)) h
->         | a <? h     = fail "checkSigma help: bad h"
+>         | a <? h     = erk "checkSigma help: bad h"
 >         | otherwise  = help (delete a as) g h
 >     help as (g :< A (a := Some d ::: k)) h = help as g (map (rep k a d) h)
 >     help as (g :< A a) h                   = help as g (Left a : h)
@@ -314,7 +313,7 @@ status.
 >             nm  <- fresh "_n" (Some (TyNum n) ::: KindNum)
 >             ty  <- instSigma (unbind nm aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
->         _ -> fail $ "Inferred type " ++ renderMe fty ++ " of " ++
+>         _ -> erk $ "Inferred type " ++ renderMe fty ++ " of " ++
 >                  renderMe f ++ " is not a pi-type with numeric domain"
 
 > checkInfer mty (TmApp f s) = do
@@ -346,7 +345,7 @@ status.
 >     r         <- instSigma sc mty
 >     return $ (t :? sc) ::: r
 
-> checkInfer mty (TmBrace n) = fail "Braces aren't cool"
+> checkInfer mty (TmBrace n) = erk "Braces aren't cool"
 
 
 > funDeclToBinding (FunDecl x (Just ty) _) = x ::: ty
@@ -399,7 +398,7 @@ status.
 >     return $ FunDecl s (Just sty) ptms
 
 > checkFunDecl (FunDecl s _ []) =
->   inLocation (text $ "in declaration of " ++ s) $ fail $ "No alternative"
+>   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
 
 
 
@@ -500,7 +499,7 @@ status.
 >     return (PatBrace (Just a) k : xs, r)
 
 > checkPat top ty (p : _) =
->     fail $ "checkPat: couldn't match pattern " ++ renderMe p
+>     erk $ "checkPat: couldn't match pattern " ++ renderMe p
 >                ++ " against type " ++ renderMe ty
 
 
@@ -541,7 +540,7 @@ status.
 >         Bind Pi a KindNum (bind n ty))
 
 > inferPat top (p : _) =
->     fail $ "inferPat: couldn't infer type of pattern " ++ renderMe p
+>     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p
 
 
 

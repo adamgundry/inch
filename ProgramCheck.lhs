@@ -18,7 +18,6 @@
 > import Syntax
 > import Context
 > import Unify
-> import Orphans
 > import Kit
 > import Error
 > import PrettyPrinter
