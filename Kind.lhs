@@ -3,7 +3,12 @@
 
 > module Kind where
 
+> import Data.Foldable
+> import Prelude hiding (any)
+
+> import BwdFwd
 > import Kit
+
 
 
 > type TmName           = String
@@ -143,3 +148,25 @@
 > varNameEq :: Var a k -> String -> Bool
 > varNameEq (FVar nom _)  y = nameEq nom y
 > varNameEq (BVar _)      _ = False
+
+
+
+
+> class FV t where
+>     (<?) :: Var () k -> t -> Bool
+
+> instance FV (Var () l) where
+>     (<?) = (=?=)
+
+> instance FV a => FV [a] where
+>     a <? as = any (a <?) as
+
+> instance FV a => FV (Fwd a) where
+>     a <? t = any (a <?) t
+
+> instance FV a => FV (Bwd a) where
+>     a <? t = any (a <?) t
+
+> instance (FV a, FV b) => FV (Either a b) where
+>     alpha <? Left x = alpha <? x
+>     alpha <? Right y = alpha <? y

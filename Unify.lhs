@@ -49,7 +49,7 @@
 >     _Gamma :< xD -> do  
 >       putContext _Gamma
 >       case xD of
->         A (FVar a KNum := d) -> ext xD =<< f (FVar a KNum := d)
+>         A (a@(FVar _ KNum) := d) -> ext xD =<< f (a := d)
 >         Layer pt@(PatternTop _ _ _ cs) -> do
 >             m
 >             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
@@ -75,68 +75,6 @@
 > ext :: Entry -> Extension -> Contextual t ()
 > ext xD (Replace _Xi)  = modifyContext (<>< _Xi)
 > ext xD Restore        = modifyContext (:< xD)
-
-
-> elemTy :: Var a k -> Ty a l -> Bool
-> elemTy a (TyVar b)       = a =?= b
-> elemTy a (TyCon _ _)     = False
-> elemTy a (TyApp f s)     = elemTy a f || elemTy a s
-> elemTy a (TyNum n)       = any (a =?=) n
-> elemTy a (Bind b x k t)  = elemTy (wkVar a) t
-> elemTy a (Qual p t)      = elemPred a p || elemTy a t 
-> elemTy a Arr             = False
-
-> elemPred :: Var a k -> Pred (NVar a) -> Bool
-> elemPred a (P c m n) = elemTyNum a m || elemTyNum a n
-
-> elemTyNum :: Var a k -> TyNum (NVar a) -> Bool
-> elemTyNum a n = any (a =?=) n
-
-> class FV t where
->     (<?) :: Var () k -> t -> Bool
-
-> instance FV (Var () l) where
->     (<?) = (=?=)
-
-> instance FV AnyTyEntry where
->     a <? TE t = a <? t
-
-> instance FV (Type k) where
->     a <? t = elemTy a t
-
-> instance FV (TyDef k) where
->     a <? Some t = a <? t
->     a <? _      = False
-
-> instance FV a => FV (TyNum a) where
->     a <? t = any (a <?) t
-
-> instance FV Suffix where
->     a <? t = any (a <?) t
-
-> instance FV (TyEntry k) where
->     a <? (b := d) = a <? b || a <? d
-
-> instance FV NormalNum where
->     a@(FVar _ KNum) <? n = isJust $ lookupVariable a n
->     _ <? _               = False
-
-> instance FV NormalPredicate where
->     a <? IsPos n   = a <? n
->     a <? IsZero n  = a <? n
-
-> instance FV a => FV [a] where
->     a <? as = any (a <?) as
-
-
-> instance FV Pattern where
->     a <? t = getAny $ getConst $ travTypes (Const . Any . (a <?)) t
-
-
-> instance (FV a, FV b) => FV (Either a b) where
->     alpha <? Left x = alpha <? x
->     alpha <? Right y = alpha <? y
-
 
 
 > var k a = TyVar (FVar a k)
@@ -242,19 +180,20 @@
 >     solve alpha (pairsToSuffix xs) rho
 >     unifyPairs xs
 
+> makeFlex :: TypeNum -> Contextual t (Type KNum, Fwd (Var () KNum, TypeNum))
+> makeFlex n = do  v <- freshVar SysVar "_i" KNum
+>                  return (TyNum (NumVar v), (v, n) :> F0)
+
 > rigidHull :: Type k -> Contextual t (Type k, Fwd (Var () KNum, TypeNum))
 > rigidHull (TyVar a)    = case varKind a of
->                           KNum  -> do  v <- freshVar SysVar "_j" KNum
->                                        return (TyNum (NumVar v),
->                                                   (v, NumVar a) :> F0)
->                           _     -> return (TyVar a, F0)
+>                              KNum  -> makeFlex (NumVar a)
+>                              _     -> return (TyVar a, F0)
 > rigidHull (TyCon c k)  = return (TyCon c k, F0)
 > rigidHull (TyApp f s)  = do  (f',  xs  )  <- rigidHull f
 >                              (s',  ys  )  <- rigidHull s
 >                              return (TyApp f' s', xs <.> ys)
 > rigidHull Arr          = return (Arr, F0)
-> rigidHull (TyNum d)    = do  v <- freshVar SysVar "_i" KNum
->                              return (TyNum (NumVar v), (v, d) :> F0)
+> rigidHull (TyNum n)    = makeFlex n
 
 > rigidHull (Bind All x k b) | not (k =?= KNum) = do
 >     v <- freshVar SysVar "_magic" k
@@ -314,20 +253,8 @@
 
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (NumConst 0) n = unifyZero F0 =<< normaliseNum n
-> unifyNum m n = unifyZero F0 =<< normaliseNum (m - n)
-
-
-> typeToNum :: Type KNum -> Contextual t NormalNum
-> typeToNum (TyNum n)  = normaliseNum n
-> typeToNum (TyVar v)  = lookupNormNumVar v
-
-> lookupNormNumVar :: Var () KNum -> Contextual t NormalNum
-> lookupNormNumVar a = getContext >>= seek
->   where
->     seek B0 = erk $ "Missing numeric variable " ++ show a
->     seek (g :< A (b := _)) | a =?= b  = return $ mkVar a
->     seek (g :< _) = seek g
+> unifyNum (NumConst 0)  n = unifyZero F0 =<< normaliseNum n
+> unifyNum m             n = unifyZero F0 =<< normaliseNum (m - n)
 
 > constrainZero :: NormalNum -> Contextual t ()
 > constrainZero e = modifyContext (:< Constraint Wanted (IsZero e))
@@ -343,7 +270,7 @@
 >       Just n -> case d of
 >         Some x -> do
 >             modifyContext (<>< _Psi)
->             x' <- typeToNum x
+>             x' <- normaliseNum (toNum x)
 >             unifyZero F0 (substNum alpha x' e)
 >             restore
 >         Hole  | n `dividesCoeffs` e -> do
@@ -363,9 +290,6 @@
 >                modifyContext (<>< _Psi)
 >                constrainZero e
 >                replace F0
->                --g <- getContext
->                --erk $ "No way for " ++ render e ++ " in " ++
->                --           render g ++ "; " ++ render (alpha := d ::: KNum) ++ " | " ++ render _Psi
 
 
 > subsPreds a dn = map (substNormPred a dn)

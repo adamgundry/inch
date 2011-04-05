@@ -313,7 +313,7 @@ status.
 
 > checkInfer mty (TmInt k) = do
 >     instSigma numTy mty
->     return (TmInt k ::: numTy)
+>     return $ TmInt k ::: numTy
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
 >     f ::: fty  <- inferRho f   
@@ -358,7 +358,7 @@ status.
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
 
 
-> funDeclToBinding :: FunDeclaration -> TmName ::: Type KSet
+> funDeclToBinding :: FunDeclaration -> TmName ::: Sigma
 > funDeclToBinding (FunDecl x (Just ty) _) = x ::: ty
 
 > withLayer :: TmLayer -> Contextual () t -> Contextual () t
@@ -428,7 +428,7 @@ status.
 >     return p
 
 > inferAlt :: String ::: Sigma -> SPattern ->
->                 Contextual () (Pattern ::: Type KSet)
+>                 Contextual () (Pattern ::: Rho)
 > inferAlt (s ::: sc) (Pat xs g t) =
 >   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do

@@ -1,5 +1,5 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators, FlexibleContexts,
->              GADTs, RankNTypes #-}
+>              GADTs, RankNTypes, TypeSynonymInstances #-}
 
 > module Context where
 
@@ -21,16 +21,16 @@
 > import Error
 
 
-> data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Type KSet
->                              ,  ptBinds        :: [TmName ::: Type KSet]
+> data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Sigma
+>                              ,  ptBinds        :: [TmName ::: Sigma]
 >                              ,  ptPreds        :: [NormalPredicate]
 >                              ,  ptConstraints  :: [NormalPredicate]
 >                              }
->                   |  AppLeft () Term (Maybe (Type KSet))
->                   |  AppRight (Term ::: Type KSet) ()
->                   |  LamBody (TmName ::: Type KSet) ()
->                   |  LetBody [TmName ::: Type KSet] ()
->                   |  AnnotLeft () (Type KSet)
+>                   |  AppLeft () Term (Maybe Sigma)
+>                   |  AppRight (Term ::: Sigma) ()
+>                   |  LamBody (TmName ::: Tau) ()
+>                   |  LetBody [TmName ::: Sigma] ()
+>                   |  AnnotLeft () Sigma
 >                   |  FunTop
 >                   |  GenMark
 
@@ -75,18 +75,36 @@
 > data CStatus = Given | Wanted
 >   deriving Show
 
+
+> data TyDef k = Hole | Some (Type k) | Fixed | Exists
+
+> instance FV (TyDef k) where
+>     a <? Some t = a <? t
+>     a <? _      = False
+
+
 > type TyEntry k = Var () k := TyDef k
+
+> instance FV (TyEntry k) where
+>     a <? (b := d) = a <? b || a <? d
+
 
 > data AnyTyEntry where
 >     TE :: TyEntry k -> AnyTyEntry
 
+> instance FV AnyTyEntry where
+>     a <? TE t = a <? t
+
+
+
+
 > data Entry where
 >     A           :: TyEntry k -> Entry
 >     Layer       :: TmLayer -> Entry
->     Func        :: TmName -> Type KSet -> Entry
+>     Func        :: TmName -> Sigma -> Entry
 >     Constraint  :: CStatus -> NormalPredicate -> Entry
 
-> data TyDef k = Hole | Some (Type k) | Fixed | Exists
+
 
 > defToMaybe :: TyDef k -> Maybe (Type k)
 > defToMaybe (Some t)  = Just t
@@ -104,7 +122,7 @@
 >                       ,  tValue :: t
 >                       ,  context :: Context
 >                       ,  tyCons :: Map.Map TyConName (Ex Kind)
->                       ,  tmCons :: Map.Map TmConName (Type KSet)
+>                       ,  tmCons :: Map.Map TmConName Sigma
 >                       }
 
 
@@ -200,14 +218,14 @@ Type constructors
 Data constructors
 
 > insertTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmConName -> Type KSet -> m ()
+>                    TmConName -> Sigma -> m ()
 > insertTmCon x ty = do
 >     st <- get
 >     when (Map.member x (tmCons st)) $ errDuplicateTmCon x
 >     put st{tmCons = Map.insert x ty (tmCons st)}
 
 > lookupTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                     TmConName -> m (Type KSet)
+>                     TmConName -> m Sigma
 > lookupTmCon x = do
 >     tcs <- gets tmCons
 >     case Map.lookup x tcs of
@@ -302,7 +320,7 @@ Data constructors
 
 
 > lookupTmVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmName -> m (Term ::: Type KSet)
+>                    TmName -> m (Term ::: Sigma)
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = missingTmVar x

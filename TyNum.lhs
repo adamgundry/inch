@@ -7,6 +7,7 @@
 > import Control.Monad
 > import Data.Foldable
 > import Data.Traversable
+> import Data.Maybe
 
 > import Kit
 > import Num
@@ -35,14 +36,11 @@
 >     Neg       :: TyNum t               -> TyNum t
 >   deriving (Show, Functor, Foldable, Traversable)
 
-
-
 > instance Ord a => Eq (TyNum a) where
 >     n == m = case (normaliseNum n, normaliseNum m) of
 >         (Just n',  Just m')  -> n' == m'
 >         (Nothing,  Nothing)  -> n == m
 >         _                    -> False
-
 
 > instance Monad TyNum where
 >     return = NumVar
@@ -219,3 +217,23 @@
 
 > fogNormPred' :: [String] -> NormPred (NVar a) -> SNormalPred
 > fogNormPred' xs = mapNormPred (fogNormNum' xs)
+
+
+
+> elemPred :: Var a k -> Pred (NVar a) -> Bool
+> elemPred a (P c m n) = elemTyNum a m || elemTyNum a n
+
+> elemTyNum :: Var a k -> TyNum (NVar a) -> Bool
+> elemTyNum a n = Data.Foldable.any (a =?=) n
+
+
+> instance FV a => FV (TyNum a) where
+>     a <? t = Data.Foldable.any (a <?) t
+
+> instance FV NormalNum where
+>     a@(FVar _ KNum) <? n = isJust $ lookupVariable a n
+>     _ <? _               = False
+
+> instance FV NormalPredicate where
+>     a <? IsPos n   = a <? n
+>     a <? IsZero n  = a <? n

@@ -8,6 +8,7 @@
 > import Control.Monad
 > import Data.Foldable hiding (foldl1)
 > import Data.Traversable
+> import Data.Monoid
 
 > import Kit
 > import Kind
@@ -60,12 +61,24 @@
 > type SGuard            = Grd RAW
 
 
+
 > class Fog t where
 >     fog :: t OK -> t RAW
 
 > class TravTypes t where
 >     travTypes :: Applicative f =>
 >         (forall k. Type k -> f (Type k)) -> t OK -> f (t OK)
+
+> mapTypes :: TravTypes t =>
+>                 (forall k. Type k -> Type k) -> t OK -> t OK
+> mapTypes g = unId . travTypes (Id . g)
+
+> replaceTypes :: TravTypes t => Var () k -> Type k -> t OK -> t OK
+> replaceTypes a t = mapTypes (replaceTy a t)
+
+> elemTypes :: TravTypes t => Var () k -> t OK -> Bool
+> elemTypes a t = getAny $ getConst $ travTypes (Const . Any . (a <?)) t
+
 
 
 > data Tm s where
@@ -142,6 +155,16 @@
 >     travTypes g (FD f) = FD <$> travTypes g f
 
 
+> partitionDecls :: [Decl s] -> ([DataDecl s], [FunDecl s])
+> partitionDecls [] = ([], [])
+> partitionDecls (DD d : xs) = (d:ds, fs)
+>   where (ds, fs) = partitionDecls xs
+> partitionDecls (FD f : xs) = (ds, f:fs)
+>   where (ds, fs) = partitionDecls xs
+
+
+
+
 > data Pat s where
 >     Pat :: [PatTerm s] -> Maybe (Grd s) -> Tm s -> Pat s
 
@@ -155,6 +178,9 @@
 >         Pat <$> traverse (travTypes g) xs
 >             <*> traverse (travTypes g) ms
 >             <*> travTypes g t
+
+> instance FV (Pat OK) where
+>     (<?) = elemTypes
 
 
 > data PatTerm s where
@@ -189,21 +215,3 @@
 >     travTypes g (ExpGuard t) = pure $ ExpGuard t
 >     travTypes g (NumGuard ps) = NumGuard <$> traverse (travPred gn) ps
 >       where gn = (toNum <$>) . g . TyNum
-
-
-
-> partitionDecls :: [Decl s] -> ([DataDecl s], [FunDecl s])
-> partitionDecls [] = ([], [])
-> partitionDecls (DD d : xs) = (d:ds, fs)
->   where (ds, fs) = partitionDecls xs
-> partitionDecls (FD f : xs) = (ds, f:fs)
->   where (ds, fs) = partitionDecls xs
-
-
-
-> mapTypes :: TravTypes t =>
->                 (forall k. Type k -> Type k) -> t OK -> t OK
-> mapTypes g = unId . travTypes (Id . g)
-
-> replaceTypes :: TravTypes t => Var () k -> Type k -> t OK -> t OK
-> replaceTypes a t = mapTypes (replaceTy a t)

@@ -1,6 +1,6 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              GADTs, TypeOperators, TypeFamilies, RankNTypes,
->              ScopedTypeVariables #-}
+>              ScopedTypeVariables, FlexibleInstances #-}
 
 > module Type where
 
@@ -13,10 +13,10 @@
 
 
 
-> type Type k   = Ty () k
-> type Tau    = Type KSet
-> type Sigma  = Type KSet
-> type Rho    = Type KSet
+> type Type k  = Ty () k
+> type Tau     = Type KSet
+> type Sigma   = Type KSet
+> type Rho     = Type KSet
 
 
 
@@ -37,6 +37,9 @@
 >     Bind   :: Binder -> String -> Kind l -> Ty (a, l) k  -> Ty a k
 >     Qual   :: Pred (NVar a) -> Ty a k                    -> Ty a k
 >     Arr    :: Ty a (KSet :-> KSet :-> KSet)
+
+> instance FV (Ty () k) where
+>     a <? t = elemTy a t
 
 > data SType where
 >     STyVar  :: String                                     -> SType
@@ -195,3 +198,13 @@
 
 > numToType :: NormalNum -> Type KNum
 > numToType  = TyNum . reifyNum
+
+
+> elemTy :: Var a k -> Ty a l -> Bool
+> elemTy a (TyVar b)       = a =?= b
+> elemTy a (TyCon _ _)     = False
+> elemTy a (TyApp f s)     = elemTy a f || elemTy a s
+> elemTy a (TyNum n)       = elemTyNum a n
+> elemTy a (Bind b x k t)  = elemTy (wkVar a) t
+> elemTy a (Qual p t)      = elemPred a p || elemTy a t 
+> elemTy a Arr             = False
