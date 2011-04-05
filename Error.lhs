@@ -27,6 +27,7 @@
 >     ConUnderapplied    :: TmConName -> Int -> Int -> Err
 >     DuplicateTyCon     :: TyConName -> Err
 >     DuplicateTmCon     :: TmConName -> Err
+>     DuplicateTmVar     :: TmName -> Err
 >     NonNumericVar      :: Ex (Var ()) -> Err
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: TyName -> SType -> Err
@@ -48,6 +49,7 @@
 >     pretty (ConUnderapplied c n m)     _ = text $ "Constructor " ++ c ++ " should have " ++ show n ++ " arguments, but has been given " ++ show m
 >     pretty (DuplicateTyCon t)          _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t)          _ = text $ "Duplicate data constructor " ++ t
+>     pretty (DuplicateTmVar t)          _ = text $ "Duplicate term variable " ++ t
 >     pretty (NonNumericVar (Ex a))           _ = text "Type variable" <+> prettyHigh a <+> text "is not numeric"
 >     pretty (CannotUnify t u)           _ = sep  [  text "Cannot unify"
 >                                                 ,  nest 2 (prettyHigh t)
@@ -90,6 +92,7 @@
 > errConUnderapplied c n m  = throw (ConUnderapplied c n m)
 > errDuplicateTyCon t       = throw (DuplicateTyCon t)
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
+> errDuplicateTmVar t       = throw (DuplicateTmVar t)
 > errNonNumericVar a        = throw (NonNumericVar (Ex a))
 > errCannotUnify t u        = throw (CannotUnify t u)
 > errUnifyFixed a t         = throw (UnifyFixed a t)

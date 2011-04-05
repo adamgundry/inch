@@ -18,7 +18,6 @@
 > instance Pretty Entry where
 >   pretty (A a) _ = prettyHigh a
 >   pretty (Layer l)    _ = prettyHigh l
->   pretty (Func f ty)  _ = prettyHigh f <+> text "::" <+> prettyHigh (fogTy ty)
 >   pretty (Constraint Given p)   _ = braces (prettyHigh p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "??"
 

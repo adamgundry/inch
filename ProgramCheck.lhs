@@ -31,10 +31,13 @@
 
 > checkProg :: SProgram -> Contextual () Program
 > checkProg xs = do
->     let (ds, _) = partitionDecls xs
->     traverse makeTyCon ds
+>     traverse makeDecl xs
 >     traverse checkDecl xs
 >   where
+>     makeDecl :: SDeclaration -> Contextual () ()
+>     makeDecl (DD d) = makeTyCon d
+>     makeDecl (FD f) = makeBinding f
+
 >     makeTyCon :: SDataDeclaration -> Contextual () ()
 >     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
@@ -42,12 +45,20 @@
 >             unless (targetsSet k') $ errKindTarget k
 >             insertTyCon t (Ex k')
 
+>     makeBinding :: SFunDeclaration -> Contextual () ()
+>     makeBinding (FunDecl x (Just ty) _) =
+>       inLocation (text $ "in binding " ++ x) $ do
+>         TK ty' k <- inferKind B0 ty
+>         case k of
+>           KSet  -> insertBinding x (Just ty')
+>           _     -> errKindNotSet (fogKind k)
+>     makeBinding (FunDecl x Nothing _) = insertBinding x Nothing
+
 > checkDecl :: SDeclaration -> Contextual () Declaration
 > checkDecl (DD d) = DD <$> checkDataDecl d
 > checkDecl (FD f) = do
->     f <- checkFunDecl f 
->     let x ::: ty = funDeclToBinding f
->     modifyContext (:< Func x ty)
+>     f@(FunDecl x (Just ty) _) <- checkFunDecl f 
+>     updateBinding x (Just ty)
 >     return $ FD f
 
 

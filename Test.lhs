@@ -273,6 +273,10 @@
 >   ("f :: pi (n :: Num) . Integer\nf {n} | {n > 0, n < 0} = f {n}\nf {n} | True = 0", True) :
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = 0", True) : 
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = x", False) : 
+>   ("x = 0\nx = 1", False) : 
+>   ("x = 0\ny = x\nx = 1", False) : 
+>   ("x = y\ny :: Integer\ny = x", True) : 
+>   ("x :: forall (a :: * -> *) . a\nx = x", False) : 
 >   []
 
 

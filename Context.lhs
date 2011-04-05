@@ -101,7 +101,6 @@
 > data Entry where
 >     A           :: TyEntry k -> Entry
 >     Layer       :: TmLayer -> Entry
->     Func        :: TmName -> Sigma -> Entry
 >     Constraint  :: CStatus -> NormalPredicate -> Entry
 
 
@@ -119,16 +118,17 @@
 > infixl 8 <><
 
 > data ZipState t = St  {  nextFreshInt :: Int
->                       ,  tValue :: t
->                       ,  context :: Context
->                       ,  tyCons :: Map.Map TyConName (Ex Kind)
->                       ,  tmCons :: Map.Map TmConName Sigma
+>                       ,  tValue    :: t
+>                       ,  context   :: Context
+>                       ,  tyCons    :: Map.Map TyConName (Ex Kind)
+>                       ,  tmCons    :: Map.Map TmConName Sigma
+>                       ,  bindings  :: Map.Map TmName (Maybe Sigma)
 >                       }
 
 
 Initial state
 
-> initialState = St 0 () B0 initTyCons initTmCons
+> initialState = St 0 () B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
 >   ("Bool", Ex KSet) :
 >   ("Integer", Ex KSet) :
@@ -136,6 +136,8 @@ Initial state
 > initTmCons = Map.fromList $
 >   ("True", TyCon "Bool" KSet) :
 >   ("False", TyCon "Bool" KSet) :
+>   []
+> initBindings = Map.fromList $
 >   []
 
 
@@ -234,6 +236,33 @@ Data constructors
 
 
 
+Bindings
+
+> insertBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                      TmName -> Maybe Sigma -> m ()
+> insertBinding x ty = do
+>     st <- get
+>     when (Map.member x (bindings st)) $ errDuplicateTmVar x
+>     put st{bindings = Map.insert x ty (bindings st)}
+
+> updateBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                      TmName -> Maybe Sigma -> m ()
+> updateBinding x ty = do
+>     st <- get
+>     put st{bindings = Map.insert x ty (bindings st)}
+
+> lookupBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    TmName -> m (Term ::: Sigma)
+> lookupBinding x = do
+>     bs <- gets bindings
+>     case Map.lookup x bs of
+>         Just (Just ty)  -> return $ TmVar x ::: ty
+>         Just Nothing    -> erk "Mutual recursion requires explicit signatures"
+>         Nothing         -> missingTmVar x
+
+
+
+
 > {-
 > seekTy :: Context -> TyName -> Ex Type
 > seekTy (g :< A (b := d ::: k))  a | a == b  = case d of  Some t  -> t
@@ -257,8 +286,6 @@ Data constructors
 > expandContext (g :< a@(A _))          = expandContext g :< a
 > expandContext (g :< Constraint s p)   =
 >     expandContext g :< Constraint s (bindNormPred (normalNum . seekNum g) p)
-> expandContext (g :< Func x ty) =
->     expandContext g :< Func x (expandType g ty)
 > expandContext (g :< Layer l) =
 >     expandContext g :< Layer (bindLayerTypes (expandTyVar g) l)
 
@@ -323,8 +350,7 @@ Data constructors
 >                    TmName -> m (Term ::: Sigma)
 > lookupTmVar x = getContext >>= seek
 >   where
->     seek B0 = missingTmVar x
->     seek (g :< Func y ty)                      | x == y = return $ TmVar y ::: ty
+>     seek B0 = lookupBinding x
 >     seek (g :< Layer (LamBody (y ::: ty) ()))  | x == y = return $ TmVar y ::: ty
 >     seek (g :< Layer (LetBody bs ())) = case lookIn bs of
 >                                             Just tt  -> return tt
