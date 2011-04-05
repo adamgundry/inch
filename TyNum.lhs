@@ -1,4 +1,5 @@
-> {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GADTs #-}
+> {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GADTs,
+>              TypeSynonymInstances #-}
 
 > module TyNum where
 
@@ -9,28 +10,39 @@
 
 > import Kit
 > import Num
+> import Kind
 
-> type TypeNum          = TyNum TyName
-> type Predicate        = Pred TyName
+> type TypeNum          = TyNum (NVar ())
+> type Predicate        = Pred (NVar ())
+> type NormalNum        = NormNum (NVar ())
+> type NormalPredicate  = NormPred (NVar ())
 
 > type STypeNum         = TyNum String
 > type SPredicate       = Pred String
+> type SNormalNum       = NormNum String
+> type SNormalPred      = NormPred String
+
+> type NVar a = Var a KNum
+> type NormNum a = NExp a
 
 
 
-> data TyNum a where
->     NumConst  :: Integer -> TyNum a
->     NumVar    :: a -> TyNum a
->     (:+:)     :: TyNum a -> TyNum a -> TyNum a
->     (:*:)     :: TyNum a -> TyNum a -> TyNum a
->     Neg       :: TyNum a -> TyNum a
+> data TyNum t where
+>     NumConst  :: Integer               -> TyNum t
+>     NumVar    :: t                     -> TyNum t
+>     (:+:)     :: TyNum t -> TyNum t  -> TyNum t
+>     (:*:)     :: TyNum t -> TyNum t  -> TyNum t
+>     Neg       :: TyNum t               -> TyNum t
 >   deriving (Show, Functor, Foldable, Traversable)
+
+
 
 > instance Ord a => Eq (TyNum a) where
 >     n == m = case (normaliseNum n, normaliseNum m) of
 >         (Just n',  Just m')  -> n' == m'
 >         (Nothing,  Nothing)  -> n == m
 >         _                    -> False
+
 
 > instance Monad TyNum where
 >     return = NumVar
@@ -43,6 +55,7 @@
 > instance Applicative TyNum where
 >     pure = return
 >     (<*>) = ap
+
 
 
 
@@ -107,8 +120,6 @@
 > simplifyPred p = mapPred simplifyNum p
 
 
-> type NormNum a = NExp a
-> type NormalNum = NormNum TyName
 
 
 > normaliseNum :: (Ord a, Applicative m, Monad m) => TyNum a -> m (NormNum a)
@@ -137,7 +148,11 @@
 > data NormPred a where
 >     IsPos   :: NormNum a -> NormPred a
 >     IsZero  :: NormNum a -> NormPred a
->   deriving (Eq, Show, Functor, Foldable, Traversable)
+>   deriving (Eq, Show)
+
+> mapNormPred :: (NormNum a -> NormNum b) -> NormPred a -> NormPred b
+> mapNormPred f (IsPos n)   = IsPos (f n)
+> mapNormPred f (IsZero n)  = IsZero (f n)
 
 > bindNormPred :: (Eq a, Eq b) => (a -> NormNum b) -> NormPred a -> NormPred b
 > bindNormPred g (IsPos n)   = IsPos   (bindNExp g n)
@@ -151,8 +166,6 @@
 > reifyPred (IsPos n) = NumConst 0 %<=% reifyNum n
 > reifyPred (IsZero n) = reifyNum n %==% NumConst 0
 
-> type NormalPredicate = NormPred TyName
-
 > normalisePred :: (Ord a, Applicative m, Monad m) => Pred a -> m (NormPred a)
 > normalisePred (P LE m n)  = IsPos <$> normaliseNum (n :+: Neg m)
 > normalisePred (P LS m n)  = IsPos <$> normaliseNum (n :+: Neg (m :+: NumConst 1))
@@ -161,3 +174,48 @@
 > normalisePred (P EL m n)  = IsZero <$> normaliseNum (n :+: Neg m)
 
 > normalPred p = either error id $ normalisePred p
+
+
+
+> subsTyNum :: Applicative f =>
+>     (a -> f (TyNum b)) ->
+>     TyNum a -> f (TyNum b)
+> subsTyNum fn (NumVar a)    = fn a
+> subsTyNum fn (NumConst k)  = pure $ NumConst k
+> subsTyNum fn (n :+: m)     = (:+:) <$> subsTyNum fn n <*> subsTyNum fn m
+> subsTyNum fn (n :*: m)     = (:*:) <$> subsTyNum fn n <*> subsTyNum fn m
+> subsTyNum fn (Neg n)       = Neg <$> subsTyNum fn n
+
+> subsPred :: Applicative f =>
+>     (a -> f (TyNum b)) ->
+>     Pred a -> f (Pred b)
+> subsPred fn (P c m n) = P c <$> subsTyNum fn m <*> subsTyNum fn n
+
+> bindPred :: (a -> TyNum b) -> Pred a -> Pred b
+> bindPred f = unId . subsPred (Id . f)
+
+
+
+> fogTyNum :: TypeNum -> STypeNum
+> fogTyNum = fogTyNum' []
+
+> fogTyNum' :: [String] -> TyNum (NVar a) -> STypeNum
+> fogTyNum' xs = fmap (fogVar xs)
+
+> fogPred :: Predicate -> SPredicate
+> fogPred = fogPred' []
+
+> fogPred' :: [String] -> Pred (NVar a) -> SPredicate
+> fogPred' xs = mapPred (fogTyNum' xs)
+
+> fogNormNum :: NormalNum -> SNormalNum
+> fogNormNum = fogNormNum' []
+
+> fogNormNum' :: [String] -> NormNum (NVar a) -> SNormalNum
+> fogNormNum' xs = fmap (fogVar xs)
+
+> fogNormPred :: NormalPredicate -> SNormalPred
+> fogNormPred = fogNormPred' []
+
+> fogNormPred' :: [String] -> NormPred (NVar a) -> SNormalPred
+> fogNormPred' xs = mapNormPred (fogNormNum' xs)

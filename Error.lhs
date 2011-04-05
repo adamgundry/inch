@@ -8,33 +8,34 @@
 > import Text.PrettyPrint.HughesPJ
 
 > import TyNum
+> import Kind
 > import Type
 > import Kit
 > import Syntax
 > import PrettyPrinter
 
-> data Err k a x where
->     MissingTyVar       :: String -> Err k a x
->     MissingNumVar      :: String -> Err k a x
->     MissingTyCon       :: String -> Err k a x
->     MissingTmVar       :: String -> Err k a x
->     MissingTmCon       :: String -> Err k a x
->     KindTarget         :: k -> Err k a x
->     KindNot            :: k -> String -> Err k a x
->     KindMismatch       :: Ty k a ::: k -> k -> Err k a x
->     ConstructorTarget  :: Ty k a -> Err k a x
->     ConUnderapplied    :: TmConName -> Int -> Int -> Err k a x
->     DuplicateTyCon     :: TyConName -> Err k a x
->     DuplicateTmCon     :: TmConName -> Err k a x
->     NonNumericVar      :: a -> Err k a x
->     CannotUnify        :: Ty k a -> Ty k a -> Err k a x
->     UnifyFixed         :: a -> Ty k a -> Err k a x
->     UnifyNumFixed      :: a -> TyNum a -> Err k a x
->     CannotDeduce       :: [NormPred a] -> [NormPred a] -> Err k a x
->     BadExistential     :: a -> Ty k a -> [Pat k a x] -> Err k a x
->     Fail               :: String -> Err k a x
+> data Err where
+>     MissingTyVar       :: String -> Err
+>     MissingNumVar      :: String -> Err
+>     MissingTyCon       :: String -> Err
+>     MissingTmVar       :: String -> Err
+>     MissingTmCon       :: String -> Err
+>     KindTarget         :: SKind -> Err
+>     KindNot            :: SKind -> String -> Err
+>     KindMismatch       :: SType ::: SKind -> SKind -> Err
+>     ConstructorTarget  :: SType -> Err
+>     ConUnderapplied    :: TmConName -> Int -> Int -> Err
+>     DuplicateTyCon     :: TyConName -> Err
+>     DuplicateTmCon     :: TmConName -> Err
+>     NonNumericVar      :: TyName -> Err
+>     CannotUnify        :: SType -> SType -> Err
+>     UnifyFixed         :: TyName -> SType -> Err
+>     UnifyNumFixed      :: TyName -> STypeNum -> Err
+>     CannotDeduce       :: [SNormalPred] -> [SNormalPred] -> Err
+>     BadExistential     :: TyName -> SType -> [SPattern] -> Err
+>     Fail               :: String -> Err
 
-> instance Pretty Error where
+> instance Pretty Err where
 >     pretty (MissingTyVar a)            _ = text $ "Missing type variable " ++ a
 >     pretty (MissingNumVar a)           _ = text $ "Missing numeric type variable " ++ a
 >     pretty (MissingTyCon a)            _ = text $ "Missing type constructor " ++ a
@@ -73,7 +74,7 @@
 >                                                 ]
 >     pretty (Fail s)                    _ = text s
 
-> throw :: (E.MonadError ErrorData m) => Error -> m a
+> throw :: (E.MonadError ErrorData m) => Err -> m a
 > throw e = E.throwError (e, [] :: [Doc])
 
 > missingTyVar a            = throw (MissingTyVar a)
@@ -97,8 +98,7 @@
 > errBadExistential a t ps  = throw (BadExistential a t ps)
                             
 
-> type Error = Err Kind TyName TmName
-> type ErrorData = (Error, [Doc])
+> type ErrorData = (Err, [Doc])
 
 > instance E.Error ErrorData where
 >     noMsg     = (Fail "Unknown error", [])

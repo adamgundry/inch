@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -F -pgmF ./toy #-}
-{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables,
+             NPlusKPatterns #-}
 
 {-
 Things that would be nice:

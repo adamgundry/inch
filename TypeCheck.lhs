@@ -1,4 +1,5 @@
-> {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts, PatternGuards #-}
+> {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts, PatternGuards,
+>              RankNTypes #-}
 
 > module TypeCheck where
 
@@ -15,6 +16,7 @@
 
 > import BwdFwd
 > import TyNum
+> import Kind 
 > import Type
 > import Num
 > import Syntax
@@ -27,19 +29,23 @@
 > import KindCheck
 
 
+> numTy   = TyCon "Integer" KSet
+> boolTy  = TyCon "Bool" KSet
+
+
 The |inst| function takes a name-mangling function (for modifying the
 names of binders), a type definition (for use when introducing binders
 into the context) and a type to instantiate. It instantiates
 forall-binders with fresh variables to produce a rho-type, and writes
 a list of predicates found.
 
-> inst :: (String -> String) -> TypeDef -> Type ->
->             ContextualWriter [NormalPredicate] t Type
-> inst s d (TyApp (TyApp (TyB Arr) a) t) =
->     TyApp (TyApp (TyB Arr) a) <$> inst s d t
+> inst :: (String -> String) -> (forall k. TyDef k) -> Type l ->
+>             ContextualWriter [NormalPredicate] t (Type l)
+> inst s d (TyApp (TyApp Arr a) t) =
+>     TyApp (TyApp Arr a) <$> inst s d t
 > inst s d (Bind All x k t) = do
->     beta <- fresh (s x) (d ::: k)
->     inst s d (unbind beta t)
+>     beta <- fresh (s x) k d
+>     inst s d (unbindTy beta t)
 > inst s d (Qual p t) = do
 >     p' <- lift $ normalisePred p
 >     tell [p']
@@ -51,21 +57,21 @@ The |instS| function is like |inst|, but also takes a constraint
 status, and stores the predicates in the context with the given
 status.
 
-> instS :: (String -> String) -> CStatus -> TypeDef -> Type ->
->              Contextual t Type
+> instS :: (String -> String) -> CStatus -> (forall k. TyDef k) -> Type l ->
+>              Contextual t (Type l)
 > instS f s d t = do
 >     (ty, cs) <- runWriterT $ inst f d t
 >     modifyContext (<><< map (Constraint s) cs)
 >     return ty
 
-> specialise :: Type -> Contextual t Type
+> specialise :: Type l -> Contextual t (Type l)
 > specialise = instS id Given Fixed
 
-> instantiate :: Type -> Contextual t Type
+> instantiate :: Type l -> Contextual t (Type l)
 > instantiate = instS (++ "_inst") Wanted Hole
 
 
-> existentialise :: (MonadState (ZipState t) m, FV a) =>
+> existentialise :: (MonadState (ZipState t) m, FV (Ty k a)) =>
 >                       m (Ty k a) -> m (Ty k a)
 > existentialise m = do
 >     modifyContext (:< Layer FunTop) -- hackish
@@ -73,27 +79,28 @@ status.
 >     modifyContext $ help (getTarget ty)
 >     return ty
 >   where
->     help ty (g :< A (a := Hole ::: k))
->         | a <? ty                = help ty g :< A (a := Hole ::: k)
->         | otherwise              = help ty g :< A (a := Exists ::: k)
+>     help ty (g :< A (a := Hole))
+>         | a <? ty                = help ty g :< A (a := Hole)
+>         | otherwise              = help ty g :< A (a := Exists)
 >     help ty (g :< Layer FunTop)  = g
 >     help ty (g :< e)             = help ty g :< e
 
 
-> generalise :: Type -> [Pattern] -> Contextual t (Type, [Pattern])
+> generalise :: Type k -> [Pattern] -> Contextual t (Type k, [Pattern])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps)
 >     putContext g'
 >     return tps
 >   where
+>     help :: Context -> (Type k, [Pattern]) -> Contextual t (Context, (Type k, [Pattern]))
 >     help g@(_ :< Layer FunTop)                tps = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps = return (g, tps)
->     help (g :< A (an := d ::: k)) (t, ps)
->       | an <? t || an <? ps = case d of
->         Exists  -> errBadExistential an t ps
->         Some d  -> help g (replaceTy k an d t, map (replace3 k an d) ps)
->         _       -> help g (Bind All (fst an) k (bind an t), ps)
+>     help (g :< A (an := d)) (t, ps)
+>       | an <? t || an <? ps  = case d of
+>         Exists  -> errBadExistential (varName an) (fogTy t) (map fog ps)
+>         Some d  -> help g (replaceTy an d t, map (replaceTypes an d) ps)
+>         _       -> help g (Bind All (fst (varName an)) (varKind an) (bindTy an t), ps)
 >     help (g :< Layer (LamBody _ _))  tps      = help g tps
 >     help (g :< A _)                  tps      = help g tps
 >     help (g :< Constraint Given _)   tps      = help g tps
@@ -104,7 +111,7 @@ status.
 
 
 
-> layerStops :: TermLayer -> Maybe (TermLayer, [NormalPredicate], [NormalPredicate])
+> layerStops :: TmLayer -> Maybe (TmLayer, [NormalPredicate], [NormalPredicate])
 > layerStops FunTop                   = Just (FunTop, [], [])
 > layerStops GenMark                  = Just (GenMark, [], [])
 > layerStops (PatternTop s bs hs ps)  = Just (PatternTop s bs [] [], hs, ps)
@@ -144,7 +151,7 @@ status.
 >     collect (g :< Constraint Wanted p)  hs ps = collect g hs (p:ps)
 >     collect (g :< Constraint Given h)   hs ps =
 >         collect g (h:hs) ps <:< Constraint Given h
->     collect (g :< A e@(a := Some d ::: KindNum)) hs ps =
+>     collect (g :< A e@(a@(FVar _ KNum) := Some d)) hs ps =
 >         let  dn = normalNum (toNum d)
 >         in   collect g (subsPreds a dn hs) (subsPreds a dn ps ) <:< A e
 >     collect (g :< Layer l) hs ps = case layerStops l of
@@ -164,7 +171,7 @@ status.
 >     (hs, qs) <- trySolveConstraints
 >     case qs of
 >         []  -> return ()
->         _   -> errCannotDeduce hs qs
+>         _   -> errCannotDeduce (map fogNormPred hs) (map fogNormPred qs)
 
 > solveOrSuspend :: Contextual t ()
 > solveOrSuspend = want . snd =<< trySolveConstraints
@@ -190,16 +197,16 @@ status.
 >         p'   = expandPred g (reifyPred p)
 >     return $ convert (expandContext g) [] hs' p'
 >   where
->     convert :: Context -> [(TyName, P.Term)] -> [Predicate] ->
+>     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
 >                    Predicate -> P.Formula
 >     convert B0 axs hs p =
 >         foldr (P.:/\:) P.TRUE (map (predToFormula . apply axs) hs)
 >             P.:=>: predToFormula (apply axs p)
->     convert (g :< A (a := _ ::: KindNum)) axs hs p = 
+>     convert (g :< A (a@(FVar _ KNum) := _)) axs hs p = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
 
->     apply :: [(TyName, P.Term)] -> Predicate -> Pred P.Term
+>     apply :: [(Var () KNum, P.Term)] -> Predicate -> Pred P.Term
 >     apply xs = bindPred (NumVar . fromJust . flip lookup xs)
 >                
 >     predToFormula :: Pred P.Term -> P.Formula
@@ -228,17 +235,19 @@ status.
 >     t  <- specialise t
 >     s  <- instantiate s
 >     case (s, t) of
->         (TyApp (TyApp (TyB Arr) s1) s2, _) -> do
+>         (TyApp (TyApp Arr s1) s2, _) -> do
 >             (t1, t2) <- unifyFun t
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->         (_, TyApp (TyApp (TyB Arr) t1) t2) -> do
+>         (_, TyApp (TyApp Arr t1) t2) -> do
 >             (s1, s2) <- unifyFun s
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 -> do
->             nm <- fresh (a1 ++ "_sc") (Fixed ::: k1)
->             subsCheck (unbind nm t1) (unbind nm t2)
+>         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 ->
+>           hetEq k1 k2 (do
+>             nm <- fresh (a1 ++ "_sc") k1 Fixed
+>             subsCheck (unbindTy nm t1) (unbindTy nm t2)
+>            ) (fail "subsCheck: kind mismatch")
 >         _ -> unify s t
 
 
@@ -258,35 +267,36 @@ status.
 >     putContext =<< help as g []
 >     return t
 >   where
+>     getNames :: Context -> [Ex (Var ())]
 >     getNames (_ :< Layer GenMark) = []
->     getNames (g :< A (a := _ ::: _)) = a : getNames g
+>     getNames (g :< A (a := _)) = Ex a : getNames g
 >     getNames (g :< e) = getNames g
 
->     help :: [TyName] -> Context -> [Either TyEntry NormalPredicate] ->
+>     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry NormalPredicate] ->
 >                 Contextual () Context
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
->     help as (g :< Layer GenMark) h  = erk $ "Bad as: " ++ show as
->     help as (g :< A (a := Fixed ::: k)) h
+>     help as (g :< Layer GenMark) h  = erk $ "Bad as"
+>     help as (g :< A (a := Fixed)) h
 >         | a <? h     = erk "checkSigma help: bad h"
->         | otherwise  = help (delete a as) g h
->     help as (g :< A (a := Some d ::: k)) h = help as g (map (rep k a d) h)
->     help as (g :< A a) h                   = help as g (Left a : h)
+>         | otherwise  = help (delete (Ex a) as) g h
+>     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
+>     help as (g :< A a) h                   = help as g (Left (TE a) : h)
 >     help as (g :< Constraint Wanted p) h   = help as g (Right p : h) 
 >     help as (g :< Constraint Given p) h    = help as g h
 >     help as B0 h = error "checkSigma help: ran out of context"
 
 >     g <><| h = g <><< map toEnt h
->     toEnt (Left a) = A a
+>     toEnt (Left (TE a)) = A a
 >     toEnt (Right p)  = Constraint Wanted p
 
->     rep :: Kind -> TyName -> Type -> Either TyEntry NormalPredicate
->                -> Either TyEntry NormalPredicate
->     rep k a t (Left (b := Some d ::: l)) =
->         Left (b := Some (replaceTy k a t d) ::: l)
->     rep k a t (Left e) = Left e
->     rep KindNum a t (Right p) =
+>     rep :: Var () k -> Type k -> Either AnyTyEntry NormalPredicate
+>                -> Either AnyTyEntry NormalPredicate
+>     rep a t (Left (TE (b := Some d))) =
+>         Left (TE (b := Some (replaceTy a t d)))
+>     rep a t (Left e) = Left e
+>     rep a@(FVar _ KNum) t (Right p) =
 >         Right (substNormPred a (normalNum $ toNum t) p)
->     rep k a t (Right p) = Right p
+>     rep a t (Right p) = Right p
 
 
 > checkInfer :: Maybe Rho -> STerm -> Contextual () (Term ::: Rho)
@@ -302,16 +312,16 @@ status.
 >     return $ TmCon c ::: ty
 
 > checkInfer mty (TmInt k) = do
->     instSigma (TyB NumTy) mty
->     return (TmInt k ::: TyB NumTy)
+>     instSigma numTy mty
+>     return (TmInt k ::: numTy)
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
 >     f ::: fty  <- inferRho f   
 >     case fty of
->         Bind Pi x KindNum aty -> do
+>         Bind Pi x KNum aty -> do
 >             n   <- checkNumKind B0 n
->             nm  <- fresh "_n" (Some (TyNum n) ::: KindNum)
->             ty  <- instSigma (unbind nm aty) mty
+>             nm  <- fresh "_n" KNum (Some (TyNum n))
+>             ty  <- instSigma (unbindTy nm aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
 >         _ -> erk $ "Inferred type " ++ renderMe fty ++ " of " ++
 >                  renderMe f ++ " is not a pi-type with numeric domain"
@@ -325,13 +335,13 @@ status.
 
 > checkInfer (Just r) (Lam x t) = do
 >     (dom, cod) <- unifyFun r
->     b <- withLayer (LamBody (x ::: dom) ()) $ checkRho cod (unbind x t)
->     return $ Lam x (bind x b) ::: r
+>     b <- withLayer (LamBody (x ::: dom) ()) $ checkRho cod t
+>     return $ Lam x b ::: r
 
 > checkInfer Nothing (Lam x t) = do
->     a <- unknownTyVar $ x ::: Set
->     b ::: ty <- withLayer (LamBody (x ::: a) ()) $ inferRho (unbind x t)
->     return $ Lam x (bind x b) ::: a --> ty
+>     a <- unknownTyVar x KSet
+>     b ::: ty <- withLayer (LamBody (x ::: a) ()) $ inferRho t
+>     return $ Lam x b ::: a --> ty
 
 > checkInfer mty (Let ds t) = do
 >     ds <- traverse checkFunDecl ds
@@ -340,17 +350,18 @@ status.
 >     return $ Let ds t ::: ty
 
 > checkInfer mty (t :? xty) = do
->     sc ::: _  <- inferKind B0 xty
->     t         <- checkSigma sc t
->     r         <- instSigma sc mty
+>     TK sc KSet  <- inferKind B0 xty
+>     t           <- checkSigma sc t
+>     r           <- instSigma sc mty
 >     return $ (t :? sc) ::: r
 
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
 
 
+> funDeclToBinding :: FunDeclaration -> TmName ::: Type KSet
 > funDeclToBinding (FunDecl x (Just ty) _) = x ::: ty
 
-> withLayer :: TermLayer -> Contextual () t -> Contextual () t
+> withLayer :: TmLayer -> Contextual () t -> Contextual () t
 > withLayer l m = modifyContext (:< Layer l) *> m <* modifyContext extract
 >   where
 >     extract (g :< Layer l') | matchLayer l l'  = g
@@ -371,7 +382,7 @@ status.
 >   inLocation (text "in inferred expression" <+> prettyHigh t) $
 >     checkInfer Nothing t
 
-> checkRho :: Type -> STerm -> Contextual () Term
+> checkRho :: Rho -> STerm -> Contextual () Term
 > checkRho ty t =
 >   inLocation (text "in checked expression" <+> prettyHigh t) $
 >     tmOf <$> checkInfer (Just ty) t
@@ -382,20 +393,21 @@ status.
 
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
->     sty     <- unknownTyVar $ "_sty" ::: Set
+>     sty     <- unknownTyVar "_sty" KSet
 >     pattys  <- traverse (inferAlt (s ::: sty)) pats
 >     let ptms ::: ptys = unzipAsc pattys
 >     traverse (unify sty) ptys
->     g <- getContext
 >     (ty', ptms') <- generalise sty ptms
 >     return $ FunDecl s (Just $ simplifyTy ty') ptms'
 
-> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) = do
+> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
->     sty ::: k <- inLocation (text $ "in type of " ++ s) $ inferKind B0 st
->     unless (k == Set) $ errKindNotSet k     
->     ptms <- traverse (checkAlt (s ::: sty)) pats
->     return $ FunDecl s (Just sty) ptms
+>     TK sty k <- inLocation (text $ "in type of " ++ s) $ inferKind B0 st
+>     case k of
+>       KSet -> do
+>         ptms <- traverse (checkAlt (s ::: sty)) pats
+>         return $ FunDecl s (Just sty) ptms
+>       _ -> errKindNotSet (fogKind k)
 
 > checkFunDecl (FunDecl s _ []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
@@ -412,11 +424,11 @@ status.
 >     t  <- checkRho rty t
 >     unifySolveConstraints
 >     solveConstraints
->     (_, [p]) <- generalise (TyB Arr) [Pat xs g t] -- to fix up variables
+>     (_, [p]) <- generalise Arr [Pat xs g t] -- to fix up variables
 >     return p
 
 > inferAlt :: String ::: Sigma -> SPattern ->
->                 Contextual () (Pattern ::: Type)
+>                 Contextual () (Pattern ::: Type KSet)
 > inferAlt (s ::: sc) (Pat xs g t) =
 >   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
@@ -435,7 +447,7 @@ status.
 >       np <- normalisePred p
 >       modifyContext (:< Constraint Given np)
 >       return p
-> checkGuard (ExpGuard t)   = ExpGuard <$> checkRho (TyCon "Bool") t
+> checkGuard (ExpGuard t)   = ExpGuard <$> checkRho boolTy t
 
  
 > checkPat :: Bool -> Rho -> [SPatternTerm] ->
@@ -466,33 +478,33 @@ status.
 >     (xs, r) <- checkPat top cod ps
 >     return (PatIgnore : xs, r)
 
-> checkPat top (Bind Pi x KindNum t) (PatBrace Nothing k : ps) = do
->     nm       <- fresh ("_" ++ x ++ "aa") (Some (TyNum (NumConst k)) ::: KindNum)
->     aty      <- instS id Given Fixed (unbind nm t)
+> checkPat top (Bind Pi x KNum t) (PatBrace Nothing k : ps) = do
+>     nm       <- fresh ("_" ++ x ++ "aa") KNum (Some (TyNum (NumConst k)))
+>     aty      <- instS id Given Fixed (unbindTy nm t)
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace Nothing k : xs, r)
 
-> checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) 0 : ps) = do
->     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
->     nm <- freshS a
->     let  t'  = unbind nm t
+> checkPat top (Bind Pi x KNum t) (PatBrace (Just a) 0 : ps) = do
+>     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
+>     nm <- freshS a KNum
+>     let  t'  = unbindTy nm t
 >          d   = if top || nm <? getTarget t'
 >                    then Fixed
 >                    else Exists
->     modifyContext (:< A (nm := d ::: KindNum))
+>     modifyContext (:< A (nm := d))
 >     aty      <- instS id Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) 0 : xs, r)
 
-> checkPat top (Bind Pi x KindNum t) (PatBrace (Just a) k : ps) = do
->     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
->     nm <- freshS $ "_" ++ x ++ "_" ++ a ++ "_" ++ "oo"
->     let  t'  = unbind nm t
+> checkPat top (Bind Pi x KNum t) (PatBrace (Just a) k : ps) = do
+>     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
+>     nm <- freshS ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
+>     let  t'  = unbindTy nm t
 >          d   = if top || nm <? getTarget t'
 >                       then Fixed
 >                       else Exists
->     am <- fresh a (d ::: KindNum)
->     modifyContext (:< A (nm := Some (TyNum (NumVar am + NumConst k)) ::: KindNum))
+>     am <- fresh a KNum d
+>     modifyContext (:< A (nm := Some (TyNum (NumVar am + NumConst k))))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
 >     aty      <- instS id Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
@@ -512,7 +524,7 @@ status.
 >     return ([], t ::: r, r)
 
 > inferPat top (PatVar v : ps) = do
->     a <- unknownTyVar $ "_a" ::: Set
+>     a <- unknownTyVar "_a" KSet
 >     modifyContext (:< Layer (LamBody (v ::: a) ()))
 >     (xs, tr, ty) <- inferPat top ps
 >     return (PatVar v : xs, tr, a --> ty)
@@ -528,16 +540,16 @@ status.
 >     return (PatCon c ys : xs, tr, s --> ty)
 
 > inferPat top (PatIgnore : ps) = do
->     b <- unknownTyVar $ "_b" ::: Set
+>     b <- unknownTyVar "_b" KSet
 >     (xs, tr, ty) <- inferPat top ps
 >     return (PatIgnore : xs, tr, b --> ty)
 
 > inferPat top (PatBrace (Just a) 0 : ps) = do
->     n <- fresh a (Hole ::: KindNum)
->     modifyContext (:< Layer (LamBody (a ::: TyB NumTy) ()))
+>     n <- fresh a KNum Hole
+>     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     (xs, tr, ty) <- inferPat top ps
 >     return (PatBrace (Just a) 0 : xs, tr,
->         Bind Pi a KindNum (bind n ty))
+>         Bind Pi a KNum (bindTy n ty))
 
 > inferPat top (p : _) =
 >     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p

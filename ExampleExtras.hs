@@ -4,7 +4,6 @@ module ExampleExtras where
 
 import Example
 
-deriving instance Show BOOL
 deriving instance Show Nat
 deriving instance Show a => Show (Vec a)
 deriving instance (Show a, Show b) => Show (Pair a b)

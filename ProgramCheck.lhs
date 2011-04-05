@@ -13,6 +13,7 @@
 
 > import BwdFwd
 > import TyNum
+> import Kind
 > import Type
 > import Num
 > import Syntax
@@ -35,9 +36,11 @@
 >     traverse checkDecl xs
 >   where
 >     makeTyCon :: SDataDeclaration -> Contextual () ()
->     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ do
->         unless (targetsSet k) $ errKindTarget k
->         insertTyCon t k
+>     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
+>         case kindKind k of
+>           Ex k' -> do
+>             unless (targetsSet k') $ errKindTarget k
+>             insertTyCon t (Ex k')
 
 > checkDecl :: SDeclaration -> Contextual () Declaration
 > checkDecl (DD d) = DD <$> checkDataDecl d
@@ -47,16 +50,20 @@
 >     modifyContext (:< Func x ty)
 >     return $ FD f
 
+
+
 > checkDataDecl :: SDataDeclaration -> Contextual () DataDeclaration
 > checkDataDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
->     DataDecl t k <$> traverse (checkConstructor t) cs
+>     unEx (kindKind k) $ \ k -> DataDecl t k <$> traverse (checkConstructor t) cs
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
->     (ty' ::: k) <- inferKind B0 ty
->     unless (k == Set) $ errKindNotSet k
->     unless (ty' `targets` t) $ errConstructorTarget ty'
->     insertTmCon c ty'
->     return (c ::: ty')
+>     TK ty' k <- inferKind B0 ty
+>     case k of
+>       KSet -> do
+>         unless (ty' `targets` t) $ errConstructorTarget ty
+>         insertTmCon c ty'
+>         return (c ::: ty')
+>       _ -> errKindNotSet (fogKind k)
 
 

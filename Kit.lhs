@@ -1,4 +1,5 @@
-> {-# LANGUAGE TypeOperators, GADTs, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+> {-# LANGUAGE TypeOperators, GADTs, DeriveFunctor, DeriveFoldable, DeriveTraversable,
+>              RankNTypes, TypeFamilies #-}
 
 > module Kit where
 
@@ -8,10 +9,19 @@
 > import Debug.Trace
 
 
-> type TyName           = (String, Int)
-> type TmName           = String
-> type TyConName        = String
-> type TmConName        = String
+> data Ex f where
+>     Ex :: f a -> Ex f
+
+> unEx :: Ex t -> (forall a . t a -> b) -> b
+> unEx (Ex t) f = f t
+
+> class HetEq t where
+>     hetEq :: t a -> t b -> (a ~ b => x) -> x -> x
+>     (=?=) :: t a -> t b -> Bool
+>     s =?= t = hetEq s t True False
+
+> instance HetEq t => Eq (Ex t) where
+>     Ex s == Ex t = s =?= t
 
 
 

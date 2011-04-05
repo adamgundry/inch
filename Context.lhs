@@ -1,4 +1,5 @@
-> {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators, FlexibleContexts #-}
+> {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators, FlexibleContexts,
+>              GADTs, RankNTypes #-}
 
 > module Context where
 
@@ -13,27 +14,26 @@
 
 > import BwdFwd
 > import TyNum
+> import Kind
 > import Type
 > import Syntax
 > import Kit
 > import Error
 
 
-> data TmLayer k a x  =  PatternTop  {  ptFun  :: x ::: Ty k a
->                                  ,  ptBinds  :: [x ::: Ty k a]
->                                  ,  ptPreds  :: [NormPred a]
->                                  ,  ptConstraints :: [NormPred a]
->                                  }
->                   |  AppLeft () (Tm k a x) (Maybe (Ty k a))
->                   |  AppRight (Tm k a x ::: Ty k a) ()
->                   |  LamBody (x ::: Ty k a) ()
->                   |  LetBody [x ::: Ty k a] ()
->                   |  AnnotLeft () (Ty k a)
+> data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Type KSet
+>                              ,  ptBinds        :: [TmName ::: Type KSet]
+>                              ,  ptPreds        :: [NormalPredicate]
+>                              ,  ptConstraints  :: [NormalPredicate]
+>                              }
+>                   |  AppLeft () Term (Maybe (Type KSet))
+>                   |  AppRight (Term ::: Type KSet) ()
+>                   |  LamBody (TmName ::: Type KSet) ()
+>                   |  LetBody [TmName ::: Type KSet] ()
+>                   |  AnnotLeft () (Type KSet)
 >                   |  FunTop
 >                   |  GenMark
->     deriving Show
 
-> type TermLayer = TmLayer Kind TyName TmName
 
 > {-
 > bindLayer :: (Ord a, Ord b) => (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
@@ -49,7 +49,7 @@
 > bindLayer f FunTop                      = FunTop
 > -}
 
-
+> {-
 > instance Trav3 TmLayer where
 >     trav3 fn fa fx (PatternTop b bs hs ps) =
 >         PatternTop <$> travBind b
@@ -61,42 +61,50 @@
 >     trav3 fn fa fx (AppLeft () tm mty) = AppLeft () <$> trav3 fn fa fx tm
 >         <*> maybe (pure Nothing) (fmap Just . fa) mty
 >     trav3 fn fa fx FunTop = pure $ FunTop
+> -}
+
+> bindLayerTypes :: (forall k . Var () k -> Type k) -> TmLayer -> TmLayer
+> bindLayerTypes g (PatternTop (x ::: ty) bs ps cs) =
+>     PatternTop (x ::: substTy g ty)
+>                (map (\ (y ::: yty) -> y ::: substTy g yty) bs)
+>                (map (bindNormPred (normalNum . toNum . g)) ps)
+>                (map (bindNormPred (normalNum . toNum . g)) cs)
+>                
 
 
 > data CStatus = Given | Wanted
 >   deriving Show
 
-> type TyEnt a = a := TyDef a ::: Kind
+> type TyEntry k = Var () k := TyDef k
 
-> data Ent k a x  =  A      (TyEnt a)
->                 |  Layer  (TmLayer k a x)
->                 |  Func   x (Ty k a)
->                 |  Constraint CStatus (NormPred a)
->   deriving Show
+> data AnyTyEntry where
+>     TE :: TyEntry k -> AnyTyEntry
 
-> data TyDef a = Hole | Some (Ty Kind a) | Fixed | Exists
->   deriving (Show, Functor, Foldable)
+> data Entry where
+>     A           :: TyEntry k -> Entry
+>     Layer       :: TmLayer -> Entry
+>     Func        :: TmName -> Type KSet -> Entry
+>     Constraint  :: CStatus -> NormalPredicate -> Entry
 
-> defToMaybe :: TyDef a -> Maybe (Ty Kind a)
+> data TyDef k = Hole | Some (Type k) | Fixed | Exists
+
+> defToMaybe :: TyDef k -> Maybe (Type k)
 > defToMaybe (Some t)  = Just t
 > defToMaybe _         = Nothing
 
-> type TypeDef = TyDef TyName
-> type Entry = Ent Kind TyName TmName
-> type TyEntry = TyEnt TyName
-> type Context = Bwd Entry
-> type Suffix = Fwd TyEntry
+> type Context  = Bwd Entry
+> type Suffix   = Fwd AnyTyEntry
 
 > (<><) :: Context -> Suffix -> Context
 > _Gamma <>< F0                   = _Gamma
-> _Gamma <>< (e :> _Xi)  = _Gamma :< A e <>< _Xi
+> _Gamma <>< (TE e :> _Xi)  = _Gamma :< A e <>< _Xi
 > infixl 8 <><
 
 > data ZipState t = St  {  nextFreshInt :: Int
 >                       ,  tValue :: t
 >                       ,  context :: Context
->                       ,  tyCons :: Map.Map TyConName Kind
->                       ,  tmCons :: Map.Map TmConName Type
+>                       ,  tyCons :: Map.Map TyConName (Ex Kind)
+>                       ,  tmCons :: Map.Map TmConName (Type KSet)
 >                       }
 
 
@@ -104,11 +112,12 @@ Initial state
 
 > initialState = St 0 () B0 initTyCons initTmCons
 > initTyCons = Map.fromList $
->   ("Bool", Set) :
+>   ("Bool", Ex KSet) :
+>   ("Integer", Ex KSet) :
 >   []
 > initTmCons = Map.fromList $
->   ("True", TyCon "Bool") :
->   ("False", TyCon "Bool") :
+>   ("True", TyCon "Bool" KSet) :
+>   ("False", TyCon "Bool" KSet) :
 >   []
 
 
@@ -125,16 +134,18 @@ Fresh names
 >                 put st{nextFreshInt = succ beta}
 >                 return beta
 
-> freshS :: (Functor m, MonadState (ZipState t) m) => String -> m TyName
-> freshS s = (\ n -> (s, n)) <$> freshName
+> freshS :: MonadState (ZipState t) m => String -> Kind k -> m (Var () k)
+> freshS s k = do  beta <- freshName
+>                  return $ FVar (s, beta) k
 
-> fresh :: MonadState (ZipState t) m => String -> TypeDef ::: Kind -> m TyName
-> fresh a d = do  beta <- freshName
->                 modifyContext (:< A ((a, beta) := d))
->                 return (a, beta)
+> fresh :: MonadState (ZipState t) m => String -> Kind k -> TyDef k -> m (Var () k)
+> fresh s k d = do  v <- freshS s k
+>                   modifyContext (:< A (v := d))
+>                   return v
 
-> unknownTyVar :: (Functor m, MonadState (ZipState t) m) => String ::: Kind -> m Type
-> unknownTyVar (s ::: k) = TyVar k <$> fresh s (Hole ::: k)
+> unknownTyVar :: (Functor m, MonadState (ZipState t) m) =>
+>                     String -> Kind k -> m (Type k)
+> unknownTyVar s k = TyVar <$> fresh s k Hole
 
 
 T values
@@ -171,14 +182,14 @@ Context
 Type constructors
 
 > insertTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TyConName -> Kind -> m ()
+>                    TyConName -> Ex Kind -> m ()
 > insertTyCon x k = do
 >     st <- get
 >     when (Map.member x (tyCons st)) $ errDuplicateTyCon x
 >     put st{tyCons = Map.insert x k (tyCons st)}
 
 > lookupTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TyConName -> m Kind
+>                    TyConName -> m (Ex Kind)
 > lookupTyCon x = do
 >     tcs <- gets tyCons
 >     case Map.lookup x tcs of
@@ -189,14 +200,14 @@ Type constructors
 Data constructors
 
 > insertTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmConName -> Type -> m ()
+>                    TmConName -> Type KSet -> m ()
 > insertTmCon x ty = do
 >     st <- get
 >     when (Map.member x (tmCons st)) $ errDuplicateTmCon x
 >     put st{tmCons = Map.insert x ty (tmCons st)}
 
 > lookupTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                     TmConName -> m Type
+>                     TmConName -> m (Type KSet)
 > lookupTmCon x = do
 >     tcs <- gets tmCons
 >     case Map.lookup x tcs of
@@ -205,92 +216,95 @@ Data constructors
 
 
 
-> seekTy :: Context -> TyName -> Type
+> {-
+> seekTy :: Context -> TyName -> Ex Type
 > seekTy (g :< A (b := d ::: k))  a | a == b  = case d of  Some t  -> t
->                                                          _       -> var k a
+>                                                          _       -> TyVar (FVar b k)
 > seekTy (g :< _)                 a           = seekTy g a
 > seekTy B0                       a           = error "seekTy: missing!"
 
+> -}
 
-> seekNum :: Context -> TyName -> TypeNum
-> seekNum (g :< A (b := d ::: KindNum))  a | a == b  = case d of  Some t  -> toNum t
->                                                                 _       -> NumVar a
-> seekNum (g :< _)                       a           = seekNum g a
-> seekNum B0                             a           = error "seekNum: missing!"
+> seekNum :: Context -> Var () KNum -> TypeNum
+> seekNum (g :< A (b@(FVar _ KNum) := d))  a
+>     | a == b  = case d of  Some t  -> toNum t
+>                            _       -> NumVar a
+> seekNum (g :< _)          a           = seekNum g a
+> seekNum B0                a           = error "seekNum: missing!"
 
 
 > expandContext :: Context -> Context
 > expandContext B0 = B0
-> expandContext (g :< A (a := Some t ::: k))  = expandContext g
-> expandContext (g :< a@(A _))                = expandContext g :< a
-> expandContext (g :< Constraint s p)           =
+> expandContext (g :< A (a := Some t))  = expandContext g
+> expandContext (g :< a@(A _))          = expandContext g :< a
+> expandContext (g :< Constraint s p)   =
 >     expandContext g :< Constraint s (bindNormPred (normalNum . seekNum g) p)
 > expandContext (g :< Func x ty) =
->     expandContext g :< Func x (bindTy (seekNum g) (const $ seekTy g) ty)
+>     expandContext g :< Func x (expandType g ty)
 > expandContext (g :< Layer l) =
->     expandContext g :< Layer (bind3 (seekNum g) (const $ seekTy g) id l)
+>     expandContext g :< Layer (bindLayerTypes (expandTyVar g) l)
 
 
-> expandTyVar :: Context -> Kind -> TyName -> Type
-> expandTyVar g k a = case seek g a of
+> expandTyVar :: Context -> Var () k -> Type k
+> expandTyVar g a = case seek g a of
 >     Some d  -> expandType g d
->     _       -> TyVar k a
+>     _       -> TyVar a
 >   where
->     seek (g :< A (b := d ::: _))  a | a == b  = d
->     seek (g :< _)                 a           = seek g a
->     seek B0                       a           = error "expandTyVar: erk"
+>     seek (g :< A (b := d))  a = hetEq a b d (seek g a)
+>     seek (g :< _)           a           = seek g a
+>     seek B0                 a           = error "expandTyVar: erk"
 
-> expandType :: Context -> Type -> Type
-> expandType g t = bindTy (expandNumVar g) (expandTyVar g) t
+> expandType :: Context -> Type k -> Type k
+> expandType g = substTy (expandTyVar g)
     
 > expandNum :: Context -> TypeNum -> TypeNum
 > expandNum g n = n >>= expandNumVar g
 
-> expandNumVar :: Context -> TyName -> TypeNum
+> expandNumVar :: Context -> Var () KNum -> TypeNum
 > expandNumVar g a = case seek g a of
 >     Some d  -> expandNum g (toNum d)
 >     _       -> NumVar a
 >   where
->     seek (g :< A (b := d ::: KindNum))  a | a == b  = d
->     seek (g :< _)                       a           = seek g a
->     seek B0                             a           = error "expandNumVar: erk"
+>     seek (g :< A (b := d))  a = hetEq a b d (seek g a)
+>     seek (g :< _)           a = seek g a
+>     seek B0                 a = error "expandNumVar: erk"
 
 > expandPred :: Context -> Predicate -> Predicate
 > expandPred g = mapPred (expandNum g)
 
-> niceType :: Type -> Contextual t Type
+> niceType :: Type k -> Contextual t (Type k)
 > niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext
 
 > nicePred :: Predicate -> Contextual t Predicate
 > nicePred p = (\ g -> simplifyPred (expandPred g p)) <$> getContext
 
 
+
+
 > lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    Bwd (TyName ::: Kind) -> String -> m (TyName ::: Kind)
-> lookupTyVar (g :< ((b, n) ::: k)) a  | a == b     = return $ (a, n) ::: k
->                                      | otherwise  = lookupTyVar g a
+>                    Bwd (Ex (Var ())) -> String -> m (Ex (Var ()))
+> lookupTyVar (g :< Ex (FVar (b, n) k)) a  | a == b     = return $ Ex (FVar (a, n) k)
+>                                          | otherwise  = lookupTyVar g a
 > lookupTyVar B0 a = getContext >>= seek
 >   where
 >     seek B0 = missingTyVar a
->     seek (g :< A ((t, n) := _ ::: k)) | a == t = return $ (t, n) ::: k
+>     seek (g :< A (FVar (t, n) k := _)) | a == t = return $ Ex (FVar (t, n) k)
 >     seek (g :< _) = seek g
 
 > lookupNumVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                     Bwd (TyName ::: Kind) -> String -> m TypeNum
-> lookupNumVar (g :< ((b, n) ::: k)) a
->     | a == b && k == KindNum  = return $ NumVar (a, n)
->     | a == b                  = errNonNumericVar (a, n)
->     | otherwise               = lookupNumVar g a
+>                     Bwd (Ex (Var ())) -> String -> m (NVar ())
+> lookupNumVar (g :< (Ex (FVar (b, n) KNum))) a  | a == b  = return $ FVar (a, n) KNum
+> lookupNumVar (g :< (Ex (FVar (b, n) k))) a     | a == b  = errNonNumericVar (a, n)
+>                                                | otherwise = lookupNumVar g a
 > lookupNumVar B0 a = getContext >>= seek
 >   where
 >     seek B0 = missingNumVar a
->     seek (g :< A ((t, n) := _ ::: k))
->         | a == t && k == KindNum = return $ NumVar (t, n)
->         | a == t = errNonNumericVar (a, n)
+>     seek (g :< A (FVar (t, n) KNum := _)) | a == t  = return $ FVar (t, n) KNum
+>     seek (g :< A (FVar (t, n) k := _))    | a == t  = errNonNumericVar (a, n)
 >     seek (g :< _) = seek g
 
 > lookupTmVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmName -> m (Term ::: Type)
+>                    TmName -> m (Term ::: Type KSet)
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = missingTmVar x

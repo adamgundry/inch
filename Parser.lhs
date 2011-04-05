@@ -16,6 +16,7 @@
 > import Type
 > import Syntax
 > import Kit
+> import Kind
 
 
 > parse = I.parse
@@ -61,9 +62,9 @@ Kinds
 
 > kind       = kindBit `chainr1` kindArrow
 > kindBit    = setKind <|> natKind <|> parens kind
-> setKind    = symbol "*" >> return Set
-> natKind    = symbol "Num" >> return KindNum
-> kindArrow  = reservedOp "->" >> return KindArr
+> setKind    = symbol "*" >> return SKSet
+> natKind    = symbol "Num" >> return SKNum
+> kindArrow  = reservedOp "->" >> return (:-->)
 
 
 
@@ -71,18 +72,18 @@ Types
 
 > tyVarName  = identLike True "type variable"
 > tyConName  = identLike False "type constructor"
-> tyVar      = TyVar () <$> tyVarName
-> tyCon      = mkTyCon <$> tyConName
+> tyVar      = STyVar <$> tyVarName
+> tyCon      = STyCon <$> tyConName
 > tyExp      = tyAll <|> tyPi <|> tyQual <|> tyExpArr
-> tyAll      = tyQuant "forall" (Bind All)
-> tyPi       = tyQuant "pi" (Bind Pi)
+> tyAll      = tyQuant "forall" (SBind All)
+> tyPi       = tyQuant "pi" (SBind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
-> tyArrow    = reservedOp "->" >> return (-->)
-> tyBit      = tyBob `chainl1` pure TyApp
+> tyArrow    = reservedOp "->" >> return (--->)
+> tyBit      = tyBob `chainl1` pure STyApp
 > tyBob      =    tyVar
 >            <|>  tyCon
->            <|>  TyNum <$> try tyNumTerm
->            <|>  parens (reservedOp "->" *> pure (TyB Arr) <|> tyExp)
+>            <|>  STyNum <$> try tyNumTerm
+>            <|>  parens (reservedOp "->" *> pure SArr <|> tyExp)
 
 > numVarName   = identLike True "numeric type variable"
 
@@ -108,18 +109,18 @@ Types
 >     aks <- many1 $ foo <$> quantifiedVar
 >     reservedOp "."
 >     t <- tyExp
->     return $ foldr (\ (a, k) ty -> f a k (bind a ty)) t $ join aks
+>     return $ foldr (\ (a, k) ty -> f a k ty) t $ join aks
 >   where
 >     foo :: ([as], k) -> [(as, k)]
 >     foo (as, k) = map (\ a -> (a, k)) as
 
 > quantifiedVar  =    parens ((,) <$> many1 tyVarName <* doubleColon <*> kind)
->                <|>  (\ a -> ([a] , Set)) <$> tyVarName
+>                <|>  (\ a -> ([a] , SKSet)) <$> tyVarName
 
 > tyQual = do
 >     ps <- try (predicates <* reservedOp "=>")
 >     t <- tyExp
->     return $ foldr Qual t ps
+>     return $ foldr SQual t ps
 
 > predicates = predicate `sepBy1` reservedOp ","
 
@@ -180,6 +181,7 @@ Terms
 
 > fexp = foldl1 TmApp <$> many1 aexp
 
+> aexp :: I.IndentCharParser st STerm
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  TmInt <$> integer
@@ -205,9 +207,7 @@ Terms
 >     return $ wrapLam ss t
 >   where
 >     wrapLam [] t      = t
->     wrapLam (s:ss) t  = lam s $ wrapLam ss t
->
->     lam s = Lam s . bind s
+>     wrapLam (s:ss) t  = Lam s $ wrapLam ss t
 
 
 Programs
@@ -227,7 +227,7 @@ Programs
 > dataDecl = I.lineFold $ do
 >     try (reserved "data")
 >     s <- tyConName
->     k <- (doubleColon >> kind) <|> return Set
+>     k <- (doubleColon >> kind) <|> return SKSet
 >     reserved "where"
 >     cs <- many $ I.lineFold constructor
 >     return $ DataDecl s k cs

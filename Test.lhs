@@ -39,7 +39,7 @@
 >               | otherwise      -> Left $ "Round trip mismatch:"
 >                     ++ "\n" ++ s ++ "\n" ++ s'
 >                     ++ "\n" ++ show (vcatPretty prog')
->                     ++ "\n" ++ show prog ++ "\n" ++ show prog'
+>                     -- ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err -> Left $ "Round trip re-parse:\n"
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err

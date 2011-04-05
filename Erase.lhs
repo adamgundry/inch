@@ -1,4 +1,5 @@
-> {-# LANGUAGE TypeOperators, MultiParamTypeClasses, TypeSynonymInstances #-}
+> {-# LANGUAGE TypeOperators, MultiParamTypeClasses, TypeSynonymInstances,
+>              GADTs, TypeFamilies, UndecidableInstances #-}
 
 > module Erase where
 
@@ -9,6 +10,7 @@
 > import BwdFwd
 > import Error
 > import Kit
+> import Kind
 > import Type
 > import TyNum
 > import Syntax
@@ -16,42 +18,56 @@
 > import TypeCheck
 
 
-> eraseKind :: Kind -> Contextual a Kind
-> eraseKind Set                  = pure Set
-> eraseKind KindNum              = erk "Cannot erase kind *"
-> eraseKind (KindArr KindNum l)  = eraseKind l
-> eraseKind (KindArr k l)        = KindArr <$> eraseKind k <*> eraseKind l
+> eraseKind :: Kind k -> Contextual a (Ex Kind)
+> eraseKind KSet          = return $ Ex KSet
+> eraseKind KNum          = return $ Ex KNum
+> eraseKind (k :-> l)  = do
+>     Ex k' <- eraseKind k
+>     Ex l' <- eraseKind l
+>     case k' of
+>         KNum  -> return $ Ex l'
+>         _     -> return $ Ex $ k' :-> l'
 
 
-> eraseType :: Type -> Contextual a (Type ::: Kind)
-> eraseType (TyVar k a)  = return $ TyVar k a ::: k
-> eraseType (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
+> eraseType :: Type k -> Contextual a (Ex Kind, TyKind)
+> eraseType (TyVar (FVar a k))    = do
+>     Ex l <- eraseKind k
+>     return (Ex k, TK (TyVar (FVar a l)) l)
+> eraseType (TyCon c k)  = do
+>     Ex l <- eraseKind k
+>     return (Ex k, TK (TyCon c l) l)
 > eraseType (TyApp f s)  = do
->         (f' ::: kf) <- eraseType f
->         case kf of
->             KindArr KindNum l        -> return $ f' ::: l
->             KindArr k' l -> do
->                 (s' ::: ks) <- eraseType s
->                 unless (k' == ks) $ erk "Kind mismatch"
->                 return $ TyApp f' s' ::: l
-> eraseType (TyB b) = return $ TyB b ::: builtinKind b
-> eraseType (Bind Pi x KindNum t)   = do
->     t' ::: Set <- eraseType $ unbind (error "eraseType: erk") t
->     return (insertNumArrow t' ::: Set)
+>         (Ex k, TK f' kf) <- eraseType f
+>         case (k, kf) of
+>             (KNum :-> l, _)  -> return (Ex l, TK f' kf)
+>             (k' :-> l, k'' :-> l'')    -> do
+>                 (_, TK s' ks) <- eraseType s
+>                 hetEq k'' ks (return (Ex l, TK (TyApp f' s') l''))
+>                             (erk "Kind mismatch")
+> eraseType Arr = return $ (Ex (KSet :-> KSet :-> KSet),
+>                           TK Arr (KSet :-> KSet :-> KSet))
+> eraseType (Bind Pi x KNum t)   = do
+>     (Ex KSet, TK t' KSet) <- eraseType $ unbindTy (error "eraseType: erk") t
+>     return (Ex KSet, TK (insertNumArrow t') KSet)
 >   where
->     insertNumArrow :: Ty k a -> Ty k a
+>     insertNumArrow :: Ty a KSet -> Ty a KSet
 >     insertNumArrow (Bind All x k t) = Bind All x k (insertNumArrow t)
->     insertNumArrow t = TyB NumTy --> t
-> eraseType (Bind All x KindNum t)  = eraseType $ unbind (error "eraseType: erk") t
+>     insertNumArrow t = numTy --> t
+> eraseType (Bind All x KNum t)  = eraseType $ unbindTy (error "eraseType: erk") t
 > eraseType (Bind b x k t)        = do
->     an <- fresh x (Hole ::: k)
->     k' <- eraseKind k
->     t' ::: kt <- eraseType (unbind an t)
->     return $ Bind b x k' (bind an t') ::: kt
+>     an <- fresh x k Hole
+>     Ex k' <- eraseKind k
+>     (ek, TK t' kt) <- eraseType (unbindTy an t)
+>     return (ek, TK (Bind b x k' (bindTy (FVar (varName an) k') t')) kt)
 > eraseType (Qual p t) = eraseType t
 
 
-> eraseTm :: Tm Kind TyName x -> Contextual t (Tm Kind TyName x)
+> eraseToSet t = do
+>     (_, TK t KSet) <- eraseType t
+>     return t
+
+
+> eraseTm :: Term -> Contextual t Term
 > eraseTm (TmVar x)    = pure $ TmVar x
 > eraseTm (TmCon c)    = pure $ TmCon c
 > eraseTm (TmInt k)    = pure $ TmInt k
@@ -59,12 +75,15 @@
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
 > eraseTm (Let ds t)   = Let <$> traverse eraseFunDecl ds <*> eraseTm t
-> eraseTm (t :? ty)    = (:?) <$> eraseTm t <*> (tmOf <$> eraseType ty)
+> eraseTm (t :? ty)    = do
+>     t <- eraseTm t
+>     ty <- eraseToSet ty
+>     return $ t :? ty
 
 This is a bit of a hack; we really ought to extend the syntax of terms:
 
-> numToTm :: TypeNum -> Tm Kind TyName x
-> numToTm (NumVar x)    = TmCon (fst x)
+> numToTm :: TypeNum -> Term
+> numToTm (NumVar x)    = TmCon . fst . varName $ x
 > numToTm (NumConst k)  = TmInt k
 > numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
 > numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)
@@ -72,12 +91,12 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 
 
 > eraseCon :: Constructor -> Contextual a Constructor
-> eraseCon (c ::: t) = ((c :::) . tmOf) <$> eraseType t
+> eraseCon (c ::: t) = (c :::) <$> eraseToSet t
 
-> erasePat :: Pat Kind TyName x -> Contextual a (Pat Kind TyName x)
+> erasePat :: Pattern -> Contextual a Pattern
 > erasePat (Pat ps g t) = Pat (map erasePatTm ps) (eraseGuard <$> g) <$> eraseTm t
 
-> eraseGuard :: Grd Kind TyName x -> Grd Kind TyName x
+> eraseGuard :: Guard -> Guard
 > eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)
 >   where
 >     andExp a b = TmApp (TmApp (TmCon "(&&)") a) b
@@ -89,21 +108,23 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 >     toS EL = "(==)"
 > eraseGuard g              = g
 
-> erasePatTm :: PatTerm Kind TyName x -> PatTerm Kind TyName x
+> erasePatTm :: PatternTerm -> PatternTerm
 > erasePatTm (PatBrace Nothing k)   = PatCon (show k) []
 > erasePatTm (PatBrace (Just a) 0)  = PatVar a
 > erasePatTm (PatBrace (Just a) k)  = PatCon "+" [PatVar a, PatCon (show k) []]
 > erasePatTm (PatCon c ps) = PatCon c (map erasePatTm ps)
 > erasePatTm t = t
 
-> eraseFunDecl :: FunDecl Kind TyName x -> Contextual t (FunDecl Kind TyName x)
+> eraseFunDecl :: FunDeclaration -> Contextual t FunDeclaration
 > eraseFunDecl (FunDecl x mt ps) =
->     FunDecl x <$> traverse (\ t -> tmOf <$> eraseType t) mt
+>     FunDecl x <$> traverse eraseToSet mt
 >               <*> traverse erasePat ps
 
 > eraseDecl :: Declaration -> Contextual a Declaration
-> eraseDecl (DD (DataDecl s k cs)) =
->     DD <$> (DataDecl s <$> eraseKind k <*> traverse eraseCon cs)
+> eraseDecl (DD (DataDecl s k cs)) = do
+>     Ex k <- eraseKind k
+>     cs <- traverse eraseCon cs
+>     return $ DD $ DataDecl s k cs
 > eraseDecl (FD f) = FD <$> eraseFunDecl f
 
 > eraseProg :: Program -> Contextual a Program

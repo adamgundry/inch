@@ -1,12 +1,14 @@
-> {-# LANGUAGE TypeOperators #-}
+> {-# LANGUAGE TypeOperators, GADTs #-}
 
 > module KindCheck where
 
 > import Control.Applicative
 > import Control.Monad
+> import Data.Traversable
 
 > import BwdFwd
 > import TyNum
+> import Kind
 > import Type
 > import Num
 > import Syntax
@@ -17,38 +19,36 @@
 > import PrettyPrinter
 
 
-> inferKind :: Bwd (TyName ::: Kind) -> SType -> Contextual t (Type ::: Kind)
-> inferKind g (TyVar _ a)  = (\ (b ::: k) -> TyVar k b ::: k) <$> lookupTyVar g a
-> inferKind g (TyCon c)    = (TyCon c :::) <$> lookupTyCon c
-> inferKind g (TyApp f s)  = do
->     f' ::: k  <- inferKind g f
+> inferKind :: Bwd (Ex (Var ())) -> SType -> Contextual t TyKind
+> inferKind g (STyVar x)   = (\ (Ex v) -> TK (TyVar v) (varKind v)) <$> lookupTyVar g x
+> inferKind g (STyCon c)   = (\ (Ex k) -> TK (TyCon c k) k) <$> lookupTyCon c
+> inferKind g (STyApp f s)  = do
+>     TK f' k  <- inferKind g f
 >     case k of
->         KindArr k1 k2 -> do
->             s' ::: l  <- inferKind g s
->             unless (k1 == l) $ errKindMismatch (s' ::: l) k1
->             return $ TyApp f' s' ::: k2
->         _ -> errKindNotArrow k
-> inferKind g (TyB b)         = return $ TyB b ::: builtinKind b
-> inferKind g (TyNum n)       = (\ n -> TyNum n ::: KindNum) <$> checkNumKind g n
-> inferKind g (Bind b a k t)  = do
->     n <- freshName
->     ty ::: l <- inferKind (g :< ((a, n) ::: k)) (unbind a t)
->     return $ Bind b a k (bind (a, n) ty) ::: l
-> inferKind g (Qual p t) = do
+>         k1 :-> k2 -> do
+>             TK s' l  <- inferKind g s
+>             hetEq k1 l
+>                 (return $ TK (TyApp f' s') k2)
+>                 (errKindMismatch (s ::: fogKind l) (fogKind k1))
+>             
+>         _ -> errKindNotArrow (fogKind k)
+> inferKind g SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
+> inferKind g (STyNum n)       = (\ n -> TK (TyNum n) KNum) <$> checkNumKind g n
+> inferKind g (SBind b a k t)  = case kindKind k of
+>     Ex k -> do
+>         n <- freshName
+>         let v = FVar (a, n) k
+>         TK ty l <- inferKind (g :< Ex v) t
+>         return $ TK (Bind b a k (bindTy v ty)) l
+> inferKind g (SQual p t) = do
 >     p' <- checkPredKind g p
->     t' ::: k <- inferKind g t
->     return (Qual p' t' ::: k)
+>     TK t' k <- inferKind g t
+>     return $ TK (Qual p' t') k
 
-> checkNumKind :: Bwd (TyName ::: Kind) -> TyNum String -> Contextual t TypeNum
-> checkNumKind g (NumConst k) = return $ NumConst k
-> checkNumKind g (NumVar a) = lookupNumVar g a
-> checkNumKind g (m :+: n) = (:+:) <$> checkNumKind g m <*> checkNumKind g n
-> checkNumKind g (m :*: n) = (:*:) <$> checkNumKind g m <*> checkNumKind g n
-> checkNumKind g (Neg n) = Neg <$> checkNumKind g n
+> checkNumKind :: Bwd (Ex (Var ())) -> TyNum String -> Contextual t TypeNum
+> checkNumKind g = traverse (lookupNumVar g)
 
-> checkPredKind :: Bwd (TyName ::: Kind) -> Pred String -> Contextual t Predicate
+> checkPredKind :: Bwd (Ex (Var ())) -> Pred String -> Contextual t Predicate
 > checkPredKind g = travPred (checkNumKind g)
 
 
-> scopeCheckTypes :: STerm -> Contextual () Term
-> scopeCheckTypes = trav3 (checkNumKind B0) (\ t -> tmOf <$> inferKind B0 t) pure

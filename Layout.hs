@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -F -pgmF ./toy #-}
-{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables,
+             NPlusKPatterns #-}
 
 module Layout where
 
