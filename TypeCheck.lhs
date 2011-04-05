@@ -39,36 +39,36 @@ into the context) and a type to instantiate. It instantiates
 forall-binders with fresh variables to produce a rho-type, and writes
 a list of predicates found.
 
-> inst :: (String -> String) -> (forall k. TyDef k) -> Type l ->
+> inst :: VarState -> (forall k. TyDef k) -> Type l ->
 >             ContextualWriter [NormalPredicate] t (Type l)
-> inst s d (TyApp (TyApp Arr a) t) =
->     TyApp (TyApp Arr a) <$> inst s d t
-> inst s d (Bind All x k t) = do
->     beta <- fresh (s x) k d
->     inst s d (unbindTy beta t)
-> inst s d (Qual p t) = do
+> inst vs d (TyApp (TyApp Arr a) t) =
+>     TyApp (TyApp Arr a) <$> inst vs d t
+> inst vs d (Bind All x k t) = do
+>     beta <- fresh vs x k d
+>     inst vs d (unbindTy beta t)
+> inst vs d (Qual p t) = do
 >     p' <- lift $ normalisePred p
 >     tell [p']
->     inst s d t
-> inst s d t = return t
+>     inst vs d t
+> inst vs d t = return t
 
 
 The |instS| function is like |inst|, but also takes a constraint
 status, and stores the predicates in the context with the given
 status.
 
-> instS :: (String -> String) -> CStatus -> (forall k. TyDef k) -> Type l ->
+> instS :: VarState -> CStatus -> (forall k. TyDef k) -> Type l ->
 >              Contextual t (Type l)
-> instS f s d t = do
->     (ty, cs) <- runWriterT $ inst f d t
+> instS vs s d t = do
+>     (ty, cs) <- runWriterT $ inst vs d t
 >     modifyContext (<><< map (Constraint s) cs)
 >     return ty
 
 > specialise :: Type l -> Contextual t (Type l)
-> specialise = instS id Given Fixed
+> specialise = instS UserVar Given Fixed
 
 > instantiate :: Type l -> Contextual t (Type l)
-> instantiate = instS (++ "_inst") Wanted Hole
+> instantiate = instS SysVar Wanted Hole
 
 
 > existentialise :: (MonadState (ZipState t) m, FV (Ty k a)) =>
@@ -96,11 +96,11 @@ status.
 >     help :: Context -> (Type k, [Pattern]) -> Contextual t (Context, (Type k, [Pattern]))
 >     help g@(_ :< Layer FunTop)                tps = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps = return (g, tps)
->     help (g :< A (an := d)) (t, ps)
->       | an <? t || an <? ps  = case d of
->         Exists  -> errBadExistential (varName an) (fogTy t) (map fog ps)
->         Some d  -> help g (replaceTy an d t, map (replaceTypes an d) ps)
->         _       -> help g (Bind All (fst (varName an)) (varKind an) (bindTy an t), ps)
+>     help (g :< A (a := d)) (t, ps)
+>       | a <? t || a <? ps  = case d of
+>         Exists  -> errBadExistential (varName a) (fogTy t) (map fog ps)
+>         Some d  -> help g (replaceTy a d t, map (replaceTypes a d) ps)
+>         _       -> help g (Bind All (varToString a) (varKind a) (bindTy a t), ps)
 >     help (g :< Layer (LamBody _ _))  tps      = help g tps
 >     help (g :< A _)                  tps      = help g tps
 >     help (g :< Constraint Given _)   tps      = help g tps
@@ -243,10 +243,10 @@ status.
 >             (s1, s2) <- unifyFun s
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->         (Bind b1 a1 k1 t1, Bind b2 a2 k2 t2) | b1 == b2 ->
+>         (Bind b1 x1 k1 t1, Bind b2 x2 k2 t2) | b1 == b2 ->
 >           hetEq k1 k2 (do
->             nm <- fresh (a1 ++ "_sc") k1 Fixed
->             subsCheck (unbindTy nm t1) (unbindTy nm t2)
+>             a <- fresh SysVar x1 k1 Fixed
+>             subsCheck (unbindTy a t1) (unbindTy a t2)
 >            ) (fail "subsCheck: kind mismatch")
 >         _ -> unify s t
 
@@ -320,8 +320,8 @@ status.
 >     case fty of
 >         Bind Pi x KNum aty -> do
 >             n   <- checkNumKind B0 n
->             nm  <- fresh "_n" KNum (Some (TyNum n))
->             ty  <- instSigma (unbindTy nm aty) mty
+>             a   <- fresh SysVar "_n" KNum (Some (TyNum n))
+>             ty  <- instSigma (unbindTy a aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
 >         _ -> erk $ "Inferred type " ++ renderMe fty ++ " of " ++
 >                  renderMe f ++ " is not a pi-type with numeric domain"
@@ -393,7 +393,7 @@ status.
 
 > checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
->     sty     <- unknownTyVar "_sty" KSet
+>     sty     <- unknownTyVar "_x" KSet
 >     pattys  <- traverse (inferAlt (s ::: sty)) pats
 >     let ptms ::: ptys = unzipAsc pattys
 >     traverse (unify sty) ptys
@@ -465,7 +465,7 @@ status.
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     (dom, cod) <- unifyFun ty
 >     sc   <- lookupTmCon c
->     cty  <- existentialise $ instS (++ "_pat_inst") Given Hole sc
+>     cty  <- existentialise $ instS SysVar Given Hole sc
 >     unless (length as == args cty) $
 >         errConUnderapplied c (args cty) (length as)
 >     (ys, s)  <- checkPat False cty as
@@ -479,34 +479,34 @@ status.
 >     return (PatIgnore : xs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace Nothing k : ps) = do
->     nm       <- fresh ("_" ++ x ++ "aa") KNum (Some (TyNum (NumConst k)))
->     aty      <- instS id Given Fixed (unbindTy nm t)
+>     b        <- fresh SysVar x KNum (Some (TyNum (NumConst k)))
+>     aty      <- instS UserVar Given Fixed (unbindTy b t)
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace Nothing k : xs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace (Just a) 0 : ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
->     nm <- freshS a KNum
->     let  t'  = unbindTy nm t
->          d   = if top || nm <? getTarget t'
+>     b <- freshVar UserVar a KNum
+>     let  t'  = unbindTy b t
+>          d   = if top || b <? getTarget t'
 >                    then Fixed
 >                    else Exists
->     modifyContext (:< A (nm := d))
->     aty      <- instS id Given Fixed t'
+>     modifyContext (:< A (b := d))
+>     aty      <- instS UserVar Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) 0 : xs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace (Just a) k : ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
->     nm <- freshS ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
->     let  t'  = unbindTy nm t
->          d   = if top || nm <? getTarget t'
+>     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
+>     let  t'  = unbindTy b t
+>          d   = if top || b <? getTarget t'
 >                       then Fixed
 >                       else Exists
->     am <- fresh a KNum d
->     modifyContext (:< A (nm := Some (TyNum (NumVar am + NumConst k))))
+>     am <- fresh UserVar a KNum d
+>     modifyContext (:< A (b := Some (TyNum (NumVar am + NumConst k))))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
->     aty      <- instS id Given Fixed t'
+>     aty      <- instS UserVar Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) k : xs, r)
 
@@ -532,7 +532,7 @@ status.
 > inferPat top (PatCon c as : ps) =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     sc   <- lookupTmCon c
->     cty  <- existentialise $ instS (++ "_pat_inst") Given Hole sc
+>     cty  <- existentialise $ instS SysVar Given Hole sc
 >     unless (length as == args cty) $
 >         errConUnderapplied c (args cty) (length as)
 >     (ys, s) <- checkPat False cty as
@@ -545,7 +545,7 @@ status.
 >     return (PatIgnore : xs, tr, b --> ty)
 
 > inferPat top (PatBrace (Just a) 0 : ps) = do
->     n <- fresh a KNum Hole
+>     n <- fresh UserVar a KNum Hole
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     (xs, tr, ty) <- inferPat top ps
 >     return (PatBrace (Just a) 0 : xs, tr,

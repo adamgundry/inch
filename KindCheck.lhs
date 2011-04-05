@@ -36,8 +36,7 @@
 > inferKind g (STyNum n)       = (\ n -> TK (TyNum n) KNum) <$> checkNumKind g n
 > inferKind g (SBind b a k t)  = case kindKind k of
 >     Ex k -> do
->         n <- freshName
->         let v = FVar (a, n) k
+>         v <- freshVar UserVar a k
 >         TK ty l <- inferKind (g :< Ex v) t
 >         return $ TK (Bind b a k (bindTy v ty)) l
 > inferKind g (SQual p t) = do

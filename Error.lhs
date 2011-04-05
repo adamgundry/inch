@@ -27,7 +27,7 @@
 >     ConUnderapplied    :: TmConName -> Int -> Int -> Err
 >     DuplicateTyCon     :: TyConName -> Err
 >     DuplicateTmCon     :: TmConName -> Err
->     NonNumericVar      :: TyName -> Err
+>     NonNumericVar      :: Ex (Var ()) -> Err
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: TyName -> SType -> Err
 >     UnifyNumFixed      :: TyName -> STypeNum -> Err
@@ -48,14 +48,14 @@
 >     pretty (ConUnderapplied c n m)     _ = text $ "Constructor " ++ c ++ " should have " ++ show n ++ " arguments, but has been given " ++ show m
 >     pretty (DuplicateTyCon t)          _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t)          _ = text $ "Duplicate data constructor " ++ t
->     pretty (NonNumericVar a)           _ = text "Type variable" <+> prettyVar a <+> text "is not numeric"
+>     pretty (NonNumericVar (Ex a))           _ = text "Type variable" <+> prettyHigh a <+> text "is not numeric"
 >     pretty (CannotUnify t u)           _ = sep  [  text "Cannot unify"
 >                                                 ,  nest 2 (prettyHigh t)
 >                                                 ,  text "with"
 >                                                 ,  nest 2 (prettyHigh u)
 >                                                 ]
->     pretty (UnifyFixed a t)            _ = text "Cannot unify fixed variable" <+> prettyVar a <+> text "with" <+> prettyHigh t
->     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettyVar a <+> text "to unify" <+> prettyHigh n <+> text "with 0"
+>     pretty (UnifyFixed a t)            _ = text "Cannot unify fixed variable" <+> prettyHigh a <+> text "with" <+> prettyHigh t
+>     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettyHigh a <+> text "to unify" <+> prettyHigh n <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
 >                                                 ,  nest 2 (fsepPretty (nub qs))
 >                                                 ,  text "in empty context"
@@ -66,7 +66,7 @@
 >                                                 ,  nest 2 (fsepPretty (nub hs))
 >                                                 ]
 >     pretty (BadExistential a t ps)     _ = sep  [  text "Illegal existential"
->                                                        <+> prettyVar a
+>                                                        <+> prettyHigh a
 >                                                 ,  text "when generalising type"
 >                                                 ,  nest 2 (prettyHigh t)
 >                                                 ,  text "and patterns"
@@ -90,7 +90,7 @@
 > errConUnderapplied c n m  = throw (ConUnderapplied c n m)
 > errDuplicateTyCon t       = throw (DuplicateTyCon t)
 > errDuplicateTmCon t       = throw (DuplicateTmCon t)
-> errNonNumericVar a        = throw (NonNumericVar a)
+> errNonNumericVar a        = throw (NonNumericVar (Ex a))
 > errCannotUnify t u        = throw (CannotUnify t u)
 > errUnifyFixed a t         = throw (UnifyFixed a t)
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)

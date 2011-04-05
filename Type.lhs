@@ -5,7 +5,6 @@
 > module Type where
 
 > import Data.Foldable hiding (notElem)
-> import Data.Traversable
 > import Data.List
 
 > import Kit
@@ -23,6 +22,11 @@
 
 > data TyKind where
 >     TK :: Type k -> Kind k -> TyKind
+
+> data Binder where
+>     Pi   :: Binder
+>     All  :: Binder
+>   deriving (Eq, Show)
 
 
 > data Ty a k where
@@ -91,6 +95,7 @@
 > withBVar f (FVar a k)  = FVar a k
 > withBVar f (BVar x)    = BVar (f x)
 
+> wkVar :: Var a k -> Var (a, l) k
 > wkVar = withBVar Pop
 
 > swapTop :: Ty ((a, k), l) x -> Ty ((a, l), k) x
@@ -125,6 +130,7 @@
 >                                 FVar a k      -> FVar a k)
 
 
+> wkTy :: Ty a k -> Ty (a, l) k
 > wkTy = renameTy wkVar
 
 > wkSubst :: (Var a k -> Ty b k) -> Var (a, l) k -> Ty (b, l) k
@@ -162,19 +168,11 @@
 
 
 
-> alphaConvert :: [(String, String)] -> SType -> SType
-> alphaConvert xys (STyApp f s) = STyApp (alphaConvert xys f)
->                                        (alphaConvert xys s)
-> alphaConvert xys (SBind b a k t) = case lookup a xys of
->     Just y   -> SBind b y k (alphaConvert ((a, y ++ "'") : xys) t)
->     Nothing  -> SBind b a k (alphaConvert xys t)
-> alphaConvert xys t = t
-
 > args :: Ty a k -> Int
-> args (TyApp (TyApp Arr s) t)  = succ $ args t
-> args (Bind Pi x k t)                = succ $ args t
-> args (Bind All x k t)               = args t
-> args (Qual p t)                     = args t
+> args (TyApp (TyApp Arr _) t)  = succ $ args t
+> args (Bind Pi  _ _ t)                = succ $ args t
+> args (Bind All _ _ t)               = args t
+> args (Qual _ t)                     = args t
 > args _                              = 0
 
 > splitArgs :: Ty a k -> ([Ty a k], Ty a k)
@@ -188,11 +186,11 @@
 
 
 > targets :: Ty a k -> TyConName -> Bool
-> targets (TyCon c k)               t | c == t = True
+> targets (TyCon c _)               t | c == t = True
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
-> targets (TyApp f s)               t = targets f t
-> targets (Bind b a k ty)           t = targets ty t
-> targets (Qual p ty)               t = targets ty t
+> targets (TyApp f _)               t = targets f t
+> targets (Bind _ _ _ ty)           t = targets ty t
+> targets (Qual _ ty)               t = targets ty t
 > targets _                         _ = False
 
 > numToType :: NormalNum -> Type KNum

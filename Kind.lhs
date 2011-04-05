@@ -1,13 +1,32 @@
-> {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes, FlexibleInstances #-}
+> {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes,
+>              FlexibleInstances #-}
 
 > module Kind where
 
 > import Kit
 
-> type TyName           = (String, Int)
+
 > type TmName           = String
 > type TyConName        = String
 > type TmConName        = String
+
+
+
+> data VarState where
+>     UserVar  :: VarState
+>     SysVar   :: VarState
+>   deriving (Eq, Ord, Show)
+
+> data TyName where
+>     N :: String -> Int -> VarState -> TyName
+>   deriving (Eq, Ord, Show)
+
+> nameToString :: TyName -> String
+> nameToString (N s _ _) = s
+
+> nameEq :: TyName -> String -> Bool
+> nameEq (N x _ UserVar) y  = x == y
+> nameEq (N _ _ SysVar)  _  = False
 
 
 > data KSet
@@ -18,14 +37,21 @@
 >     KSet   :: Kind KSet
 >     KNum   :: Kind KNum
 >     (:->)  :: Kind k -> Kind l -> Kind (k :-> l)
+> infixr 5 :->
+
+> instance HetEq Kind where
+>     hetEq KSet KSet yes _ = yes
+>     hetEq KNum KNum yes _ = yes
+>     hetEq (k :-> k') (l :-> l') yes no = hetEq k l (hetEq k' l' yes no) no
+>     hetEq _ _ _ no = no
 
 > data SKind where
 >     SKSet   :: SKind
 >     SKNum   :: SKind
 >     (:-->)  :: SKind -> SKind -> SKind
 >   deriving (Eq, Show)
+> infixr 5 :-->
 
-> infixr 5 :->
 
 > targetsSet :: Kind k -> Bool
 > targetsSet KSet       = True
@@ -37,31 +63,45 @@
 > fogKind KNum       = SKNum
 > fogKind (k :-> l)  = fogKind k :--> fogKind l
 
-> varName :: Var () k -> TyName
-> varName (FVar a _) = a
-
-> varKind :: Var () k -> Kind k
-> varKind (FVar _ k) = k
-
 > kindKind :: SKind -> Ex Kind
-> kindKind SKSet = Ex KSet
-> kindKind SKNum = Ex KNum
-> kindKind (k :--> l) = case (kindKind k, kindKind l) of
+> kindKind SKSet       = Ex KSet
+> kindKind SKNum       = Ex KNum
+> kindKind (k :--> l)  = case (kindKind k, kindKind l) of
 >                            (Ex k, Ex l) -> Ex (k :-> l)
->                 
 
 
-> instance HetEq Kind where
->     hetEq KSet KSet yes no = yes
->     hetEq KNum KNum yes no = yes
->     hetEq (k :-> k') (l :-> l') yes no = hetEq k l (hetEq k' l' yes no) no
->     hetEq _ _ yes no = no
 
 
-> data Binder where
->     Pi   :: Binder
->     All  :: Binder
->   deriving (Eq, Show)
+
+
+
+
+> data BVar a k where
+>     Top  :: BVar (a, k) k
+>     Pop  :: BVar a k -> BVar (a, l) k
+
+> instance Show (BVar a k) where
+>     show x = '!' : show (bvarToInt x)
+
+> instance HetEq (BVar a) where
+>     hetEq Top      Top      yes _  = yes
+>     hetEq (Pop x)  (Pop y)  yes no = hetEq x y yes no
+>     hetEq _        _        _   no = no
+
+> instance Eq (BVar a k) where
+>     (==) = (=?=)
+
+> instance Ord (BVar a k) where
+>     Top    <= _      = True
+>     Pop x  <= Pop y  = x <= y
+>     Pop _  <= Top    = False
+
+
+> bvarToInt :: BVar a k -> Int
+> bvarToInt Top      = 0
+> bvarToInt (Pop x)  = succ (bvarToInt x)
+
+
 
 > data Var a k where
 >     BVar :: BVar a k          -> Var a k
@@ -71,10 +111,14 @@
 >     show (BVar x)    = show x
 >     show (FVar a _)  = show a
 
+> instance HetEq (Var a) where
+>     hetEq (FVar a k)  (FVar b l)  yes _ | a == b =
+>         hetEq k l yes (error "eqVar: kinding error")
+>     hetEq (BVar x)    (BVar y)    yes no = hetEq x y yes no
+>     hetEq _           _           _   no = no
+
 > instance Eq (Var a k) where
->     BVar x    == BVar y    = x == y
->     FVar a _  == FVar b _  = a == b
->     _         == _         = False
+>     (==) = (=?=)
 
 > instance Ord (Var a k) where
 >     BVar x    <= BVar y    = x <= y
@@ -82,40 +126,20 @@
 >     BVar _    <= FVar _ _  = True
 >     FVar _ _  <= BVar _    = False
 
-> data BVar a k where
->     Top  :: BVar (a, k) k
->     Pop  :: BVar a k -> BVar (a, l) k
 
-> bvarToInt :: BVar a k -> Int
-> bvarToInt Top      = 0
-> bvarToInt (Pop x)  = succ (bvarToInt x)
+> varName :: Var () k -> TyName
+> varName (FVar a _) = a
+
+> varToString :: Var () k -> String
+> varToString = nameToString . varName
+
+> varKind :: Var () k -> Kind k
+> varKind (FVar _ k) = k
 
 > fogVar :: [String] -> Var a k -> String
-> fogVar bs (FVar a k) = fst a
-> fogVar bs (BVar x) = bs !! bvarToInt x
+> fogVar _  (FVar a _)  = nameToString a
+> fogVar bs (BVar x)    = bs !! bvarToInt x
 
-> instance Show (BVar a k) where
->     show x = '!' : show (bvarToInt x)
-
-> instance Eq (BVar a k) where
->     Top    == Top    = True
->     Pop x  == Pop y  = x == y
->     _      == _      = False
-
-> instance Ord (BVar a k) where
->     Top    <= _      = True
->     Pop x  <= Pop y  = x <= y
->     Pop _  <= Top    = False
-
-
-
-> instance HetEq (BVar a) where
->     hetEq Top      Top      yes no = yes
->     hetEq (Pop x)  (Pop y)  yes no = hetEq x y yes no
->     hetEq _        _        yes no = no
-
-> instance HetEq (Var a) where
->     hetEq (FVar a k)  (FVar b l)  yes no | a == b = hetEq k l yes
->                                                        (error "eqVar: kinding error")
->     hetEq (BVar x)    (BVar y)    yes no = hetEq x y yes no
->     hetEq _           _           yes no = no
+> varNameEq :: Var a k -> String -> Bool
+> varNameEq (FVar nom _)  y = nameEq nom y
+> varNameEq (BVar _)      _ = False

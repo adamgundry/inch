@@ -12,13 +12,13 @@
 > import Context
 
 > instance Pretty (TyEntry k) where
->     pretty (FVar a k := d) _ = prettyVar a <+> text ":="
->       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind k)
+>     pretty (a := d) _ = prettyHigh a <+> text ":="
+>       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind (varKind a))
 
 > instance Pretty Entry where
 >   pretty (A a) _ = prettyHigh a
 >   pretty (Layer l)    _ = prettyHigh l
->   pretty (Func f ty)  _ = prettyVar f <+> text "::" <+> prettyHigh (fogTy ty)
+>   pretty (Func f ty)  _ = prettyHigh f <+> text "::" <+> prettyHigh (fogTy ty)
 >   pretty (Constraint Given p)   _ = braces (prettyHigh p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "??"
 

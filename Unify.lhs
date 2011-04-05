@@ -8,6 +8,7 @@
 > import Data.Foldable 
 > import Data.Maybe
 > import Data.Monoid hiding (All)
+> import Control.Monad.State (gets)
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
 
@@ -149,8 +150,8 @@
 > unifyTypes :: Type k -> Type k -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
 > unifyTypes Arr Arr  = return ()
-> unifyTypes (TyVar (FVar alpha KNum)) (TyVar (FVar beta KNum)) =
->     unifyNum (NumVar (FVar alpha KNum)) (NumVar (FVar beta KNum))
+> unifyTypes (TyVar a@(FVar _ KNum)) (TyVar b) =
+>     unifyNum (NumVar a) (NumVar b)
 > unifyTypes (TyVar alpha) (TyVar beta) = onTop $
 >   \ (gamma := d) ->
 >     hetEq gamma alpha
@@ -158,15 +159,19 @@
 >         restore
 >         (case d of
 >           Hole      ->  replace (TE (alpha := Some (TyVar beta)) :> F0)
->           Some tau  ->  unifyTypes (TyVar beta)   tau       >> restore
->           _         ->  solve beta (TE (alpha := d) :> F0) (TyVar alpha) >>  replace F0
+>           Some tau  ->  unifyTypes (TyVar beta) tau
+>                             >> restore
+>           _         ->  solve beta (TE (alpha := d) :> F0) (TyVar alpha)
+>                             >> replace F0
 >         )
 >       )
 >       (hetEq gamma beta
 >         (case d of
 >           Hole      ->  replace (TE (beta := Some (TyVar alpha)) :> F0)
->           Some tau  ->  unifyTypes (TyVar alpha)  tau       >> restore
->           _         ->  solve alpha (TE (beta := d) :> F0) (TyVar beta) >>  replace F0
+>           Some tau  ->  unifyTypes (TyVar alpha) tau
+>                             >> restore
+>           _         ->  solve alpha (TE (beta := d) :> F0) (TyVar beta)
+>                             >> replace F0
 >         )
 >         (unifyTypes (TyVar alpha)  (TyVar beta)  >> restore)
 >       )
@@ -238,25 +243,23 @@
 >     unifyPairs xs
 
 > rigidHull :: Type k -> Contextual t (Type k, Fwd (Var () KNum, TypeNum))
-> rigidHull (TyVar (FVar a KNum))      = do  v <- freshS "_j" KNum
->                                            return (TyNum (NumVar v), (v, NumVar (FVar a KNum)) :> F0)
-> rigidHull (TyVar v)            = return (TyVar v, F0)
-> rigidHull (TyCon c k)              = return (TyCon c k, F0)
-> rigidHull (TyApp f s)            = do  (f',  xs  )  <- rigidHull f
->                                        (s',  ys  )  <- rigidHull s
->                                        return (TyApp f' s', xs <.> ys)
-> rigidHull Arr = return (Arr, F0)
-> rigidHull (TyNum d)          = do  v <- freshS "_i" KNum
->                                    return (TyNum (NumVar v), (v, d) :> F0)
+> rigidHull (TyVar a)    = case varKind a of
+>                           KNum  -> do  v <- freshVar SysVar "_j" KNum
+>                                        return (TyNum (NumVar v),
+>                                                   (v, NumVar a) :> F0)
+>                           _     -> return (TyVar a, F0)
+> rigidHull (TyCon c k)  = return (TyCon c k, F0)
+> rigidHull (TyApp f s)  = do  (f',  xs  )  <- rigidHull f
+>                              (s',  ys  )  <- rigidHull s
+>                              return (TyApp f' s', xs <.> ys)
+> rigidHull Arr          = return (Arr, F0)
+> rigidHull (TyNum d)    = do  v <- freshVar SysVar "_i" KNum
+>                              return (TyNum (NumVar v), (v, d) :> F0)
 
 > rigidHull (Bind All x k b) | not (k =?= KNum) = do
->     n <- freshName
->     let v = FVar ("magic", n) k
+>     v <- freshVar SysVar "_magic" k
 >     (t, cs) <- rigidHull (unbindTy v b)
 >     return (Bind All x k (bindTy v t), cs)
-
-
-
 
 > {-
 > rigidHull (Bind Pi x KNum b) = do
@@ -274,6 +277,7 @@
 
 
 > rigidHull b = erk $ "rigidHull can't cope with " ++ renderMe b
+
 
 > pairsToSuffix :: Fwd (Var () KNum, TypeNum) -> Suffix
 > pairsToSuffix = fmap (TE . (:= Hole) . fst)
@@ -381,7 +385,7 @@ We can insert a fresh variable into a unit thus:
 
 > insertFreshVar :: NormalNum -> Contextual t (NormalNum, Var () KNum)
 > insertFreshVar d = do
->     v <- freshS "_beta" KNum
+>     v <- freshVar SysVar "_beta" KNum
 >     return (d +~ mkVar v, v)
 
 
@@ -389,8 +393,7 @@ We can insert a fresh variable into a unit thus:
 > unifyFun :: Rho -> Contextual a (Sigma, Rho)
 > unifyFun (TyApp (TyApp Arr s) t) = return (s, t)
 > unifyFun ty = do
->     n <- freshName
->     a <- unknownTyVar ("_dom" ++ show n) KSet
->     b <- unknownTyVar ("_cod" ++ show n) KSet
->     unify (a --> b) ty
->     return (a, b)
+>     s <- unknownTyVar "_s" KSet
+>     t <- unknownTyVar "_t" KSet
+>     unify (s --> t) ty
+>     return (s, t)

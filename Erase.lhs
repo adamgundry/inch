@@ -55,7 +55,7 @@
 >     insertNumArrow t = numTy --> t
 > eraseType (Bind All x KNum t)  = eraseType $ unbindTy (error "eraseType: erk") t
 > eraseType (Bind b x k t)        = do
->     an <- fresh x k Hole
+>     an <- fresh SysVar x k Hole
 >     Ex k' <- eraseKind k
 >     (ek, TK t' kt) <- eraseType (unbindTy an t)
 >     return (ek, TK (Bind b x k' (bindTy (FVar (varName an) k') t')) kt)
@@ -83,7 +83,7 @@
 This is a bit of a hack; we really ought to extend the syntax of terms:
 
 > numToTm :: TypeNum -> Term
-> numToTm (NumVar x)    = TmCon . fst . varName $ x
+> numToTm (NumVar x)    = TmCon . varToString $ x
 > numToTm (NumConst k)  = TmInt k
 > numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
 > numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)

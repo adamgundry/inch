@@ -128,24 +128,24 @@ Initial state
 
 Fresh names
 
-> freshName :: MonadState (ZipState t) m => m Int
-> freshName = do  st <- get
->                 let beta = nextFreshInt st
->                 put st{nextFreshInt = succ beta}
->                 return beta
+> freshVar :: MonadState (ZipState t) m =>
+>                 VarState -> String -> Kind k -> m (Var () k)
+> freshVar vs s k = do
+>     st <- get
+>     let beta = nextFreshInt st
+>     put st{nextFreshInt = succ beta}
+>     return $ FVar (N s beta vs) k
 
-> freshS :: MonadState (ZipState t) m => String -> Kind k -> m (Var () k)
-> freshS s k = do  beta <- freshName
->                  return $ FVar (s, beta) k
-
-> fresh :: MonadState (ZipState t) m => String -> Kind k -> TyDef k -> m (Var () k)
-> fresh s k d = do  v <- freshS s k
->                   modifyContext (:< A (v := d))
->                   return v
+> fresh :: MonadState (ZipState t) m =>
+>              VarState -> String -> Kind k -> TyDef k -> m (Var () k)
+> fresh vs s k d = do
+>     v <- freshVar vs s k
+>     modifyContext (:< A (v := d))
+>     return v
 
 > unknownTyVar :: (Functor m, MonadState (ZipState t) m) =>
 >                     String -> Kind k -> m (Type k)
-> unknownTyVar s k = TyVar <$> fresh s k Hole
+> unknownTyVar s k = TyVar <$> fresh SysVar s k Hole
 
 
 T values
@@ -283,25 +283,23 @@ Data constructors
 
 > lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
 >                    Bwd (Ex (Var ())) -> String -> m (Ex (Var ()))
-> lookupTyVar (g :< Ex (FVar (b, n) k)) a  | a == b     = return $ Ex (FVar (a, n) k)
->                                          | otherwise  = lookupTyVar g a
-> lookupTyVar B0 a = getContext >>= seek
+> lookupTyVar (g :< Ex a) x
+>     | varNameEq a x  = return $ Ex a
+>     | otherwise      = lookupTyVar g x
+> lookupTyVar B0 x = getContext >>= seek
 >   where
->     seek B0 = missingTyVar a
->     seek (g :< A (FVar (t, n) k := _)) | a == t = return $ Ex (FVar (t, n) k)
+>     seek B0 = missingTyVar x
+>     seek (g :< A (a := _)) | varNameEq a x = return $ Ex a
 >     seek (g :< _) = seek g
 
 > lookupNumVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
 >                     Bwd (Ex (Var ())) -> String -> m (NVar ())
-> lookupNumVar (g :< (Ex (FVar (b, n) KNum))) a  | a == b  = return $ FVar (a, n) KNum
-> lookupNumVar (g :< (Ex (FVar (b, n) k))) a     | a == b  = errNonNumericVar (a, n)
->                                                | otherwise = lookupNumVar g a
-> lookupNumVar B0 a = getContext >>= seek
->   where
->     seek B0 = missingNumVar a
->     seek (g :< A (FVar (t, n) KNum := _)) | a == t  = return $ FVar (t, n) KNum
->     seek (g :< A (FVar (t, n) k := _))    | a == t  = errNonNumericVar (a, n)
->     seek (g :< _) = seek g
+> lookupNumVar g x = do
+>     Ex a <- lookupTyVar g x
+>     case varKind a of
+>         KNum  -> return a
+>         _     -> errNonNumericVar a
+
 
 > lookupTmVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
 >                    TmName -> m (Term ::: Type KSet)

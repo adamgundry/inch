@@ -8,7 +8,6 @@ Things that would be nice:
 * Automatic translation of GADT notation into local equality constraints
 * Mutually recursive binding groups
 * Nat kind (desugars to Num with inequality constraint)
-* Fix lexically-scoped type variables, without name munging
 * Higher-order unification
 * Type synonyms
 * GHC LINE pragmas that make some kind of sense

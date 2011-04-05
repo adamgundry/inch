@@ -43,19 +43,15 @@
 > infix 2 <++>
 
 
-> class Ord a => PrettyVar a where
->     prettyVar :: a -> Doc
+> instance Pretty String where
+>     pretty s _ = text s
 
+> instance Pretty TyName where
+>     pretty n _ = text (nameToString n)
 
-> instance PrettyVar String where
->     prettyVar = text
+> instance Pretty (Var () k) where
+>     pretty v = pretty (varName v)
 
-> instance PrettyVar (String, Int) where
->     prettyVar (s, -1) = text s
->     prettyVar (s, n) = text s <> char '_' <> int n
-
-> instance PrettyVar (Var () k) where
->     prettyVar (FVar x k) = prettyVar x
 
 
 > instance Pretty SKind where
@@ -70,7 +66,7 @@
 
 > instance Pretty STypeNum where
 >     pretty (NumConst k)  = const $ integer k
->     pretty (NumVar a)    = const $ prettyVar a
+>     pretty (NumVar a)    = const $ text a
 >     pretty (m :+: NumConst k) | k < 0 = wrapDoc AppSize $ 
 >         pretty m ArgSize <+> text "-" <+> integer (-k)
 >     pretty (m :+: Neg n) = wrapDoc AppSize $ 
@@ -99,22 +95,20 @@
 >     pretty EL _ = text "~"
 
 > instance Pretty SType where
->     pretty (STyVar v)                  = const $ prettyVar v
+>     pretty (STyVar v)                  = const $ text v
 >     pretty (STyCon c)                  = const $ text c
 >     pretty (STyApp (STyApp SArr s) t)  = wrapDoc ArrSize $ 
 >         pretty s AppSize <+> text "->" <++> pretty t ArrSize
 >     pretty (STyApp f s)  = wrapDoc AppSize $ 
 >         pretty f AppSize <+> pretty s ArgSize
 >     pretty (STyNum n) = pretty n
->     pretty (SBind b a k t) = prettyBind b (B0 :< (a, k)) $
->         alphaConvert [(a, a ++ "'")] t
+>     pretty (SBind b a k t) = prettyBind b (B0 :< (a, k)) t
 >     pretty (SQual p t) = prettyQual (B0 :< p) t
 >     pretty SArr = const $ text "(->)"
 
 > prettyBind :: Binder -> Bwd (String, SKind) ->
 >     SType -> Size -> Doc
-> prettyBind b bs (SBind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) $
->     alphaConvert [(a, a ++ "'")] t
+> prettyBind b bs (SBind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) t
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <++> pretty t ArrSize
@@ -136,7 +130,7 @@
 
 
 > instance Pretty STerm where
->     pretty (TmVar x)    = const $ prettyVar x
+>     pretty (TmVar x)    = const $ text x
 >     pretty (TmCon s)    = const $ text s
 >     pretty (TmInt k)    = const $ integer k
 >     pretty (TmApp f s)  = wrapDoc AppSize $
@@ -148,7 +142,7 @@
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
 > prettyLam :: Doc -> STerm -> Size -> Doc
-> prettyLam d (Lam x t) = prettyLam (d <+> prettyVar x) t
+> prettyLam d (Lam x t) = prettyLam (d <+> text x) t
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
@@ -166,12 +160,12 @@
 >             vcat (map prettyHigh cs)
 
 > instance Pretty SFunDeclaration where
->     pretty (FunDecl n Nothing ps) _ = vcat (map ((prettyVar n <+>) . prettyHigh) ps)
->     pretty (FunDecl n (Just ty) ps) _ = vcat $ (prettyVar n <+> text "::" <+> prettyHigh ty) : map ((prettyVar n <+>) . prettyHigh) ps
+>     pretty (FunDecl n Nothing ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
+>     pretty (FunDecl n (Just ty) ps) _ = vcat $ (text n <+> text "::" <+> prettyHigh ty) : map ((text n <+>) . prettyHigh) ps
 
 
-> instance (PrettyVar x, Pretty p) => Pretty (x ::: p) where
->   pretty (x ::: p) _ = prettyVar x <+> text "::" <+> prettyHigh p
+> instance (Pretty x, Pretty p) => Pretty (x ::: p) where
+>   pretty (x ::: p) _ = prettyHigh x <+> text "::" <+> prettyHigh p
 
 
 > instance Pretty SPattern where
@@ -187,7 +181,7 @@
 
 
 > instance Pretty SPatternTerm where
->     pretty (PatVar x)    = const $ prettyVar x
+>     pretty (PatVar x)    = const $ text x
 >     pretty (PatCon c []) = const $ text c
 >     pretty (PatCon "+" [a, b]) = wrapDoc AppSize $
 >         prettyLow a <+> text "+" <+> prettyLow b
@@ -195,9 +189,9 @@
 >                                text c <+> hsep (map prettyLow ps)
 >     pretty PatIgnore = const $ text "_"
 >     pretty (PatBrace Nothing k)   = const $ braces $ integer k
->     pretty (PatBrace (Just a) 0)  = const $ braces $ prettyVar a
+>     pretty (PatBrace (Just a) 0)  = const $ braces $ text a
 >     pretty (PatBrace (Just a) k)  = const $ braces $
->                                     prettyVar a <+> text "+" <+> integer k
+>                                     text a <+> text "+" <+> integer k
 
 > instance Pretty SNormalPred where
 >     pretty p = pretty (reifyPred p)
