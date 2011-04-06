@@ -47,7 +47,8 @@
 >     pretty s _ = text s
 
 > instance Pretty TyName where
->     pretty n _ = text (nameToString n)
+>     pretty (N x _ UserVar)  _ = text x
+>     pretty (N x i SysVar)   _ = text $ x ++ "_" ++ show i
 
 > instance Pretty (Var () k) where
 >     pretty v = pretty (varName v)

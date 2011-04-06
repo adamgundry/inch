@@ -144,6 +144,11 @@
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec a n\n"
 >   ++ "  Cons :: forall a (n :: Num). 1 <= n => a -> Vec a (n-1) -> Vec a n\n"
 
+> vec3Decl = "data Vec :: Num -> * -> * where\n"
+>   ++ "  Nil :: forall a . Vec 0 a\n"
+>   ++ "  Cons :: forall a (n :: Num). 0 <= n => a -> Vec n a -> Vec (n+1) a\n"
+
+
 > natDecl = "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\n"
 
 > parseCheckTestData = 
@@ -177,8 +182,8 @@
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   ("f :: forall a (n :: Num) . n ~ n => a -> a\nf x = x", True) :
 >   ("f :: forall a (n :: Num) . n ~ m => a -> a\nf x = x", False) :
->   (vecDecl ++ "head (Cons x xs) = x\nid Nil = Nil\nid (Cons x xs) = Cons x xs", False) :
->   (vecDecl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid :: forall (n :: Num) a. Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
+>   (vecDecl ++ "head (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vecDecl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "tail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\ntail (Cons x xs) = xs", True) :
@@ -191,10 +196,10 @@
 >   (vecDecl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = tail (tail xs)", True) :
 >   (vecDecl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails xs = tail (tail xs)", True) :
 >   (vecDecl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
->   (vecDecl ++ "id :: forall a (n :: Num) . Vec n a -> Vec n a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
->   (vecDecl ++ "id :: forall a (n m :: Num) . Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", False) :
->   (vecDecl ++ "id :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
->   (vec2Decl ++ "id :: forall a (n m :: Num) . n ~ m => Vec a n -> Vec a m\nid Nil = Nil\nid (Cons x xs) = Cons x xs", True) :
+>   (vecDecl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vecDecl ++ "id2 :: forall a (n m :: Num) . Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vecDecl ++ "id2 :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vec2Decl ++ "id2 :: forall a (n m :: Num) . n ~ m => Vec a n -> Vec a m\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   ("f :: forall a. 0 ~ 1 => a\nf = f", False) :
 >   -- ("x = y\ny = x", True) :
 >   ("f :: forall a . pi (m :: Num) . a -> a\nf {0} x = x\nf {n} x = x", True) :
@@ -252,7 +257,7 @@
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x\nx = f (Higher (\\ zzz -> 0)) 0", False) :
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop (f {m} {n}) loop", True) :
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop loop (f {m} {n})", False) :
->   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id (f {m} {n})", False) :
+>   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid2 x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id2 (f {m} {n})", False) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = Ex Refl", True) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = f {n}", False) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n+1} Refl", True) :
@@ -277,6 +282,25 @@
 >   ("x = 0\ny = x\nx = 1", False) : 
 >   ("x = y\ny :: Integer\ny = x", True) : 
 >   ("x :: forall (a :: * -> *) . a\nx = x", False) : 
+>   (vec3Decl ++ "head (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vec3Decl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   (vec3Decl ++ "tail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\ntail (Cons x xs) = xs", True) :
+>   (vec3Decl ++ "lie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
+>   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x", True) :
+>   (vec3Decl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x", True) :
+>   (vec3Decl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x\nbad = silly (Cons Nil Nil)", False) :
+>   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nwrong = head Nil", False) :
+>   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nright = head (Cons Nil Nil)", True) :
+>   (vec3Decl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = tail (tail xs)", True) :
+>   (vec3Decl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails xs = tail (tail xs)", True) :
+>   (vec3Decl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
+>   (vec3Decl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vec3Decl ++ "id2 :: forall a (n m :: Num) . Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vec3Decl ++ "id2 :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vec3Decl ++ "data Pair :: * -> * -> * where Pair :: forall a b. a -> b -> Pair a b\nvsplit2 :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)\nvsplit2 {0}   xs           = Pair Nil xs\nvsplit2 {n+1} (Cons x xs) = let  f (Pair ys zs)  = Pair (Cons x ys) zs\n                                 xs'             = vsplit2 {n} xs\n                             in f xs'", True) :
+>   ("data Max :: Num -> Num -> Num -> * where\n  Less :: forall (m n :: Num) . m < n => Max m n n\n  Same :: forall (m :: Num) . Max m m m\n  More :: forall (m n :: Num) . m > n => Max m n m", True) :
 >   []
 
 

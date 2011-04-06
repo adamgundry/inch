@@ -109,13 +109,15 @@
 > mapPred f = unId . travPred (Id . f)
 
 > simplifyPred :: Pred a -> Pred a
-> simplifyPred (P EL m n) = case (simplifyNum m, simplifyNum n) of
->     (m' :+: Neg n', NumConst 0)  -> m' %==% n'
->     (Neg n' :+: m', NumConst 0)  -> m' %==% n'
->     (NumConst 0, m' :+: Neg n')  -> m' %==% n'
->     (NumConst 0, Neg n' :+: m')  -> m' %==% n'
->     (m', n')                     -> m' %==% n'
-> simplifyPred p = mapPred simplifyNum p
+> simplifyPred (P c m n) = case (simplifyNum m, simplifyNum n) of
+>     (m' :+: Neg n', NumConst 0)  -> mkP c m' n'
+>     (Neg n' :+: m', NumConst 0)  -> mkP c m' n'
+>     (NumConst 0, n' :+: Neg m')  -> mkP c m' n'
+>     (NumConst 0, Neg m' :+: n')  -> mkP c m' n'
+>     (m', n')                     -> mkP c m' n'
+>   where
+>     mkP LE m (n :+: NumConst (-1)) = P LS m n
+>     mkP c m n = P c m n
 
 
 
@@ -161,8 +163,8 @@
 > substNormPred a n (IsZero m)  = IsZero  $ substNum a n m
 
 > reifyPred :: Ord a => NormPred a -> Pred a
-> reifyPred (IsPos n) = NumConst 0 %<=% reifyNum n
-> reifyPred (IsZero n) = reifyNum n %==% NumConst 0
+> reifyPred (IsPos n) = simplifyPred $ NumConst 0 %<=% reifyNum n
+> reifyPred (IsZero n) = simplifyPred $ reifyNum n %==% NumConst 0
 
 > normalisePred :: (Ord a, Applicative m, Monad m) => Pred a -> m (NormPred a)
 > normalisePred (P LE m n)  = IsPos <$> normaliseNum (n :+: Neg m)

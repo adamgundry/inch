@@ -6,9 +6,8 @@
 > import Control.Applicative
 > import Control.Monad.Error
 > import Control.Monad.State
-> import Control.Monad.Writer
+> import Control.Monad.Writer hiding (All)
 > import Data.Foldable
-> import Data.Monoid
 > import qualified Data.Map as Map
 > import Data.Traversable
 
@@ -130,14 +129,18 @@ Initial state
 
 > initialState = St 0 () B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
->   ("Bool", Ex KSet) :
->   ("Integer", Ex KSet) :
+>   ("Bool",     Ex KSet) :
+>   ("Integer",  Ex KSet) :
+>   ("String",   Ex KSet) :
 >   []
 > initTmCons = Map.fromList $
->   ("True", TyCon "Bool" KSet) :
->   ("False", TyCon "Bool" KSet) :
+>   ("True",   TyCon "Bool" KSet) :
+>   ("False",  TyCon "Bool" KSet) :
 >   []
 > initBindings = Map.fromList $
+>   ("undefined",  Just (Bind All "a" KSet (TyVar (BVar Top)))) :
+>   ("id",         Just (Bind All "a" KSet 
+>                           (TyVar (BVar Top) --> TyVar (BVar Top)))) :
 >   []
 
 

@@ -16,8 +16,8 @@
 >       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind (varKind a))
 
 > instance Pretty Entry where
->   pretty (A a) _ = prettyHigh a
->   pretty (Layer l)    _ = prettyHigh l
+>   pretty (A a)                  _ = prettyHigh a
+>   pretty (Layer l)              _ = prettyHigh l
 >   pretty (Constraint Given p)   _ = braces (prettyHigh p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "??"
 
@@ -28,7 +28,15 @@
 >   pretty (Some t)  l = pretty (fogTy t) l
 
 > instance Pretty TmLayer where
->   pretty _ _ = text "TmLayer"
+>   pretty (PatternTop (x ::: _) _ _ _)  _ = text $ "PatternTop " ++ x
+>   pretty (AppLeft _ _ _)               _ = text "AppLeft"
+>   pretty (AppRight _ _)                _ = text "AppRight"
+>   pretty (LamBody (x ::: _) _)         _ = text $ "LamBody " ++ x
+>   pretty (LetBody _ _)                 _ = text "LetBody"
+>   pretty (AnnotLeft _ _)               _ = text "AnnotLeft"
+>   pretty FunTop                        _ = text "FunTop"
+>   pretty GenMark                       _ = text "GenMark"
+
 > {-
 >   pretty (PatternTop ssty bs ps cs) _ = text "<PatternTop>"
 >       $$ prettyHigh (fogTy ssty)

@@ -4,8 +4,6 @@
 
 module Layout where
 
-bottom = bottom
-
 
 trichotomy :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
     (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
@@ -57,17 +55,17 @@ data Ident :: * where
 
 
 data Stuff :: Num -> Num -> * where
-  Unit :: forall (w d :: Num) . w ~ 1, d ~ 1 => Ident -> Stuff w d
+  Unit :: Ident -> Stuff 1 1
 
 data Layout :: Num -> Num -> * where
   Stuff :: forall (w d :: Num) . 0 <= w, 0 <= d => Stuff w d -> Layout w d
   Empty :: forall (w d :: Num) . 0 <= w, 0 <= d => Layout w d
-  Horiz :: forall (w d :: Num) . 0 <= w, 0 <= d => 
-    pi (w1 w2 :: Num) . 0 <= w1, 0 <= w2, w ~ (w1 + w2) =>
-    Layout w1 d -> Layout w2 d -> Layout w d
-  Vert :: forall (w d :: Num) . 0 <= w, 0 <= d => 
-    pi (d1 d2 :: Num) . 0 <= d1, 0 <= d2, d ~ (d1 + d2) =>
-    Layout w d1 -> Layout w d2 -> Layout w d
+  Horiz :: forall (d :: Num) . 0 <= d => 
+    pi (w1 w2 :: Num) . 0 <= w1, 0 <= w2 =>
+    Layout w1 d -> Layout w2 d -> Layout (w1 + w2) d
+  Vert :: forall (w :: Num) . 0 <= w => 
+    pi (d1 d2 :: Num) . 0 <= d1, 0 <= d2 =>
+    Layout w d1 -> Layout w d2 -> Layout w (d1 + d2)
 
 l2x1 = Horiz {1} {1} (Stuff (Unit A)) (Stuff (Unit B))
 
@@ -95,9 +93,9 @@ horiz {w1} {w2} {d1} {d2} l1 l2 =
 
 
 data Max :: Num -> Num -> Num -> * where
-  Less :: forall (m n d :: Num) . m < n, m ~ d => Max m n d
-  Same :: forall (m n d :: Num) . m ~ d, n ~ d => Max m n d
-  More :: forall (m n d :: Num) . m > n, n ~ d => Max m n d
+  Less :: forall (m n :: Num) . m < n => Max m n n
+  Same :: forall (m   :: Num) .          Max m m m
+  More :: forall (m n :: Num) . m > n => Max m n m
 
 data Ex :: (Num -> *) -> * where
   Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
@@ -132,8 +130,7 @@ horiz2 {w1} {w2} {d1} {d2} l1 l2 =
 
 data Option :: * -> * where
   Some :: forall a. a -> Option a
-  None :: forall a. Option a
-
+  None :: forall a.      Option a
 
 identAt :: forall (w d :: Num) . pi (x y :: Num) .
     0 <= x, 0 <= y, x < w, y < d => Layout w d -> Option Ident

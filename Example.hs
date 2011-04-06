@@ -4,8 +4,9 @@
 
 {-
 Things that would be nice:
+* Fix existential numeric types bug
+* Better representation of lexical type variable scope
 * Pattern-matching let and lambda bindings
-* Automatic translation of GADT notation into local equality constraints
 * Mutually recursive binding groups
 * Nat kind (desugars to Num with inequality constraint)
 * Higher-order unification
@@ -48,15 +49,16 @@ silly x | andy x x = False
 silly x | True = True
 
 
-{-
+
 data Vec :: Num -> * -> * where
   VNil :: forall a. Vec 0 a
   VCons :: forall (n :: Num) a . 0 <= n => a -> Vec n a -> Vec (n+1) a
--}
 
+{-
 data Vec :: Num -> * -> * where
   VNil :: forall (n :: Num) a . n ~ 0 => Vec n a
   VCons :: forall (n m :: Num) a . 1 <= n => a -> Vec (n-1) a -> Vec n a
+-}
 
 data UNat :: Num -> * where
   UZero :: forall (n :: Num) . n ~ 0 => UNat n
@@ -179,11 +181,13 @@ vsplit :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) 
 vsplit {0}   xs           = Pair VNil xs
 vsplit {n+1} (VCons x xs) = pairMap (VCons x) i (vsplit {n} xs)
 
+{-
 vsplit2 :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)
 vsplit2 {0}   xs           = Pair VNil xs
 vsplit2 {n+1} (VCons x xs) = let  f (Pair ys zs)  = Pair (VCons x ys) zs
                                   xs'             = vsplit2 {n} xs
                              in f xs'
+-}
 
 vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a
 vtake {0}   _            = VNil
@@ -198,11 +202,6 @@ right    = vhead v123
 righter  = app vtail v123
 
 
-bottom :: forall a. a
-bottom = bottom
-
-
-
 
 uplus :: forall (m n :: Num) . 0 <= n => UNat m -> UNat n -> UNat (m + n)
 uplus UZero n = n
@@ -214,7 +213,7 @@ uplus (USuc m) n = USuc (uplus m n)
 
 data Fin :: Num -> * where
   FZero :: forall (n :: Num) . 1 <= n => Fin n
-  FSuc  :: forall (n :: Num) . 1 <= n => Fin (n-1) -> Fin n
+  FSuc  :: forall (n :: Num) . Fin n -> Fin (n+1)
 
 data Tm :: Num -> * where
   V :: forall (m :: Num) . Fin m -> Tm m
@@ -300,12 +299,12 @@ rebuildTm = foldTm3 V' L' A'
 -- http://www.haskell.org/pipermail/haskell-cafe/2011-February/089719.html
 
 data Layer :: Num -> * where
-  Layer0 :: forall (m :: Num) . m ~ 0 => Nat    -> Layer m
-  Layer1 :: forall (m :: Num) . m ~ 1 => Nat    -> Layer m
-  Layer2 :: forall (m :: Num) . m ~ 2 => Bool  -> Layer m
-  Layer3 :: forall (m :: Num) . m ~ 3 => Nat    -> Layer m
+  Layer0 :: Nat   -> Layer 0
+  Layer1 :: Nat   -> Layer 1
+  Layer2 :: Bool  -> Layer 2
+  Layer3 :: Nat   -> Layer 3
 
-deserialize :: pi (m :: Num) . m <= 3 => Nat -> Layer m
+deserialize :: pi (m :: Num) . 0 <= m, m <= 3 => Nat -> Layer m
 deserialize {0} n     = Layer0 n
 deserialize {1} n     = Layer1 n
 deserialize {2} Zero  = Layer2 True
@@ -323,10 +322,11 @@ layer :: forall (m :: Num) . m <= 2 => Layer m -> Layer (m + 1)
 layer (Layer0 n)           = Layer1 (Suc n)
 layer (Layer1 (Suc Zero))  = Layer2 True
 layer (Layer1 n)           = Layer2 False
-layer (Layer2 True)          = Layer3 Zero
-layer (Layer2 False)          = Layer3 (Suc Zero)
+layer (Layer2 True)        = Layer3 Zero
+layer (Layer2 False)       = Layer3 (Suc Zero)
 
-doLayers :: forall (m :: Num) . pi (n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
+doLayers :: forall (m :: Num) . pi (n :: Num) .
+    0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
 doLayers {0}   l = l
 doLayers {i+1} l = doLayers {i} (layer l)
 
@@ -343,14 +343,10 @@ l3  = runLayers {0} {3} Zero
 -- Cartesian
 
 data Coord :: Num -> Num -> Num -> Num -> * where
-  Coord :: forall (lx bx rx tx :: Num) . 
-             pi (l b r t :: Num) . l <= r, b <= t,
-               lx ~ l, bx ~ b, rx ~ r, tx ~ t => Coord lx bx rx tx
+  Coord :: pi (l b r t :: Num) . l <= r, b <= t => Coord l b r t
 
 data Shape :: Num -> Num -> Num -> Num -> * where
-  Box :: forall (lx bx rx tx :: Num) .
-           pi (l b r t :: Num) . l <= r, b <= t,
-             lx ~ l, bx ~ b, rx ~ r, tx ~ t => Shape lx bx rx tx
+  Box :: pi (l b r t :: Num) . l <= r, b <= t => Shape l b r t
   Above :: forall (l b r t b' :: Num) .
              Shape l b r t -> Shape l b' r b -> Shape l b' r t
 
@@ -379,10 +375,12 @@ bound (Above s t) = aboveC (bound s) (bound t)
 data Ex :: (Num -> *) -> * where
   Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
 
-unEx :: forall (f :: Num -> *) a . (forall (n :: Num) . f n -> a) -> Ex f -> a
+unEx :: forall (f :: Num -> *) a .
+            (forall (n :: Num) . f n -> a) -> Ex f -> a
 unEx g (Ex x) = g x
 
-mapEx :: forall (f g :: Num -> *) . (forall (n :: Num) . f n -> g n) -> Ex f -> Ex g
+mapEx :: forall (f g :: Num -> *) .
+             (forall (n :: Num) . f n -> g n) -> Ex f -> Ex g
 mapEx g (Ex x) = Ex (g x)
 
 
@@ -465,6 +463,16 @@ functorCompose :: forall (f g :: * -> *) .
     (forall a b . (a -> b) -> g a -> g b) ->
     (forall a b . (a -> b) -> f (g a) -> f (g b))
 functorCompose fmap gmap = comp fmap gmap
+
+
+data EqNum :: Num -> Num -> * where
+  Refl :: forall (n :: Num) . EqNum n n
+
+leibniz :: forall (f :: Num -> *) (m n :: Num) . EqNum m n -> f m -> f n
+leibniz Refl = id
+
+trans :: forall (m n p :: Num) . EqNum m n -> EqNum n p -> EqNum m p
+trans Refl Refl = Refl
 
 
 
