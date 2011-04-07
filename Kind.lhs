@@ -1,5 +1,5 @@
 > {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes,
->              FlexibleInstances #-}
+>              FlexibleInstances, StandaloneDeriving #-}
 
 > module Kind where
 
@@ -46,6 +46,8 @@
 >     KNum   :: Kind KNum
 >     (:->)  :: Kind k -> Kind l -> Kind (k :-> l)
 > infixr 5 :->
+
+> deriving instance Show (Kind k)
 
 > instance HetEq Kind where
 >     hetEq KSet KSet yes _ = yes

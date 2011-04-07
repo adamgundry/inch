@@ -71,19 +71,20 @@ status.
 > instantiate = instS SysVar Wanted Hole
 
 
-> existentialise :: (MonadState (ZipState t) m, FV (Ty k a)) =>
->                       m (Ty k a) -> m (Ty k a)
+> existentialise :: (MonadState (ZipState t) m, FV (Type k)) =>
+>                       m (Type k) -> m (Type k)
 > existentialise m = do
 >     modifyContext (:< Layer FunTop) -- hackish
 >     ty <- m
->     modifyContext $ help (getTarget ty)
+>     modifyContext $ help (flip elemTarget ty)
 >     return ty
 >   where
->     help ty (g :< A (a := Hole))
->         | a <? ty                = help ty g :< A (a := Hole)
->         | otherwise              = help ty g :< A (a := Exists)
->     help ty (g :< Layer FunTop)  = g
->     help ty (g :< e)             = help ty g :< e
+>     help :: (forall k. Var () k -> Bool) -> Context -> Context
+>     help isHole (g :< A (a := Hole))
+>         | isHole a                   = help isHole g :< A (a := Hole)
+>         | otherwise                  = help isHole g :< A (a := Exists)
+>     help isHole (g :< Layer FunTop)  = g
+>     help isHole (g :< e)             = help isHole g :< e
 
 
 > generalise :: Type k -> [Pattern] -> Contextual t (Type k, [Pattern])
@@ -488,7 +489,7 @@ status.
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar UserVar a KNum
 >     let  t'  = unbindTy b t
->          d   = if top || b <? getTarget t'
+>          d   = if top || b `elemTarget` t'
 >                    then Fixed
 >                    else Exists
 >     modifyContext (:< A (b := d))
@@ -500,7 +501,7 @@ status.
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
 >     let  t'  = unbindTy b t
->          d   = if top || b <? getTarget t'
+>          d   = if top || b `elemTarget` t'
 >                       then Fixed
 >                       else Exists
 >     am <- fresh UserVar a KNum d

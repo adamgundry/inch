@@ -1,6 +1,7 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              GADTs, TypeOperators, TypeFamilies, RankNTypes,
->              ScopedTypeVariables, FlexibleInstances #-}
+>              ScopedTypeVariables, FlexibleInstances,
+>              StandaloneDeriving #-}
 
 > module Type where
 
@@ -37,6 +38,8 @@
 >     Bind   :: Binder -> String -> Kind l -> Ty (a, l) k  -> Ty a k
 >     Qual   :: Pred (NVar a) -> Ty a k                    -> Ty a k
 >     Arr    :: Ty a (KSet :-> KSet :-> KSet)
+
+> deriving instance Show (Ty a k)
 
 > instance FV (Ty () k) where
 >     a <? t = elemTy a t
@@ -193,11 +196,6 @@
 >   where (ss, ty) = splitArgs t
 > splitArgs t = ([], t)
 
-> getTarget :: Ty a k -> Ty a k
-> getTarget (TyApp (TyApp Arr _) ty)  = getTarget ty
-> getTarget t                               = t
-
-
 > targets :: Ty a k -> TyConName -> Bool
 > targets (TyCon c _)               t | c == t = True
 > targets (TyApp (TyApp Arr _) ty)  t = targets ty t
@@ -218,3 +216,9 @@
 > elemTy a (Bind b x k t)  = elemTy (wkVar a) t
 > elemTy a (Qual p t)      = elemPred a p || elemTy a t 
 > elemTy a Arr             = False
+
+> elemTarget :: Var a k -> Ty a l -> Bool
+> elemTarget a (TyApp (TyApp Arr _) ty)  = elemTarget a ty
+> elemTarget a (Qual _ ty)               = elemTarget a ty
+> elemTarget a (Bind Pi x k ty)          = elemTarget (wkVar a) ty
+> elemTarget a t                         = elemTy a t

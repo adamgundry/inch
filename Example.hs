@@ -153,6 +153,9 @@ vbuild2 :: forall (n :: Num) a . Vec n a -> Vec n a
 vbuild2 = vfold VNil VCons
 -}
 
+unat :: pi (n :: Num) . 0 <= n => UNat n
+unat {0}   = UZero
+unat {n+1} = USuc (unat {n})
 
 unaryToNat :: forall (n :: Num) . UNat n -> Nat
 unaryToNat UZero    = Zero
@@ -465,16 +468,6 @@ functorCompose :: forall (f g :: * -> *) .
 functorCompose fmap gmap = comp fmap gmap
 
 
-data EqNum :: Num -> Num -> * where
-  Refl :: forall (n :: Num) . EqNum n n
-
-leibniz :: forall (f :: Num -> *) (m n :: Num) . EqNum m n -> f m -> f n
-leibniz Refl = id
-
-trans :: forall (m n p :: Num) . EqNum m n -> EqNum n p -> EqNum m p
-trans Refl Refl = Refl
-
-
 
 -- Typeclass encoding (higher rank goodness)
 
@@ -531,3 +524,21 @@ trav (Mon ret bnd) f (Cons x xs) = bnd (f x) (\ y ->
     bnd (trav (Mon ret bnd) f xs) (\ ys -> ret (Cons y ys)))
 -- trav m f (Cons x xs) = bnd m (f x) (\ y -> 
 --     bnd m (trav m f xs) (\ ys -> ret m (Cons y ys)))
+
+
+-- Predicates
+
+data EqNum :: Num -> Num -> * where
+  Refl :: forall (n :: Num) . EqNum n n
+
+leibniz :: forall (f :: Num -> *) (m n :: Num) . EqNum m n -> f m -> f n
+leibniz Refl = id
+
+trans :: forall (m n p :: Num) . EqNum m n -> EqNum n p -> EqNum m p
+trans Refl Refl = Refl
+
+
+data Even :: Num -> * where
+  Twice :: pi (n :: Num) . Even (2 * n)
+
+unEven (Twice {n}) = unat {n}
