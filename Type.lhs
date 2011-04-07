@@ -52,17 +52,27 @@
 >   deriving (Eq, Show)
 
 > fogTy :: Type k -> SType
-> fogTy = fogTy' []
+> fogTy = fogTy' fogVar []
 
-> fogTy' :: [String] -> Ty a k -> SType
-> fogTy' xs (TyVar v)       = STyVar (fogVar xs v)
-> fogTy' xs (TyCon c k)     = STyCon c
-> fogTy' xs (TyApp f s)     = STyApp (fogTy' xs f) (fogTy' xs s)
-> fogTy' xs (TyNum n)       = STyNum (fogTyNum' xs n)
-> fogTy' xs (Bind b x k t)  = SBind b y (fogKind k) (fogTy' (y:xs) t)
->   where y = alphaConv x xs
-> fogTy' xs (Qual p t)      = SQual (fogPred' xs p) (fogTy' xs t)
-> fogTy' xs Arr             = SArr
+> fogSysTy :: Type k -> SType
+> fogSysTy = fogTy' fogSysVar []
+
+> fogTy' :: (forall l. Var a l -> String) -> [String] -> Ty a k -> SType
+> fogTy' g xs (TyVar v)       = STyVar (g v)
+> fogTy' g xs (TyCon c k)     = STyCon c
+> fogTy' g xs (TyApp f s)     = STyApp (fogTy' g xs f) (fogTy' g xs s)
+> fogTy' g xs (TyNum n)       = STyNum (fogTyNum' g n)
+> fogTy' g xs (Qual p t)      = SQual (fogPred' g p) (fogTy' g xs t)
+> fogTy' g xs Arr             = SArr
+> fogTy' g xs (Bind b x k t)  =
+>     SBind b y (fogKind k) (fogTy' (wkn g) (y:xs) t)
+>   where
+>     y = alphaConv x xs
+
+>     wkn :: (forall l. Var a l -> String) -> Var (a, k) l -> String
+>     wkn g (BVar Top)      = y
+>     wkn g (BVar (Pop x))  = g (BVar x)
+>     wkn g (FVar a k)      = g (FVar a k)
 
 > alphaConv :: String -> [String] -> String
 > alphaConv x xs | x `notElem` xs = x

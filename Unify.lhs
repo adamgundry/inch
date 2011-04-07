@@ -63,7 +63,7 @@
 >             modifyContext $ (:< xD) . (:< Constraint Wanted p)
 > -}
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
->     B0 -> inLocation (text "when solving" <+> prettyHigh p) $
+>     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred $ reifyPred p)) $
 >               erk $ "onTopNum: ran out of context"
 
 > restore :: Contextual t Extension
@@ -80,9 +80,10 @@
 > var k a = TyVar (FVar a k)
 
 
+> unify :: Type k -> Type k -> Contextual () ()
 > unify t u = unifyTypes t u `inLoc` (do
->                 return $ sep [text "when unifying", nest 4 (prettyHigh t),
->                              text "and", nest 4 (prettyHigh u)])
+>                 return $ sep [text "when unifying", nest 4 (prettyHigh $ fogSysTy t),
+>                              text "and", nest 4 (prettyHigh $ fogSysTy u)])
 >                     -- ++ "\n    in context " ++ render g)
 
 > unifyTypes :: Type k -> Type k -> Contextual t ()
@@ -215,7 +216,7 @@
 > rigidHull (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull t
 
 
-> rigidHull b = erk $ "rigidHull can't cope with " ++ renderMe b
+> rigidHull b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
 
 
 > pairsToSuffix :: Fwd (Var () KNum, TypeNum) -> Suffix
@@ -236,7 +237,7 @@
 >            Some upsilon  ->  modifyContext (<>< _Xi)
 >                                         >>  unifyTypes upsilon tau
 >                                         >>  restore
->            _             ->  errUnifyFixed (varName alpha) (fogTy tau)
+>            _             ->  errUnifyFixed alpha tau
 >       )
 >       (if occurs
 >         then case d of
@@ -314,7 +315,7 @@ We can insert a fresh variable into a unit thus:
 
 
 
-> unifyFun :: Rho -> Contextual a (Sigma, Rho)
+> unifyFun :: Rho -> Contextual () (Sigma, Rho)
 > unifyFun (TyApp (TyApp Arr s) t) = return (s, t)
 > unifyFun ty = do
 >     s <- unknownTyVar "_s" KSet

@@ -86,7 +86,7 @@
 >     return $ foldr bindVar ty' (map fst vts)
 >   where
 >     bindVar :: Var () KNum -> Type k -> Type k
->     bindVar a = Bind All (varToString a) KNum . bindTy a
+>     bindVar a = Bind All (fogVar a) KNum . bindTy a
 
 > makeEqGadtMangle :: [Ex (Var ())] -> Type k ->
 >     ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type k)
@@ -118,10 +118,10 @@
 >     isAllBound :: [Ex (Var ())] -> Type k -> Either String [Ex (Var ())]
 >     isAllBound as (TyNum (NumVar a))
 >         | Ex a `elem` as     = Right $ delete (Ex a) as
->         | otherwise          = Left  $ varToString a ++ "'"
+>         | otherwise          = Left  $ fogVar a ++ "'"
 >     isAllBound as (TyVar a)
 >         | Ex a `elem` as     = Right $ delete (Ex a) as
->         | otherwise          = Left  $ varToString a ++ "'"
+>         | otherwise          = Left  $ fogVar a ++ "'"
 >     isAllBound _  (TyNum _)  = Left "_gn"
 >     isAllBound _  _          = Left "_ga"
 

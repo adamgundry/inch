@@ -62,12 +62,10 @@
 
 
 
-> class Fog t where
->     fog :: t OK -> t RAW
-
 > class TravTypes t where
 >     travTypes :: Applicative f =>
 >         (forall k. Type k -> f (Type k)) -> t OK -> f (t OK)
+>     fogTypes :: (forall k. Var () k -> String) -> t OK -> t RAW
 
 > mapTypes :: TravTypes t =>
 >                 (forall k. Type k -> Type k) -> t OK -> t OK
@@ -79,6 +77,12 @@
 > elemTypes :: TravTypes t => Var () k -> t OK -> Bool
 > elemTypes a t = getAny $ getConst $ travTypes (Const . Any . (a <?)) t
 
+
+> fog :: TravTypes t => t OK -> t RAW
+> fog = fogTypes fogVar
+
+> fogSys :: TravTypes t => t OK -> t RAW
+> fogSys = fogTypes fogSysVar
 
 
 > data Tm s where
@@ -93,16 +97,6 @@
 
 > deriving instance Eq (Tm RAW)
 
-> instance Fog Tm where
->     fog (TmVar x)    = TmVar x
->     fog (TmCon c)    = TmCon c
->     fog (TmInt k)    = TmInt k
->     fog (TmApp f s)  = TmApp (fog f) (fog s)
->     fog (TmBrace n)  = TmBrace (fogTyNum n)
->     fog (Lam x b)    = Lam x (fog b)
->     fog (Let ds t)   = Let (map fog ds) (fog t)
->     fog (t :? ty)    = fog t :? fogTy ty
-
 > instance TravTypes Tm where
 >     travTypes g (TmApp f s)  = TmApp <$> travTypes g f <*> travTypes g s
 >     travTypes g (TmBrace n)  = TmBrace . toNum <$> g (TyNum n)
@@ -110,7 +104,18 @@
 >     travTypes g (Let ds t)   = Let <$> traverse (travTypes g) ds
 >                                    <*> travTypes g t
 >     travTypes g (t :? ty)    = (:?) <$> travTypes g t <*> g ty
->     travTypes g t = pure t
+>     travTypes g t            = pure t
+>
+>     fogTypes g (TmVar x)     = TmVar x
+>     fogTypes g (TmCon c)     = TmCon c
+>     fogTypes g (TmInt k)     = TmInt k
+>     fogTypes g (TmApp f s)   = TmApp (fogTypes g f) (fogTypes g s)
+>     fogTypes g (TmBrace n)   = TmBrace (fogTyNum' g n)
+>     fogTypes g (Lam x b)     = Lam x (fogTypes g b)
+>     fogTypes g (Let ds t)    = Let (map (fogTypes g) ds)
+>                                    (fogTypes g t)
+>     fogTypes g (t :? ty)     = fogTypes g t :? fogTy' g [] ty
+
 
 
 > data DataDecl s where
@@ -119,13 +124,12 @@
 
 > deriving instance Eq (DataDecl RAW)
 
-> instance Fog DataDecl where
->     fog (DataDecl x k cs) = DataDecl x (fogKind k)
->         (map (\ (y ::: ty) -> y ::: fogTy ty) cs)
-
 > instance TravTypes DataDecl where
 >     travTypes g (DataDecl x k cs) =
 >         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs
+>
+>     fogTypes g (DataDecl x k cs) =
+>         DataDecl x (fogKind k) (map (\ (x ::: t) -> x ::: fogTy' g [] t) cs)
 
 
 > data FunDecl s where
@@ -133,12 +137,13 @@
 
 > deriving instance Eq (FunDecl RAW)
 
-> instance Fog FunDecl where
->     fog (FunDecl x mt ps) = FunDecl x (fmap fogTy mt) (map fog ps)
-
 > instance TravTypes FunDecl where
 >     travTypes g (FunDecl x mt ps) =
 >         FunDecl x <$> traverse g mt <*> traverse (travTypes g) ps
+>
+>     fogTypes g (FunDecl x mt ps) =
+>         FunDecl x (fmap (fogTy' g []) mt) (map (fogTypes g) ps)
+
 
 > data Decl s where
 >     DD :: DataDecl s  -> Decl s
@@ -146,13 +151,12 @@
 
 > deriving instance Eq (Decl RAW)
 
-> instance Fog Decl where
->     fog (DD d) = DD (fog d)
->     fog (FD f) = FD (fog f)
-
 > instance TravTypes Decl where
 >     travTypes g (DD d) = DD <$> travTypes g d
 >     travTypes g (FD f) = FD <$> travTypes g f
+>
+>     fogTypes g (DD d) = DD (fogTypes g d)
+>     fogTypes g (FD f) = FD (fogTypes g f)
 
 
 > partitionDecls :: [Decl s] -> ([DataDecl s], [FunDecl s])
@@ -170,14 +174,16 @@
 
 > deriving instance Eq (Pat RAW)
 
-> instance Fog Pat where
->     fog (Pat xs mg t) = Pat (map fog xs) (fmap fog mg) (fog t)
-
 > instance TravTypes Pat where
 >     travTypes g (Pat xs ms t) = 
 >         Pat <$> traverse (travTypes g) xs
 >             <*> traverse (travTypes g) ms
 >             <*> travTypes g t
+>
+>     fogTypes g (Pat xs ms t) = 
+>         Pat (map (fogTypes g) xs)
+>             (fmap (fogTypes g) ms)
+>             (fogTypes g t)
 
 > instance FV (Pat OK) where
 >     (<?) = elemTypes
@@ -191,14 +197,13 @@
 
 > deriving instance Eq (PatTerm RAW)
 
-> instance Fog PatTerm where
->     fog (PatVar x)       = PatVar x
->     fog (PatCon x ps)    = PatCon x (map fog ps)
->     fog PatIgnore        = PatIgnore
->     fog (PatBrace mt k)  = PatBrace mt k
-
 > instance TravTypes PatTerm where
 >     travTypes g t = pure t -- change if types added to pattern terms
+>     fogTypes g (PatVar x)       = PatVar x
+>     fogTypes g (PatCon x ps)    = PatCon x (map (fogTypes g) ps)
+>     fogTypes g PatIgnore        = PatIgnore
+>     fogTypes g (PatBrace mt k)  = PatBrace mt k
+
 
 
 > data Grd s where
@@ -207,11 +212,10 @@
 
 > deriving instance Eq (Grd RAW)
 
-> instance Fog Grd where
->     fog (ExpGuard t)   = ExpGuard (fog t)
->     fog (NumGuard ps)  = NumGuard (map fogPred ps)
-
 > instance TravTypes Grd where
->     travTypes g (ExpGuard t) = pure $ ExpGuard t
->     travTypes g (NumGuard ps) = NumGuard <$> traverse (travPred gn) ps
+>     travTypes g (ExpGuard t)   = ExpGuard <$> travTypes g t
+>     travTypes g (NumGuard ps)  = NumGuard <$> traverse (travPred gn) ps
 >       where gn = (toNum <$>) . g . TyNum
+>
+>     fogTypes g (ExpGuard t)  = ExpGuard (fogTypes g t)
+>     fogTypes g (NumGuard ps) = NumGuard (map (fogPred' g) ps)

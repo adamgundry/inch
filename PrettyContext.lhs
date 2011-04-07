@@ -12,20 +12,22 @@
 > import Context
 
 > instance Pretty (TyEntry k) where
->     pretty (a := d) _ = prettyHigh a <+> text ":="
+>     pretty (a := d) _ = prettySysVar a <+> text ":="
 >       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind (varKind a))
 
 > instance Pretty Entry where
 >   pretty (A a)                  _ = prettyHigh a
 >   pretty (Layer l)              _ = prettyHigh l
->   pretty (Constraint Given p)   _ = braces (prettyHigh p) <> text "!!"
->   pretty (Constraint Wanted p)  _ = braces (prettyHigh p) <> text "??"
+>   pretty (Constraint Given p)   _ =
+>       braces (prettyHigh $ fogSysPred $ reifyPred p) <> text "!!"
+>   pretty (Constraint Wanted p)  _ =
+>       braces (prettyHigh $ fogSysPred $ reifyPred p) <> text "??"
 
 > instance Pretty (TyDef k) where
 >   pretty Hole      _ = text "?"
 >   pretty Fixed     _ = text "!"
 >   pretty Exists    _ = text "Ex"
->   pretty (Some t)  l = pretty (fogTy t) l
+>   pretty (Some t)  l = pretty (fogSysTy t) l
 
 > instance Pretty TmLayer where
 >   pretty (PatternTop (x ::: _) _ _ _)  _ = text $ "PatternTop " ++ x

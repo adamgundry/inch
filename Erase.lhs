@@ -83,7 +83,7 @@
 This is a bit of a hack; we really ought to extend the syntax of terms:
 
 > numToTm :: TypeNum -> Term
-> numToTm (NumVar x)    = TmCon . varToString $ x
+> numToTm (NumVar x)    = TmCon . fogVar $ x
 > numToTm (NumConst k)  = TmInt k
 > numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
 > numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)

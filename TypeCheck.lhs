@@ -98,9 +98,9 @@ status.
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps = return (g, tps)
 >     help (g :< A (a := d)) (t, ps)
 >       | a <? t || a <? ps  = case d of
->         Exists  -> errBadExistential (varName a) (fogTy t) (map fog ps)
+>         Exists  -> errBadExistential a t ps
 >         Some d  -> help g (replaceTy a d t, map (replaceTypes a d) ps)
->         _       -> help g (Bind All (varToString a) (varKind a) (bindTy a t), ps)
+>         _       -> help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps)
 >     help (g :< Layer (LamBody _ _))  tps      = help g tps
 >     help (g :< A _)                  tps      = help g tps
 >     help (g :< Constraint Given _)   tps      = help g tps
@@ -171,7 +171,7 @@ status.
 >     (hs, qs) <- trySolveConstraints
 >     case qs of
 >         []  -> return ()
->         _   -> errCannotDeduce (map fogNormPred hs) (map fogNormPred qs)
+>         _   -> errCannotDeduce hs qs
 
 > solveOrSuspend :: Contextual t ()
 > solveOrSuspend = want . snd =<< trySolveConstraints
@@ -179,7 +179,7 @@ status.
 >     want :: [NormalPredicate] -> Contextual t ()
 >     want [] = return ()
 >     want (p:ps)
->         | nonsense p  = erk $ "Impossible constraint " ++ renderMe p
+>         | nonsense p  = errImpossiblePred p
 >         | otherwise   = modifyContext (:< Constraint Wanted p)
 >                                 >> want ps
 >
@@ -230,7 +230,7 @@ status.
 
 
 
-> subsCheck :: Sigma -> Sigma -> Contextual a ()
+> subsCheck :: Sigma -> Sigma -> Contextual () ()
 > subsCheck s t = do
 >     t  <- specialise t
 >     s  <- instantiate s
@@ -323,8 +323,8 @@ status.
 >             a   <- fresh SysVar "_n" KNum (Some (TyNum n))
 >             ty  <- instSigma (unbindTy a aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
->         _ -> erk $ "Inferred type " ++ renderMe fty ++ " of " ++
->                  renderMe f ++ " is not a pi-type with numeric domain"
+>         _ -> erk $ "Inferred type " ++ renderMe (fogSysTy fty) ++ " of " ++
+>                  renderMe (fogSys f) ++ " is not a pi-type with numeric domain"
 
 > checkInfer mty (TmApp f s) = do
 >     f ::: fty   <- inferRho f
@@ -512,7 +512,7 @@ status.
 
 > checkPat top ty (p : _) =
 >     erk $ "checkPat: couldn't match pattern " ++ renderMe p
->                ++ " against type " ++ renderMe ty
+>                ++ " against type " ++ renderMe (fogSysTy ty)
 
 
 

@@ -29,6 +29,9 @@
 > nameToString :: TyName -> String
 > nameToString (N s _ _) = s
 
+> nameToSysString :: TyName -> String
+> nameToSysString (N s i _) = s ++ "_" ++ show i
+
 > nameEq :: TyName -> String -> Bool
 > nameEq (N x _ UserVar) y  = x == y
 > nameEq (N _ _ SysVar)  _  = False
@@ -135,15 +138,18 @@
 > varName :: Var () k -> TyName
 > varName (FVar a _) = a
 
-> varToString :: Var () k -> String
-> varToString = nameToString . varName
-
 > varKind :: Var () k -> Kind k
 > varKind (FVar _ k) = k
 
-> fogVar :: [String] -> Var a k -> String
-> fogVar _  (FVar a _)  = nameToString a
-> fogVar bs (BVar x)    = bs !! bvarToInt x
+> fogVar :: Var () k -> String
+> fogVar = fogVar' nameToString []
+
+> fogSysVar :: Var () k -> String
+> fogSysVar = fogVar' nameToSysString []
+
+> fogVar' :: (TyName -> String) -> [String] -> Var a k -> String
+> fogVar' g _  (FVar a _)  = g a
+> fogVar' _ bs (BVar x)    = bs !! bvarToInt x
 
 > varNameEq :: Var a k -> String -> Bool
 > varNameEq (FVar nom _)  y = nameEq nom y

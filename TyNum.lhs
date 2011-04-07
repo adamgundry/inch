@@ -197,28 +197,43 @@
 
 
 > fogTyNum :: TypeNum -> STypeNum
-> fogTyNum = fogTyNum' []
+> fogTyNum = fogTyNum' fogVar
 
-> fogTyNum' :: [String] -> TyNum (NVar a) -> STypeNum
-> fogTyNum' xs = fmap (fogVar xs)
+> fogSysTyNum :: TypeNum -> STypeNum
+> fogSysTyNum = fogTyNum' fogSysVar
+
+> fogTyNum' :: (NVar a -> String) -> TyNum (NVar a) -> STypeNum
+> fogTyNum' = fmap
+
 
 > fogPred :: Predicate -> SPredicate
-> fogPred = fogPred' []
+> fogPred = fogPred' fogVar
 
-> fogPred' :: [String] -> Pred (NVar a) -> SPredicate
-> fogPred' xs = mapPred (fogTyNum' xs)
+> fogSysPred :: Predicate -> SPredicate
+> fogSysPred = fogPred' fogSysVar
+
+> fogPred' :: (NVar a -> String) -> Pred (NVar a) -> SPredicate
+> fogPred' = mapPred . fogTyNum'
+
 
 > fogNormNum :: NormalNum -> SNormalNum
-> fogNormNum = fogNormNum' []
+> fogNormNum = fogNormNum' fogVar
 
-> fogNormNum' :: [String] -> NormNum (NVar a) -> SNormalNum
-> fogNormNum' xs = fmap (fogVar xs)
+> fogSysNormNum :: NormalNum -> SNormalNum
+> fogSysNormNum = fogNormNum' fogSysVar
+
+> fogNormNum' :: (NVar a -> String) -> NormNum (NVar a) -> SNormalNum
+> fogNormNum' = fmap
+
 
 > fogNormPred :: NormalPredicate -> SNormalPred
-> fogNormPred = fogNormPred' []
+> fogNormPred = fogNormPred' fogVar
 
-> fogNormPred' :: [String] -> NormPred (NVar a) -> SNormalPred
-> fogNormPred' xs = mapNormPred (fogNormNum' xs)
+> fogSysNormPred :: NormalPredicate -> SNormalPred
+> fogSysNormPred = fogNormPred' fogSysVar
+
+> fogNormPred' :: (NVar a -> String) -> NormPred (NVar a) -> SNormalPred
+> fogNormPred' = mapNormPred . fogNormNum'
 
 
 

@@ -35,6 +35,17 @@
 > prettyProgram :: Program -> Doc
 > prettyProgram = vcat . intersperse (text " ") . map (prettyHigh . fog)
 
+> prettyVar :: Var () k -> Doc
+> prettyVar = prettyHigh . fogVar
+
+> prettySysVar :: Var () k -> Doc
+> prettySysVar = prettyHigh . fogSysVar
+
+> prettyFog :: (TravTypes t, Pretty (t RAW)) => t OK -> Doc
+> prettyFog = prettyHigh . fog
+
+> prettyFogSys :: (TravTypes t, Pretty (t RAW)) => t OK -> Doc
+> prettyFogSys = prettyHigh . fogSys
 
 > renderMe :: Pretty a => a -> String
 > renderMe x = renderStyle style{ribbonsPerLine=1.2, lineLength=80} (prettyHigh x)
@@ -45,14 +56,6 @@
 
 > instance Pretty String where
 >     pretty s _ = text s
-
-> instance Pretty TyName where
->     pretty (N x _ UserVar)  _ = text x
->     pretty (N x i SysVar)   _ = text $ x ++ "_" ++ show i
-
-> instance Pretty (Var () k) where
->     pretty v = pretty (varName v)
-
 
 
 > instance Pretty SKind where
@@ -84,9 +87,6 @@
 > instance Pretty SPredicate where
 >     pretty (P c n m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> pretty c ArgSize <+> pretty m ArgSize
-
-> instance Pretty Predicate where
->     pretty = pretty . fogPred
 
 > instance Pretty Comparator where
 >     pretty LS _ = text "<"
@@ -126,9 +126,6 @@
 >   where
 >     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
 
-> instance Pretty (Type k) where
->     pretty = pretty . fogTy
-
 
 > instance Pretty STerm where
 >     pretty (TmVar x)    = const $ text x
@@ -146,9 +143,6 @@
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
-
-> instance Pretty Term where
->     pretty = pretty . fog
 
 > instance Pretty SDeclaration where
 >     pretty (DD d) = pretty d 
@@ -195,9 +189,6 @@
 >                                     text a <+> text "+" <+> integer k
 
 > instance Pretty SNormalPred where
->     pretty p = pretty (reifyPred p)
-
-> instance Pretty NormalPredicate where
 >     pretty p = pretty (reifyPred p)
 
 > instance Pretty SNormalNum where

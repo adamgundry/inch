@@ -30,51 +30,53 @@
 >     DuplicateTmVar     :: TmName -> Err
 >     NonNumericVar      :: Ex (Var ()) -> Err
 >     CannotUnify        :: SType -> SType -> Err
->     UnifyFixed         :: TyName -> SType -> Err
->     UnifyNumFixed      :: TyName -> STypeNum -> Err
->     CannotDeduce       :: [SNormalPred] -> [SNormalPred] -> Err
->     BadExistential     :: TyName -> SType -> [SPattern] -> Err
+>     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
+>     UnifyNumFixed      :: NVar () -> TypeNum -> Err
+>     CannotDeduce       :: [NormalPredicate] -> [NormalPredicate] -> Err
+>     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Pattern] -> Err
+>     ImpossiblePred     :: NormalPredicate -> Err
 >     Fail               :: String -> Err
 
 > instance Pretty Err where
->     pretty (MissingTyVar a)            _ = text $ "Missing type variable " ++ a
->     pretty (MissingNumVar a)           _ = text $ "Missing numeric type variable " ++ a
->     pretty (MissingTyCon a)            _ = text $ "Missing type constructor " ++ a
->     pretty (MissingTmVar a)            _ = text $ "Missing term variable " ++ a
->     pretty (MissingTmCon a)            _ = text $ "Missing data constructor " ++ a
->     pretty (KindTarget k)              _ = text "Kind" <+> prettyHigh k <+> text "doesn't target *"
->     pretty (KindNot k s)               _ = text "Kind" <+> prettyHigh k <+> text "is not" <+> text s
+>     pretty (MissingTyVar a)   _ = text $ "Missing type variable " ++ a
+>     pretty (MissingNumVar a)  _ = text $ "Missing numeric type variable " ++ a
+>     pretty (MissingTyCon a)   _ = text $ "Missing type constructor " ++ a
+>     pretty (MissingTmVar a)   _ = text $ "Missing term variable " ++ a
+>     pretty (MissingTmCon a)   _ = text $ "Missing data constructor " ++ a
+>     pretty (KindTarget k)     _ = text "Kind" <+> prettyHigh k <+> text "doesn't target *"
+>     pretty (KindNot k s)      _ = text "Kind" <+> prettyHigh k <+> text "is not" <+> text s
 >     pretty (KindMismatch (t ::: k) l)  _ = text "Kind" <+> prettyHigh k <+> text "of" <+> prettyHigh t <+> text "is not" <+> prettyHigh l
 >     pretty (ConstructorTarget t)       _ = text "Type" <+> prettyHigh t <+> text "doesn't target data type"
 >     pretty (ConUnderapplied c n m)     _ = text $ "Constructor " ++ c ++ " should have " ++ show n ++ " arguments, but has been given " ++ show m
 >     pretty (DuplicateTyCon t)          _ = text $ "Duplicate type constructor " ++ t
 >     pretty (DuplicateTmCon t)          _ = text $ "Duplicate data constructor " ++ t
 >     pretty (DuplicateTmVar t)          _ = text $ "Duplicate term variable " ++ t
->     pretty (NonNumericVar (Ex a))           _ = text "Type variable" <+> prettyHigh a <+> text "is not numeric"
+>     pretty (NonNumericVar (Ex a))      _ = text "Type variable" <+> prettySysVar a <+> text "is not numeric"
 >     pretty (CannotUnify t u)           _ = sep  [  text "Cannot unify"
 >                                                 ,  nest 2 (prettyHigh t)
 >                                                 ,  text "with"
 >                                                 ,  nest 2 (prettyHigh u)
 >                                                 ]
->     pretty (UnifyFixed a t)            _ = text "Cannot unify fixed variable" <+> prettyHigh a <+> text "with" <+> prettyHigh t
->     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettyHigh a <+> text "to unify" <+> prettyHigh n <+> text "with 0"
+>     pretty (UnifyFixed (Ex a) (Ex t))  _ = text "Cannot unify fixed variable" <+> prettySysVar a <+> text "with" <+> prettyHigh (fogSysTy t)
+>     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTyNum n) <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty (nub qs))
+>                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub qs)
 >                                                 ,  text "in empty context"
 >                                                 ]
 >     pretty (CannotDeduce hs qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty (nub qs))
+>                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub qs)
 >                                                 ,  text "from hypotheses"
->                                                 ,  nest 2 (fsepPretty (nub hs))
+>                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub hs)
 >                                                 ]
->     pretty (BadExistential a t ps)     _ = sep  [  text "Illegal existential"
->                                                        <+> prettyHigh a
+>     pretty (BadExistential (Ex a) (Ex t) ps)  _ = sep  [  text "Illegal existential"
+>                                                        <+> prettySysVar a
 >                                                 ,  text "when generalising type"
->                                                 ,  nest 2 (prettyHigh t)
+>                                                 ,  nest 2 (prettyHigh $ fogSysTy t)
 >                                                 ,  text "and patterns"
->                                                 ,  nest 2 (vcatPretty ps)
+>                                                 ,  nest 2 (vcatPretty $ map fogSys ps)
 >                                                 ]
->     pretty (Fail s)                    _ = text s
+>     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred $ reifyPred p)
+>     pretty (Fail s)           _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Err -> m a
 > throw e = E.throwError (e, [] :: [Doc])
@@ -95,10 +97,11 @@
 > errDuplicateTmVar t       = throw (DuplicateTmVar t)
 > errNonNumericVar a        = throw (NonNumericVar (Ex a))
 > errCannotUnify t u        = throw (CannotUnify t u)
-> errUnifyFixed a t         = throw (UnifyFixed a t)
+> errUnifyFixed a t         = throw (UnifyFixed (Ex a) (Ex t))
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
 > errCannotDeduce hs qs     = throw (CannotDeduce hs qs)
-> errBadExistential a t ps  = throw (BadExistential a t ps)
+> errBadExistential a t ps  = throw (BadExistential (Ex a) (Ex t) ps)
+> errImpossiblePred p       = throw (ImpossiblePred p)
                             
 
 > type ErrorData = (Err, [Doc])
