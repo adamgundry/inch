@@ -22,6 +22,7 @@
 >     ,  substNum
 >     ,  negateNExp
 >     ,  foldNExp
+>     ,  solveForVar
 >     ) where
 
 > import Data.Foldable (Foldable, find)
@@ -172,6 +173,13 @@ The |substNExp| function substitutes a group expression for a variable
 
 > foldNExp :: (Integer -> a -> b -> b) -> (Integer -> b) -> NExp a -> b
 > foldNExp f g (NExp vs m) = foldr (\ (a, n) -> f n a) (g m) vs
+
+
+
+> solveForVar :: Eq a => a -> NExp a -> Maybe (NExp a)
+> solveForVar a n = case lookupVariable a n of
+>     Just i | i `dividesCoeffs` n  -> Just (pivot (a, i) n)
+>     _                             -> Nothing
 
 
 The following utility functions are just used within this module.

@@ -305,6 +305,7 @@
 >   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven (Twice {n}) = int {n}", False) :
 >   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven :: forall (n :: Num). Even (2 * n) -> Int n\nunEven (Twice {n}) = int {n}", True) :
 >   ("f :: Boo -> Boo\nf x = x\ndata Boo where Boo :: Boo", True) :
+>   ("data Ex where Ex :: pi (n :: Num) . Ex\nf :: forall a . (pi (n :: Num) . a) -> Ex -> a\nf g (Ex {n}) = g {n}", True) :
 >   []
 
 

@@ -541,4 +541,5 @@ trans Refl Refl = Refl
 data Even :: Num -> * where
   Twice :: pi (n :: Num) . Even (2 * n)
 
+unEven :: forall (n :: Num) . 0 <= n => Even (2 * n) -> UNat n
 unEven (Twice {n}) = unat {n}

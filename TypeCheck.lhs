@@ -92,26 +92,58 @@ status.
 > generalise :: Type k -> [Pattern] -> Contextual t (Type k, [Pattern])
 > generalise t ps = do
 >     g <- getContext
->     (g', tps) <- help g (t, ps)
+>     (g', tps) <- help g (t, ps) []
 >     putContext g'
 >     return tps
 >   where
->     help :: Context -> (Type k, [Pattern]) -> Contextual t (Context, (Type k, [Pattern]))
->     help g@(_ :< Layer FunTop)                tps = return (g, tps)
->     help g@(_ :< Layer (PatternTop _ _ _ _))  tps = return (g, tps)
->     help (g :< A (a := d)) (t, ps)
->       | a <? t || a <? ps  = case d of
->         Exists  -> traceContext "oh no" >> errBadExistential a t ps
->         Some d  -> help g (replaceTy a d t, map (replaceTypes a d) ps)
->         _       -> help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps)
->     help (g :< Layer (LamBody _ _))  tps      = help g tps
->     help (g :< A _)                  tps      = help g tps
->     help (g :< Constraint Given _)   tps      = help g tps
->     help (g :< Constraint Wanted p)  (t, ps)  =
->         help g (Qual (reifyPred p) t, ps)
->     help g tps = erk $ "generalise: can't help " ++ renderMe g
+>     help :: Context -> (Type k, [Pattern]) -> [NormalPredicate] ->
+>                 Contextual t (Context, (Type k, [Pattern]))
+>     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
+>     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
+>     help (g :< Layer (LamBody _ _))           tps hs = help g tps hs
+
+>     help (g :< A (a@(FVar _ KNum) := Exists)) (t, ps) hs
+>       | a <? t || a <? ps || a <? hs = case solveFor a hs of
+>             Just n   -> replaceHelp g (t, ps) hs a (numToType n)
+>             Nothing  | a <? t -> traceContext "oh no" >>
+>                                     errBadExistential a t ps
+>                      | otherwise -> help g (t, ps) (filter (not . (a <?)) hs)
+>     help (g :< A (a := Exists)) (t, ps) hs
+>       | a <? t     = errBadExistential a t ps
+>       | otherwise  = help g (t, ps) hs
+>     help (g :< A (a := Some d)) (t, ps) hs = replaceHelp g (t, ps) hs a d
+>     help (g :< A (a := d)) (t, ps) hs
+>       | a <? t || a <? ps || a <? hs = help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps) hs
+>     help (g :< A _)                  tps hs      = help g tps hs
+
+>     help (g :< Constraint Given h)   tps hs      = help g tps (h:hs)
+>     help (g :< Constraint Wanted p)  (t, ps) hs  =
+>         help g (Qual (reifyPred p) t, ps) hs
+
+>     help g tps hs = erk $ "generalise: can't help " ++ renderMe g
 
 
+>     replaceHelp :: Context -> (Type k, [Pattern]) -> [NormalPredicate] ->
+>         Var () l -> Type l -> Contextual t (Context, (Type k, [Pattern]))
+>     replaceHelp g (t, ps) hs a d = help g (replaceTy a d t,
+>                                                map (replaceTypes a d) ps)
+>                                           hs'
+>       where hs' = case a of
+>                       FVar _ KNum -> map (substNormPred a (normalNum (toNum d))) hs
+>                       _           -> hs
+
+>     solveFor :: Var () KNum -> [NormalPredicate] -> Maybe NormalNum
+>     solveFor a = getFirst . foldMap (First . solveForVar a) . mapMaybe f
+>       where  f (IsZero n)  = Just n
+>              f _           = Nothing
+
+> {-
+> traceContext "oh no" >>
+>                                     errBadExistential a t ps
+> case solveFor a (collectHyps g (hs ++ ps)) of
+>             Just n   -> collect g hs ps <:< A (a := Some (numToType n))
+>             Nothing  -> collect g hs ps <:< A e
+> -}
 
 
 > layerStops :: TmLayer -> Maybe (TmLayer, [NormalPredicate], [NormalPredicate])
