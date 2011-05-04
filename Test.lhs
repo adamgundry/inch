@@ -279,6 +279,7 @@
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = 0", True) : 
 >   ("f :: pi (n :: Num) . (n ~ 0 => Integer) -> Integer\nf {n} x | {n ~ 0} = x\nf {n} x = x", False) : 
 >   ("x = 0\nx = 1", False) : 
+>   ("x :: Integer\nx = 0\nx = 1", False) : 
 >   ("x = 0\ny = x\nx = 1", False) : 
 >   ("x = y\ny :: Integer\ny = x", True) : 
 >   ("x :: forall (a :: * -> *) . a\nx = x", False) : 
@@ -301,6 +302,9 @@
 >   (vec3Decl ++ "id2 :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vec3Decl ++ "data Pair :: * -> * -> * where Pair :: forall a b. a -> b -> Pair a b\nvsplit2 :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)\nvsplit2 {0}   xs           = Pair Nil xs\nvsplit2 {n+1} (Cons x xs) = let  f (Pair ys zs)  = Pair (Cons x ys) zs\n                                 xs'             = vsplit2 {n} xs\n                             in f xs'", True) :
 >   ("data Max :: Num -> Num -> Num -> * where\n  Less :: forall (m n :: Num) . m < n => Max m n n\n  Same :: forall (m :: Num) . Max m m m\n  More :: forall (m n :: Num) . m > n => Max m n m", True) :
+>   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven (Twice {n}) = int {n}", False) :
+>   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven :: forall (n :: Num). Even (2 * n) -> Int n\nunEven (Twice {n}) = int {n}", True) :
+>   ("f :: Boo -> Boo\nf x = x\ndata Boo where Boo :: Boo", True) :
 >   []
 
 

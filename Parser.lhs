@@ -160,7 +160,7 @@ Terms
 
 > letExpr = do
 >     reserved "let"
->     ds <- I.block $ many funDecl
+>     ds <- I.block $ many (sigDecl <|> funDecl)
 >     reserved "in"
 >     t <- expr
 >     return $ Let ds t
@@ -220,8 +220,9 @@ Programs
 >     eof
 >     return (ds, mn)
 
-> decl  =    DD <$> dataDecl
->       <|>  FD <$> funDecl
+> decl  =    dataDecl
+>       <|>  sigDecl
+>       <|>  funDecl
 
 
 > dataDecl = I.lineFold $ do
@@ -239,18 +240,19 @@ Programs
 >     s <- dataConName
 >     doubleColon
 >     t <- tyExp
->     return (s ::: t)
+>     return $ s ::: t
 
+
+> sigDecl = I.lineFold $ do
+>     s   <- try $ tmVarName <* reservedOp "::"
+>     ty  <- tyExp
+>     return $ SigDecl s ty
 
 
 > funDecl = do
->     mst <- optional signature
->     case mst of
->         Just (s, t) -> FunDecl s (Just t) <$> many (patternFor s)
->         Nothing -> do
->             (s, p) <- patternStart
->             ps <- many $ patternFor s
->             return $ FunDecl s Nothing (p:ps)
+>     (s, p)  <- patternStart
+>     ps      <- many $ patternFor s
+>     return $ FunDecl s (p:ps)
 
 
 > patternStart = I.lineFold $ (,) <$> tmVarName <*> pattern

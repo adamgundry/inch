@@ -30,42 +30,25 @@
 > runCheckProg p = runStateT (checkProg p) initialState
 
 > checkProg :: SProgram -> Contextual () Program
-> checkProg xs = do
->     traverse makeDecl xs
->     traverse checkDecl xs
+> checkProg ds = do
+>     traverse makeTyCon ds
+>     traverse makeBinding ds
+>     concat <$> traverse checkDecl ds
 >   where
->     makeDecl :: SDeclaration -> Contextual () ()
->     makeDecl (DD d) = makeTyCon d
->     makeDecl (FD f) = makeBinding f
-
->     makeTyCon :: SDataDeclaration -> Contextual () ()
+>     makeTyCon :: SDeclaration -> Contextual () ()
 >     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
 >             insertTyCon t (Ex k')
+>     makeTyCon _ = return ()
 
->     makeBinding :: SFunDeclaration -> Contextual () ()
->     makeBinding (FunDecl x (Just ty) _) =
->       inLocation (text $ "in binding " ++ x) $ do
->         TK ty' k <- inferKind B0 ty
->         case k of
->           KSet  -> insertBinding x (Just ty')
->           _     -> errKindNotSet (fogKind k)
->     makeBinding (FunDecl x Nothing _) = insertBinding x Nothing
-
-> checkDecl :: SDeclaration -> Contextual () Declaration
-> checkDecl (DD d) = DD <$> checkDataDecl d
-> checkDecl (FD f) = do
->     f@(FunDecl x (Just ty) _) <- checkFunDecl f 
->     updateBinding x (Just ty)
->     return $ FD f
-
-
-
-> checkDataDecl :: SDataDeclaration -> Contextual () DataDeclaration
-> checkDataDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
->     unEx (kindKind k) $ \ k -> DataDecl t k <$> traverse (checkConstructor t) cs
+> checkDecl :: SDeclaration -> Contextual () [Declaration]
+> checkDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ 
+>   unEx (kindKind k) $ \ k -> do
+>     cs    <- traverse (checkConstructor t) cs
+>     return [DataDecl t k cs]
+> checkDecl d = checkInferFunDecl d
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do

@@ -20,16 +20,16 @@
 > import Error
 
 
+> type Bindings = Map.Map TmName (Maybe Sigma)
+
 > data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Sigma
 >                              ,  ptBinds        :: [TmName ::: Sigma]
 >                              ,  ptPreds        :: [NormalPredicate]
 >                              ,  ptConstraints  :: [NormalPredicate]
 >                              }
->                   |  AppLeft () Term (Maybe Sigma)
->                   |  AppRight (Term ::: Sigma) ()
 >                   |  LamBody (TmName ::: Tau) ()
->                   |  LetBody [TmName ::: Sigma] ()
->                   |  AnnotLeft () Sigma
+>                   |  LetBindings Bindings
+>                   |  LetBody Bindings ()
 >                   |  FunTop
 >                   |  GenMark
 
@@ -241,28 +241,57 @@ Data constructors
 
 Bindings
 
-> insertBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                      TmName -> Maybe Sigma -> m ()
-> insertBinding x ty = do
->     st <- get
->     when (Map.member x (bindings st)) $ errDuplicateTmVar x
->     put st{bindings = Map.insert x ty (bindings st)}
+> lookupBindingIn :: (MonadError ErrorData m) =>
+>                    TmName -> Map.Map TmName (Maybe Sigma) -> m (Term ::: Sigma)
+> lookupBindingIn x bs = case Map.lookup x bs of
+>     Just (Just ty)  -> return $ TmVar x ::: ty
+>     Just Nothing    -> erk "Mutual recursion requires explicit signatures"
+>     Nothing         -> missingTmVar x
 
-> updateBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                      TmName -> Maybe Sigma -> m ()
-> updateBinding x ty = do
->     st <- get
->     put st{bindings = Map.insert x ty (bindings st)}
+> insertBindingIn x ty bs = do
+>     when (Map.member x bs) $ errDuplicateTmVar x
+>     return $ Map.insert x ty bs
 
-> lookupBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
 >                    TmName -> m (Term ::: Sigma)
-> lookupBinding x = do
->     bs <- gets bindings
->     case Map.lookup x bs of
->         Just (Just ty)  -> return $ TmVar x ::: ty
->         Just Nothing    -> erk "Mutual recursion requires explicit signatures"
->         Nothing         -> missingTmVar x
+> lookupTopBinding x = lookupBindingIn x =<< gets bindings 
 
+> modifyTopBindings :: MonadState (ZipState t) m => (Bindings -> m Bindings) -> m ()
+> modifyTopBindings f = do
+>     st <- get
+>     bs <- f (bindings st)
+>     put st{bindings = bs}
+
+> insertTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                      TmName -> Maybe Sigma -> m ()
+> insertTopBinding x ty = modifyTopBindings $ insertBindingIn x ty
+
+> updateTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                      TmName -> Maybe Sigma -> m ()
+> updateTopBinding x ty = modifyTopBindings (return . Map.insert x ty)
+
+
+
+
+
+> lookupBinding x = help =<< getContext
+>   where
+>     help B0                             = lookupTopBinding x
+>     help (g :< Layer (LetBindings bs))  = lookupBindingIn x bs
+>     help (g :< _)                       = help g
+
+> modifyBindings :: (Bindings -> Contextual () Bindings) -> Contextual () ()
+> modifyBindings f = flip help [] =<< getContext
+>   where
+>     help :: Context -> [Entry] -> Contextual () ()
+>     help B0 _ = modifyTopBindings f
+>     help (g :< Layer (LetBindings bs)) h = do
+>         bs' <- f bs
+>         putContext $ (g :< Layer (LetBindings bs')) <><< h
+>     help (g :< e) h = help g (e:h)
+
+> insertBinding x ty = modifyBindings $ insertBindingIn x ty
+> updateBinding x ty = modifyBindings $ return . Map.insert x ty
 
 
 
@@ -349,15 +378,15 @@ Bindings
 >         _     -> errNonNumericVar a
 
 
-> lookupTmVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTmVar :: (Alternative m, MonadState (ZipState t) m, MonadError ErrorData m) =>
 >                    TmName -> m (Term ::: Sigma)
 > lookupTmVar x = getContext >>= seek
 >   where
->     seek B0 = lookupBinding x
->     seek (g :< Layer (LamBody (y ::: ty) ()))  | x == y = return $ TmVar y ::: ty
->     seek (g :< Layer (LetBody bs ())) = case lookIn bs of
->                                             Just tt  -> return tt
->                                             Nothing  -> seek g
+>     seek B0 = lookupTopBinding x
+>     seek (g :< Layer (LamBody (y ::: ty) ()))
+>         | x == y = return $ TmVar y ::: ty
+>     seek (g :< Layer (LetBody bs ()))   = lookupBindingIn x bs <|> seek g
+>     seek (g :< Layer (LetBindings bs))  = lookupBindingIn x bs <|> seek g
 >     seek (g :< Layer (PatternTop (y ::: ty) bs ps cs))
 >         | x == y = return $ TmVar y ::: ty
 >         | otherwise = case lookIn bs of

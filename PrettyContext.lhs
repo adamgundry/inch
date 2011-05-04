@@ -31,11 +31,9 @@
 
 > instance Pretty TmLayer where
 >   pretty (PatternTop (x ::: _) _ _ _)  _ = text $ "PatternTop " ++ x
->   pretty (AppLeft _ _ _)               _ = text "AppLeft"
->   pretty (AppRight _ _)                _ = text "AppRight"
 >   pretty (LamBody (x ::: _) _)         _ = text $ "LamBody " ++ x
+>   pretty (LetBindings _)               _ = text "LetBindings"
 >   pretty (LetBody _ _)                 _ = text "LetBody"
->   pretty (AnnotLeft _ _)               _ = text "AnnotLeft"
 >   pretty FunTop                        _ = text "FunTop"
 >   pretty GenMark                       _ = text "GenMark"
 

@@ -9,6 +9,8 @@
 > import Control.Monad.Writer hiding (All)
 > import Data.List
 > import Data.Maybe
+> import qualified Data.Map as Map
+> import Data.Foldable hiding (foldr)
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
@@ -99,7 +101,7 @@ status.
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps = return (g, tps)
 >     help (g :< A (a := d)) (t, ps)
 >       | a <? t || a <? ps  = case d of
->         Exists  -> errBadExistential a t ps
+>         Exists  -> traceContext "oh no" >> errBadExistential a t ps
 >         Some d  -> help g (replaceTy a d t, map (replaceTypes a d) ps)
 >         _       -> help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps)
 >     help (g :< Layer (LamBody _ _))  tps      = help g tps
@@ -345,8 +347,8 @@ status.
 >     return $ Lam x b ::: a --> ty
 
 > checkInfer mty (Let ds t) = do
->     ds <- traverse checkFunDecl ds
->     t ::: ty <- withLayer (LetBody (map funDeclToBinding ds) ()) $
+>     (ds, bs) <- checkLocalDecls ds
+>     t ::: ty <- withLayer (LetBody bs ()) $
 >                     checkInfer mty t
 >     return $ Let ds t ::: ty
 
@@ -359,24 +361,31 @@ status.
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
 
 
-> funDeclToBinding :: FunDeclaration -> TmName ::: Sigma
-> funDeclToBinding (FunDecl x (Just ty) _) = x ::: ty
+> declToBinding :: Declaration -> [TmName ::: Sigma]
+> declToBinding (SigDecl x ty)  = [x ::: ty]
+> declToBinding _               = []
 
-> withLayer :: TmLayer -> Contextual () t -> Contextual () t
-> withLayer l m = modifyContext (:< Layer l) *> m <* modifyContext extract
+> withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual () t -> Contextual () (t, a)
+> withLayerExtract l f m = do
+>     modifyContext (:< Layer l)
+>     t <- m
+>     (g, a) <- extract <$> getContext
+>     putContext g
+>     return (t, a)
 >   where
->     extract (g :< Layer l') | matchLayer l l'  = g
->     extract (g :< e)                           = extract g :< e
+>     extract (g :< Layer l') | matchLayer l l'  = (g, f l')
+>     extract (g :< e)                           = (g' :< e, a) where (g', a) = extract g
 
 >     matchLayer (PatternTop (x ::: _) _ _ _)
 >                (PatternTop (y ::: _) _ _ _) = x == y
 >     matchLayer FunTop FunTop = True
 >     matchLayer (LamBody (x ::: _) ()) (LamBody (y ::: _) ()) = x == y
 >     matchLayer (LetBody _ _) (LetBody _ _) = True
->     matchLayer (AnnotLeft _ _) (AnnotLeft _ _) = True
->     matchLayer (AppLeft _ _ _) (AppLeft _ _ _) = True
->     matchLayer (AppRight _ _) (AppRight _ _) = True
+>     matchLayer (LetBindings _) (LetBindings _) = True
 >     matchLayer _ _ = False
+
+> withLayer :: TmLayer -> Contextual () t -> Contextual () t
+> withLayer l m = fst <$> withLayerExtract l (const ()) m
 
 > inferRho :: STerm -> Contextual () (Term ::: Rho)
 > inferRho t =
@@ -390,28 +399,53 @@ status.
 
 
 
-> checkFunDecl :: SFunDeclaration -> Contextual () FunDeclaration
 
-> checkFunDecl (FunDecl s Nothing pats@(Pat xs _ _ : _)) =
+> checkLocalDecls :: [SDeclaration] -> Contextual () ([Declaration], Bindings)
+> checkLocalDecls ds =
+>     withLayerExtract (LetBindings Map.empty) (\ (LetBindings bs) -> bs) $ do
+>         traverse makeBinding ds
+>         Data.List.concat <$> traverse checkInferFunDecl ds  
+
+> makeBinding :: SDeclaration -> Contextual () ()
+> makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
+>     TK ty' k <- inferKind B0 ty
+>     case k of
+>         KSet  -> insertBinding x (Just ty')
+>         _     -> errKindNotSet (fogKind k)
+> makeBinding (FunDecl x _) = insertBinding x Nothing <|> return ()
+> makeBinding (DataDecl _ _ _) = return ()
+
+> checkInferFunDecl :: SDeclaration -> Contextual () [Declaration]
+> checkInferFunDecl (FunDecl s []) =
+>   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
+> checkInferFunDecl fd@(FunDecl s (p:ps)) = do
+>     when (not (null ps) && isVarPat p) $ erk $ "Multiple bindings for variable " ++ s
+>     mty <- optional $ lookupBinding s
+>     case mty of
+>         Just (_ ::: ty)  -> (\ x -> [x]) <$> checkFunDecl ty fd
+>         Nothing          -> do
+>             (fd, ty) <- inferFunDecl fd
+>             updateBinding s (Just ty)
+>             return [SigDecl s ty, fd]
+> checkInferFunDecl (SigDecl x _) = do
+>     _ ::: ty <- lookupBinding x
+>     return [SigDecl x ty]
+
+> inferFunDecl (FunDecl s pats) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar "_x" KSet
 >     pattys  <- traverse (inferAlt (s ::: sty)) pats
 >     let ptms ::: ptys = unzipAsc pattys
 >     traverse (unify sty) ptys
 >     (ty', ptms') <- generalise sty ptms
->     return $ FunDecl s (Just $ simplifyTy ty') ptms'
+>     return (FunDecl s ptms', simplifyTy ty')
 
-> checkFunDecl (FunDecl s (Just st) pats@(Pat xs _ _ : _)) =
+> checkFunDecl sty (FunDecl s pats) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
->     TK sty k <- inLocation (text $ "in type of " ++ s) $ inferKind B0 st
->     case k of
->       KSet -> do
 >         ptms <- traverse (checkAlt (s ::: sty)) pats
->         return $ FunDecl s (Just sty) ptms
->       _ -> errKindNotSet (fogKind k)
+>         return $ FunDecl s ptms
 
-> checkFunDecl (FunDecl s _ []) =
->   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
+
 
 
 
@@ -554,8 +588,3 @@ status.
 
 > inferPat top (p : _) =
 >     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p
-
-
-
-
-> traceContext s = getContext >>= \ g -> mtrace (s ++ "\n" ++ renderMe g)

@@ -45,8 +45,6 @@
 > type Pattern          = Pat OK
 > type PatternTerm      = PatTerm OK
 > type Declaration      = Decl OK
-> type DataDeclaration  = DataDecl OK
-> type FunDeclaration   = FunDecl OK
 > type Program          = Prog OK
 > type Guard            = Grd OK
 
@@ -55,8 +53,6 @@
 > type SPattern          = Pat RAW
 > type SPatternTerm      = PatTerm RAW
 > type SDeclaration      = Decl RAW
-> type SDataDeclaration  = DataDecl RAW
-> type SFunDeclaration   = FunDecl RAW
 > type SProgram          = Prog RAW
 > type SGuard            = Grd RAW
 
@@ -92,7 +88,7 @@
 >     TmApp    :: Tm s -> Tm s          -> Tm s
 >     TmBrace  :: TyNum (AVar KNum s)   -> Tm s
 >     Lam      :: TmName -> Tm s        -> Tm s
->     Let      :: [FunDecl s] -> Tm s   -> Tm s
+>     Let      :: [Decl s] -> Tm s      -> Tm s
 >     (:?)     :: Tm s -> AType KSet s  -> Tm s
 
 > deriving instance Eq (Tm RAW)
@@ -118,53 +114,27 @@
 
 
 
-> data DataDecl s where
->     DataDecl  :: TyConName -> AKind k s -> [TmConName ::: AType KSet s] ->
->                      DataDecl s
-
-> deriving instance Eq (DataDecl RAW)
-
-> instance TravTypes DataDecl where
->     travTypes g (DataDecl x k cs) =
->         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs
->
->     fogTypes g (DataDecl x k cs) =
->         DataDecl x (fogKind k) (map (\ (x ::: t) -> x ::: fogTy' g [] t) cs)
-
-
-> data FunDecl s where
->     FunDecl   :: TmName -> Maybe (AType KSet s) -> [Pat s] -> FunDecl s
-
-> deriving instance Eq (FunDecl RAW)
-
-> instance TravTypes FunDecl where
->     travTypes g (FunDecl x mt ps) =
->         FunDecl x <$> traverse g mt <*> traverse (travTypes g) ps
->
->     fogTypes g (FunDecl x mt ps) =
->         FunDecl x (fmap (fogTy' g []) mt) (map (fogTypes g) ps)
-
-
 > data Decl s where
->     DD :: DataDecl s  -> Decl s
->     FD :: FunDecl s   -> Decl s
+>     DataDecl  :: TyConName -> AKind k s -> [TmConName ::: AType KSet s] ->
+>                      Decl s
+>     FunDecl   :: TmName -> [Pat s] -> Decl s
+>     SigDecl   :: TmName -> AType KSet s -> Decl s
 
 > deriving instance Eq (Decl RAW)
 
 > instance TravTypes Decl where
->     travTypes g (DD d) = DD <$> travTypes g d
->     travTypes g (FD f) = FD <$> travTypes g f
+>     travTypes g (DataDecl x k cs) =
+>         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs
+>     travTypes g (FunDecl x ps) =
+>         FunDecl x <$> traverse (travTypes g) ps
+>     travTypes g (SigDecl x ty) = SigDecl x <$> g ty
 >
->     fogTypes g (DD d) = DD (fogTypes g d)
->     fogTypes g (FD f) = FD (fogTypes g f)
+>     fogTypes g (DataDecl x k cs) = DataDecl x (fogKind k)
+>         (map (\ (x ::: t) -> x ::: fogTy' g [] t) cs)
+>     fogTypes g (FunDecl x ps)  = FunDecl x (map (fogTypes g) ps)
+>     fogTypes g (SigDecl x ty)  = SigDecl x (fogTy' g [] ty)
 
 
-> partitionDecls :: [Decl s] -> ([DataDecl s], [FunDecl s])
-> partitionDecls [] = ([], [])
-> partitionDecls (DD d : xs) = (d:ds, fs)
->   where (ds, fs) = partitionDecls xs
-> partitionDecls (FD f : xs) = (ds, f:fs)
->   where (ds, fs) = partitionDecls xs
 
 
 
@@ -187,6 +157,10 @@
 
 > instance FV (Pat OK) where
 >     (<?) = elemTypes
+
+> isVarPat :: Pat s -> Bool
+> isVarPat (Pat [] Nothing _)  = True
+> isVarPat _                   = False
 
 
 > data PatTerm s where

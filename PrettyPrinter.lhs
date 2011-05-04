@@ -145,18 +145,12 @@
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
 > instance Pretty SDeclaration where
->     pretty (DD d) = pretty d 
->     pretty (FD f) = pretty f
-
-> instance Pretty SDataDeclaration where
 >     pretty (DataDecl n k cs) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
 >             vcat (map prettyHigh cs)
-
-> instance Pretty SFunDeclaration where
->     pretty (FunDecl n Nothing ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
->     pretty (FunDecl n (Just ty) ps) _ = vcat $ (text n <+> text "::" <+> prettyHigh ty) : map ((text n <+>) . prettyHigh) ps
+>     pretty (FunDecl n ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
+>     pretty (SigDecl n ty) _ = text n <+> text "::" <+> prettyHigh ty
 
 
 > instance (Pretty x, Pretty p) => Pretty (x ::: p) where

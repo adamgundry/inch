@@ -74,7 +74,7 @@
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
-> eraseTm (Let ds t)   = Let <$> traverse eraseFunDecl ds <*> eraseTm t
+> eraseTm (Let ds t)   = Let <$> traverse eraseDecl ds <*> eraseTm t
 > eraseTm (t :? ty)    = do
 >     t <- eraseTm t
 >     ty <- eraseToSet ty
@@ -115,17 +115,14 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > erasePatTm (PatCon c ps) = PatCon c (map erasePatTm ps)
 > erasePatTm t = t
 
-> eraseFunDecl :: FunDeclaration -> Contextual t FunDeclaration
-> eraseFunDecl (FunDecl x mt ps) =
->     FunDecl x <$> traverse eraseToSet mt
->               <*> traverse erasePat ps
-
 > eraseDecl :: Declaration -> Contextual a Declaration
-> eraseDecl (DD (DataDecl s k cs)) = do
+> eraseDecl (DataDecl s k cs) = do
 >     Ex k <- eraseKind k
 >     cs <- traverse eraseCon cs
->     return $ DD $ DataDecl s k cs
-> eraseDecl (FD f) = FD <$> eraseFunDecl f
+>     return $ DataDecl s k cs
+> eraseDecl (FunDecl x ps) =
+>     FunDecl x <$> traverse erasePat ps
+> eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
 
 > eraseProg :: Program -> Contextual a Program
 > eraseProg = traverse eraseDecl

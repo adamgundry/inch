@@ -322,3 +322,9 @@ We can insert a fresh variable into a unit thus:
 >     t <- unknownTyVar "_t" KSet
 >     unify (s --> t) ty
 >     return (s, t)
+
+
+
+
+
+> traceContext s = getContext >>= \ g -> mtrace (s ++ "\n" ++ renderMe g)
