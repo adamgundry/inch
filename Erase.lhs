@@ -18,28 +18,32 @@
 > import TypeCheck
 
 
-> eraseKind :: Kind k -> Contextual a (Ex Kind)
-> eraseKind KSet          = return $ Ex KSet
-> eraseKind KNum          = return $ Ex KNum
-> eraseKind (k :-> l)  = do
->     Ex k' <- eraseKind k
->     Ex l' <- eraseKind l
->     case k' of
->         KNum  -> return $ Ex l'
->         _     -> return $ Ex $ k' :-> l'
+> eraseKind :: Kind k -> Maybe (Ex Kind)
+> eraseKind KSet       = Just $ Ex KSet
+> eraseKind KNum       = Nothing
+> eraseKind (k :-> l)  =
+>     case (eraseKind k, eraseKind l) of
+>         (_,             Nothing)       -> Nothing
+>         (Nothing,       Just (Ex l'))  -> Just $ Ex l'
+>         (Just (Ex k'),  Just (Ex l'))  -> Just $ Ex $ k' :-> l'
 
+
+> willErase :: Kind k -> Bool
+> willErase KSet = False
+> willErase KNum = True
+> willErase (k :-> l) = willErase l
 
 > eraseType :: Type k -> Contextual a (Ex Kind, TyKind)
-> eraseType (TyVar (FVar a k))    = do
->     Ex l <- eraseKind k
->     return (Ex k, TK (TyVar (FVar a l)) l)
-> eraseType (TyCon c k)  = do
->     Ex l <- eraseKind k
->     return (Ex k, TK (TyCon c l) l)
+> eraseType (TyVar (FVar a k))    = 
+>     case eraseKind k of
+>         Just (Ex l) -> return (Ex k, TK (TyVar (FVar a l)) l)
+> eraseType (TyCon c k)  =
+>     case eraseKind k of
+>         Just (Ex l) -> return (Ex k, TK (TyCon c l) l)
 > eraseType (TyApp f s)  = do
 >         (Ex k, TK f' kf) <- eraseType f
 >         case (k, kf) of
->             (KNum :-> l, _)  -> return (Ex l, TK f' kf)
+>             (k' :-> l, _) | willErase k'  -> return (Ex l, TK f' kf)
 >             (k' :-> l, k'' :-> l'')    -> do
 >                 (_, TK s' ks) <- eraseType s
 >                 hetEq k'' ks (return (Ex l, TK (TyApp f' s') l''))
@@ -53,12 +57,13 @@
 >     insertNumArrow :: Ty a KSet -> Ty a KSet
 >     insertNumArrow (Bind All x k t) = Bind All x k (insertNumArrow t)
 >     insertNumArrow t = numTy --> t
-> eraseType (Bind All x KNum t)  = eraseType $ unbindTy (error "eraseType: erk") t
-> eraseType (Bind b x k t)        = do
->     an <- fresh SysVar x k Hole
->     Ex k' <- eraseKind k
->     (ek, TK t' kt) <- eraseType (unbindTy an t)
->     return (ek, TK (Bind b x k' (bindTy (FVar (varName an) k') t')) kt)
+> eraseType (Bind All x k t)        = 
+>     case eraseKind k of
+>         Just (Ex k') -> do
+>             an <- fresh SysVar x k Hole
+>             (ek, TK t' kt) <- eraseType (unbindTy an t)
+>             return (ek, TK (Bind All x k' (bindTy (FVar (varName an) k') t')) kt)
+>         Nothing -> eraseType $ unbindTy (error "eraseType: erk") t
 > eraseType (Qual p t) = eraseType t
 
 
@@ -116,10 +121,11 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > erasePatTm t = t
 
 > eraseDecl :: Declaration -> Contextual a Declaration
-> eraseDecl (DataDecl s k cs) = do
->     Ex k <- eraseKind k
->     cs <- traverse eraseCon cs
->     return $ DataDecl s k cs
+> eraseDecl (DataDecl s k cs) =
+>     case eraseKind k of
+>         Just (Ex k') -> do
+>             cs <- traverse eraseCon cs
+>             return $ DataDecl s k' cs
 > eraseDecl (FunDecl x ps) =
 >     FunDecl x <$> traverse erasePat ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
