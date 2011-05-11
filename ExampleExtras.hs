@@ -16,3 +16,9 @@ deriving instance Show a => Show (FlipVec a)
 deriving instance Show a => Show (Ex a)
 deriving instance Show (f (g a)) => Show (Comp f g a)
 deriving instance Show a => Show (List a)
+deriving instance Show q => Show (Quantity q)
+deriving instance Show Unit
+deriving instance Show Unit2
+deriving instance Show Unit3
+
+thirtymk' = thirtymk (*)

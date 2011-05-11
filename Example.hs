@@ -34,6 +34,9 @@ flp      = \ f x y -> f y x
 data Pair :: * -> * -> * where
   Pair :: forall a b. a -> b -> Pair a b
 
+p1 (Pair a _) = a
+p2 (Pair _ b) = b
+
 data Nat where
   Zero :: Nat
   Suc :: Nat -> Nat
@@ -93,6 +96,12 @@ vappend :: forall (m n :: Num) a . Vec m a -> Vec n a -> Vec (m+n) a
 vappend VNil ys = ys
 vappend (VCons x xs) VNil = VCons x (vappend xs VNil)
 vappend (VCons x xs) (VCons y ys) = VCons x (vappend xs (VCons y ys))
+
+vappend2 :: forall (m n :: Num) a . 0 <= m, 0 <= n =>
+                Vec m a -> Vec n a -> Vec (m+n) a
+vappend2 VNil ys = ys
+vappend2 (VCons x xs) ys = VCons x (vappend2 xs ys)
+
 
 vrevapp :: forall (m n :: Num) a . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a
 vrevapp VNil ys = ys
@@ -543,3 +552,112 @@ data Even :: Num -> * where
 
 unEven :: forall (n :: Num) . 0 <= n => Even (2 * n) -> UNat n
 unEven (Twice {n}) = unat {n}
+
+
+
+-- Something involving negative numbers
+
+data Move :: Num -> Num -> * where
+  Step :: pi (x y :: Num) . Move x y
+  Join :: forall (x y x' y' :: Num) . 
+            Move x y -> Move x' y' -> Move (x + x') (y + y')
+
+runMove :: (Integer -> Integer -> Integer) -> Move 0 0 -> List (Pair Integer Integer)
+runMove plus m =
+  let help :: forall (x y :: Num) . Pair Integer Integer -> Move x y ->
+                  Pair (Pair Integer Integer) (List (Pair Integer Integer)) 
+      help (Pair a b) (Step {x} {y}) = let p = Pair (plus a x) (plus b y)
+                                       in Pair p Nil
+      help q (Join m1 m2) = let x = help q m1
+                                y = help (p1 x) m2
+                            in Pair (p1 y) (append (p2 y) (Cons (p1 x) (p2 x)))
+      x = help (Pair 0 0) m
+  in Cons (p1 x) (p2 x)
+
+
+test = flp runMove (Join (Step {1} {2}) (Join (Step { -1} {0}) (Step {0} { -2})))
+
+
+-- Something else
+
+data Quantity :: (Num -> Num -> Num -> *) -> Num -> Num -> Num -> * where
+  Q :: forall (u :: Num -> Num -> Num -> *)(m s k :: Num) . 
+           Integer -> u m s k -> Quantity u m s k
+
+multQ :: forall (q :: Num -> Num -> Num -> *)(m s k m' s' k' :: Num). 
+          (q m s k -> q m' s' k' -> q (m+m') (s+s') (k+k')) ->
+          (Integer -> Integer -> Integer) -> 
+            Quantity q m s k ->
+              Quantity q m' s' k' ->
+                Quantity q (m+m') (s+s') (k+k')
+multQ timesQ timesZ (Q x u) (Q y v) = Q (timesZ x y) (timesQ u v)
+
+
+data Unit :: Num -> Num -> Num -> * where
+  One       :: Unit 0 0 0
+  Metre     :: Unit 1 0 0
+  Second    :: Unit 0 1 0
+  Kilogram  :: Unit 0 0 1
+  Prod :: forall (m s k m' s' k' :: Num).
+              Unit m s k -> Unit m' s' k' -> Unit (m + m') (s + s') (k + k')
+  Inv :: forall (m s k :: Num) . 
+             Unit m s k -> Unit (- m) (- s) (- k)
+
+multU1 = multQ Prod
+
+
+fivem = Q 5 Metre
+sixk  = Q 6 Kilogram
+thirtymk times = multU1 times fivem sixk
+
+
+
+data Unit2 :: Num -> Num -> Num -> * where
+  U2 :: pi (m s k :: Num) . Unit2 m s k
+
+prodU2 :: forall (m s k m' s' k' :: Num).
+           Unit2 m s k -> Unit2 m' s' k' -> Unit2 (m + m') (s + s') (k + k')
+prodU2 (U2 {m} {s} {k}) (U2 {m'} {s'} {k'}) = U2 {m+m'} {s+s'} {k+k'}
+
+multU2 = multQ prodU2
+
+invU2 :: forall (m s k :: Num). Unit2 m s k -> Unit2 (-m) (-s) (-k)
+invU2 (U2 {m} {s} {k}) = U2 { -m} { -s} { -k}
+
+one2     = U2 {0} {0} {0}
+metre2   = U2 {1} {0} {0}
+second2  = U2 {0} {1} {0}
+kilo2    = U2 {0} {0} {1}
+
+fivem2           = Q 5 metre2
+sixk2            = Q 6 kilo2
+thirtymk2 times  = multU2 times fivem2 sixk2
+
+data Unit3 :: Num -> Num -> Num -> * where
+  U3 :: forall (m s k :: Num) . Unit3 m s k
+
+prodU3 :: forall (m s k m' s' k' :: Num).
+           Unit3 m s k -> Unit3 m' s' k' -> Unit3 (m + m') (s + s') (k + k')
+prodU3 _ _ = U3
+
+multU3 = multQ prodU3
+
+invU3 :: forall (m s k :: Num). Unit3 m s k -> Unit3 (-m) (-s) (-k)
+invU3 _ = U3
+
+one3     = U3 :: Unit3 0 0 0
+metre3   = U3 :: Unit3 1 0 0
+second3  = U3 :: Unit3 0 1 0
+kilo3    = U3 :: Unit3 0 0 1
+
+fivem3           = Q 5 metre3
+sixk3            = Q 6 kilo3
+thirtymk3 times  = multU3 times fivem3 sixk3
+
+
+
+data Bad :: (Num -> Num) -> * where
+  Eek :: forall (f :: Num -> Num) . UNat (f 0) -> Bad f
+
+badder :: forall (g :: Num -> Num -> Num) . Bad (g 1) -> UNat (g (2-1) 0)
+badder (Eek n) = n
