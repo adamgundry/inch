@@ -38,11 +38,13 @@
 >     Ex k -> do
 >         v <- freshVar UserVar a k
 >         TK ty l <- inferKind (g :< Ex v) t
->         return $ TK (Bind b a k (bindTy v ty)) l
+>         case l of
+>             KSet  -> return $ TK (Bind b a k (bindTy v ty)) KSet
+>             _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind g (SQual p t) = do
 >     p' <- checkPredKind g p
->     TK t' k <- inferKind g t
->     return $ TK (Qual p' t') k
+>     TK t' KSet <- inferKind g t
+>     return $ TK (Qual p' t') KSet
 
 > checkNumKind :: Bwd (Ex (Var ())) -> TyNum String -> Contextual t TypeNum
 > checkNumKind g = traverse (lookupNumVar g)

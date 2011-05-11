@@ -61,8 +61,8 @@
 >     case eraseKind k of
 >         Just (Ex k') -> do
 >             an <- fresh SysVar x k Hole
->             (ek, TK t' kt) <- eraseType (unbindTy an t)
->             return (ek, TK (Bind All x k' (bindTy (FVar (varName an) k') t')) kt)
+>             (ek, TK t' KSet) <- eraseType (unbindTy an t)
+>             return (ek, TK (Bind All x k' (bindTy (FVar (varName an) k') t')) KSet)
 >         Nothing -> eraseType $ unbindTy (error "eraseType: erk") t
 > eraseType (Qual p t) = eraseType t
 

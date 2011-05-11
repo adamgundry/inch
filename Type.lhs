@@ -31,12 +31,12 @@
 
 
 > data Ty a k where
->     TyVar  :: Var a k                                    -> Ty a k
->     TyCon  :: TyConName -> Kind k                        -> Ty a k
->     TyApp  :: Ty a (l :-> k) -> Ty a l                   -> Ty a k
->     TyNum  :: TyNum (NVar a)                             -> Ty a KNum
->     Bind   :: Binder -> String -> Kind l -> Ty (a, l) k  -> Ty a k
->     Qual   :: Pred (NVar a) -> Ty a k                    -> Ty a k
+>     TyVar  :: Var a k                                       -> Ty a k
+>     TyCon  :: TyConName -> Kind k                           -> Ty a k
+>     TyApp  :: Ty a (l :-> k) -> Ty a l                      -> Ty a k
+>     TyNum  :: TyNum (NVar a)                                -> Ty a KNum
+>     Bind   :: Binder -> String -> Kind l -> Ty (a, l) KSet  -> Ty a KSet
+>     Qual   :: Pred (NVar a) -> Ty a KSet                    -> Ty a KSet
 >     Arr    :: Ty a (KSet :-> KSet :-> KSet)
 
 > deriving instance Show (Ty a k)
@@ -99,7 +99,7 @@
 > (/->) :: Foldable f => f (Ty a KSet) -> Ty a KSet -> Ty a KSet
 > ts /-> t = Data.Foldable.foldr (-->) t ts
 
-> (/=>) :: Foldable f => f (Pred (NVar a)) -> Ty a k -> Ty a k
+> (/=>) :: Foldable f => f (Pred (NVar a)) -> Ty a KSet -> Ty a KSet
 > ps /=> t = Data.Foldable.foldr Qual t ps
 
 > toNum :: Ty a KNum -> TyNum (NVar a)
@@ -172,13 +172,10 @@
 
 
 
-> simplifyTy :: Ord a => Ty a k -> Ty a k
+> simplifyTy :: Ord a => Ty a KSet -> Ty a KSet
 > simplifyTy = simplifyTy' []
 >   where
->     simplifyTy' :: Ord a => [Pred (NVar a)] -> Ty a k -> Ty a k
->     simplifyTy' ps (TyNum n)       = nub ps /=> TyNum (simplifyNum n)
->     simplifyTy' ps (TyApp f s)     = nub ps /=> TyApp (simplifyTy f) (simplifyTy s)
->     -- simplifyTy' ps (Bind b x k t)  = Bind b x k (simplifyTy' (map (fmap S) ps) t)
+>     simplifyTy' :: Ord a => [Pred (NVar a)] -> Ty a KSet -> Ty a KSet
 >     simplifyTy' ps (Qual p t)      = simplifyTy' (simplifyPred p:ps) t
 >     simplifyTy' ps t               = nub ps /=> t
 

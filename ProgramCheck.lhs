@@ -63,22 +63,22 @@
 
 
 
-> goGadtMangle :: Type k -> Contextual () (Type k)
+> goGadtMangle :: Type KSet -> Contextual () (Type KSet)
 > goGadtMangle ty = do
 >     (ty', vts) <- runWriterT $ makeEqGadtMangle [] ty
 >     return $ foldr bindVar ty' (map fst vts)
 >   where
->     bindVar :: Var () KNum -> Type k -> Type k
+>     bindVar :: Var () KNum -> Type KSet -> Type KSet
 >     bindVar a = Bind All (fogVar a) KNum . bindTy a
 
-> makeEqGadtMangle :: [Ex (Var ())] -> Type k ->
->     ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type k)
+> makeEqGadtMangle :: [Ex (Var ())] -> Type KSet ->
+>     ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type KSet)
 > makeEqGadtMangle as ty = do
 >     (ty', vts) <- lift $ runWriterT $ gadtMangle as ty
 >     tell $ map (\ (a, _) -> (a, Nothing)) vts
 >     return $ foldr makeEq ty' vts
 >   where
->     makeEq :: (Var () KNum, Maybe TypeNum) -> Type k -> Type k
+>     makeEq :: (Var () KNum, Maybe TypeNum) -> Type KSet -> Type KSet
 >     makeEq (a, Just n)   = Qual (NumVar a %==% n)
 >     makeEq (a, Nothing)  = id
 

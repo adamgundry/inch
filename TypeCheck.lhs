@@ -89,15 +89,15 @@ status.
 >     help isHole (g :< e)             = help isHole g :< e
 
 
-> generalise :: Type k -> [Pattern] -> Contextual t (Type k, [Pattern])
+> generalise :: Type KSet -> [Pattern] -> Contextual t (Type KSet, [Pattern])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps) []
 >     putContext g'
 >     return tps
 >   where
->     help :: Context -> (Type k, [Pattern]) -> [NormalPredicate] ->
->                 Contextual t (Context, (Type k, [Pattern]))
+>     help :: Context -> (Type KSet, [Pattern]) -> [NormalPredicate] ->
+>                 Contextual t (Context, (Type KSet, [Pattern]))
 >     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
 >     help (g :< Layer (LamBody _ _))           tps hs = help g tps hs
@@ -123,8 +123,8 @@ status.
 >     help g tps hs = erk $ "generalise: can't help " ++ renderMe g
 
 
->     replaceHelp :: Context -> (Type k, [Pattern]) -> [NormalPredicate] ->
->         Var () l -> Type l -> Contextual t (Context, (Type k, [Pattern]))
+>     replaceHelp :: Context -> (Type KSet, [Pattern]) -> [NormalPredicate] ->
+>         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Pattern]))
 >     replaceHelp g (t, ps) hs a d = help g (replaceTy a d t,
 >                                                map (replaceTypes a d) ps)
 >                                           hs'
@@ -491,7 +491,7 @@ status.
 >     t  <- checkRho rty t
 >     unifySolveConstraints
 >     solveConstraints
->     (_, [p]) <- generalise Arr [Pat xs g t] -- to fix up variables
+>     (_, [p]) <- generalise (TyCon "Fake" KSet) [Pat xs g t] -- to fix up variables
 >     return p
 
 > inferAlt :: String ::: Sigma -> SPattern ->

@@ -349,7 +349,7 @@ Bindings
 > expandPred :: Context -> Predicate -> Predicate
 > expandPred g = mapPred (expandNum g)
 
-> niceType :: Type k -> Contextual t (Type k)
+> niceType :: Type KSet -> Contextual t (Type KSet)
 > niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext
 
 > nicePred :: Predicate -> Contextual t Predicate
