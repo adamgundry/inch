@@ -23,6 +23,7 @@
 >     ,  negateNExp
 >     ,  foldNExp
 >     ,  solveForVar
+>     ,  partitionNExp
 >     ) where
 
 > import Data.Foldable (Foldable, find)
@@ -180,6 +181,15 @@ The |substNExp| function substitutes a group expression for a variable
 > solveForVar a n = case lookupVariable a n of
 >     Just i | i `dividesCoeffs` n  -> Just (pivot (a, i) n)
 >     _                             -> Nothing
+
+
+
+> partitionNExp :: Eq a => [a] -> NExp a -> (NExp a, NExp a)
+> partitionNExp as (NExp vs k) = help vs [] []
+>   where
+>     help [] ls rs = (mkNExp ls 0, mkNExp rs k)
+>     help ((a, n):vs) ls rs | a `elem` as  = help vs ((a, n):ls) rs
+>                            | otherwise    = help vs ls ((a, n):rs)
 
 
 The following utility functions are just used within this module.

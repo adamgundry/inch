@@ -309,6 +309,10 @@
 >   ("y = 2\ny :: Integer", True) :
 >   ("y = 2\nx = 3\ny :: Integer", True) :
 >   ("data UNat :: Num -> * where\ndata Bad :: (Num -> Num) -> * where Eek :: forall (f :: Num -> Num) . UNat (f 0) -> Bad f\nbadder :: forall (g :: Num -> Num -> Num) . Bad (g 1) -> UNat (g (2-1) 0)\nbadder (Eek n) = n", True) :
+>   ("narg {n} = n", True) :
+>   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . UNat n\nunat = unat\nnarg {n} = unat {n}", True) :
+>   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . 0 <= n => UNat n\nunat = unat\nnarg {n} = unat {n}", True) :
+>   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . UNat n\nunat = unat\nf :: UNat 0 -> UNat 0\nf x = x\nnarg {n} = f (unat {n})", True) :
 >   []
 
 

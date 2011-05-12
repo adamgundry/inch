@@ -5,7 +5,7 @@
 
 > import Control.Applicative
 > import Control.Monad hiding (mapM_)
-> import Data.Foldable 
+> import Data.Foldable hiding (elem)
 > import Data.Maybe
 > import Data.Monoid hiding (All)
 > import Control.Monad.State (gets)
@@ -177,53 +177,63 @@
 
 > startSolve :: Var () k -> Type k -> Contextual t ()
 > startSolve alpha tau = do
->     (rho, xs) <- rigidHull tau
+>     (rho, xs) <- rigidHull [] tau
+>     -- traceContext $ "sS\nalpha = " ++ show alpha ++ "\ntau = " ++ show tau ++ "\nrho = " ++ show rho ++ "\nxs = " ++ show xs
 >     solve alpha (pairsToSuffix xs) rho
+>     -- traceContext $ "sS2"
 >     unifyPairs xs
 
-> makeFlex :: TypeNum -> Contextual t (Type KNum, Fwd (Var () KNum, TypeNum))
-> makeFlex n = do  v <- freshVar SysVar "_i" KNum
->                  return (TyNum (NumVar v), (v, n) :> F0)
+> type FlexConstraint = (Var () KNum, TypeNum, TypeNum)
 
-> rigidHull :: Type k -> Contextual t (Type k, Fwd (Var () KNum, TypeNum))
-> rigidHull (TyVar a)    = case varKind a of
->                              KNum  -> makeFlex (NumVar a)
+> makeFlex :: [Var () KNum] -> TypeNum ->
+>                 Contextual t (Type KNum, Fwd FlexConstraint)
+> makeFlex as n = do
+>     n' <- normaliseNum n
+>     let (l, r) = partitionNExp as n'
+>     if isZero r
+>         then return (TyNum n, F0)
+>         else do
+>             v <- freshVar SysVar "_i" KNum
+>             -- traceContext $ "mF\nas = " ++ show as ++ "\nn = " ++ show n ++ "\nl' = " ++ show l' ++ "\nr' = " ++ show r'
+>             return (TyNum (reifyNum (mkVar v +~ l)), (v, NumVar v, reifyNum r) :> F0)
+
+
+> rigidHull :: [Var () KNum] -> Type k ->
+>                  Contextual t (Type k, Fwd FlexConstraint)
+> rigidHull as (TyVar a)    = case varKind a of
+>                              KNum  -> makeFlex as (NumVar a)
 >                              _     -> return (TyVar a, F0)
-> rigidHull (TyCon c k)  = return (TyCon c k, F0)
-> rigidHull (TyApp f s)  = do  (f',  xs  )  <- rigidHull f
->                              (s',  ys  )  <- rigidHull s
->                              return (TyApp f' s', xs <.> ys)
-> rigidHull Arr          = return (Arr, F0)
-> rigidHull (TyNum n)    = makeFlex n
+> rigidHull as (TyCon c k)  = return (TyCon c k, F0)
+> rigidHull as (TyApp f s)  = do  (f',  xs  )  <- rigidHull as f
+>                                 (s',  ys  )  <- rigidHull as s
+>                                 return (TyApp f' s', xs <.> ys)
+> rigidHull as Arr          = return (Arr, F0)
+> rigidHull as (TyNum n)    = makeFlex as n
 
-> rigidHull (Bind All x k b) | not (k =?= KNum) = do
+> rigidHull as (Bind b x KNum t) = do
+>     v <- freshVar SysVar "_magical" KNum
+>     (t, cs) <- rigidHull (v:as) (unbindTy v t)
+>     return (Bind b x KNum (bindTy v t), cs)
+
+> rigidHull as (Bind All x k b) | not (k =?= KNum) = do
 >     v <- freshVar SysVar "_magic" k
->     (t, cs) <- rigidHull (unbindTy v b)
+>     (t, cs) <- rigidHull as (unbindTy v b)
 >     return (Bind All x k (bindTy v t), cs)
 
-> {-
-> rigidHull (Bind Pi x KNum b) = do
->     n <- freshName
->     (t, cs) <- rigidHull (unbind ("magic", n) b)
->     return (Bind Pi x KNum (bind ("magic", n) t), dropMagic ("magic", n) cs)
->   where
->     dropMagic :: Eq a => a -> Fwd (a, b) -> Fwd (a, b)
->     dropMagic a F0 = F0
->     dropMagic a ((x, y) :> xys) | x == a     = dropMagic a xys
->                                 | otherwise  = (x, y) :> dropMagic a xys
-> -}
+This is wrong, I think:
 
-> rigidHull (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull t
+> rigidHull as (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull as t
+
+> rigidHull as b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
 
 
-> rigidHull b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
+> pairsToSuffix :: Fwd FlexConstraint -> Suffix
+> pairsToSuffix = fmap (TE . (:= Hole) . fst3)
+>   where fst3 (a, _, _) = a
 
-
-> pairsToSuffix :: Fwd (Var () KNum, TypeNum) -> Suffix
-> pairsToSuffix = fmap (TE . (:= Hole) . fst)
-
-> unifyPairs :: Fwd (Var () KNum, TypeNum) -> Contextual t ()
-> unifyPairs = mapM_ (uncurry $ unifyNum . NumVar)
+> unifyPairs :: Fwd FlexConstraint -> Contextual t ()
+> unifyPairs = mapM_ (uncurry unifyNum . snd3)
+>   where snd3 (_, b, c) = (b, c)
 
 
 > solve :: Var () k -> Suffix -> Type k -> Contextual t ()
@@ -242,7 +252,7 @@
 >       (if occurs
 >         then case d of
 >           Some upsilon  ->  do
->             (upsilon', xs) <- rigidHull upsilon
+>             (upsilon', xs) <- rigidHull [] upsilon
 >             solve alpha (pairsToSuffix xs <.> (TE (gamma := Some upsilon') :> _Xi)) tau
 >             unifyPairs xs
 >             replace F0

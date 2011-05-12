@@ -101,6 +101,7 @@ status.
 >     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
 >     help (g :< Layer (LamBody _ _))           tps hs = help g tps hs
+>     help (g :< Layer GenMark)                 tps hs = return (g, tps)
 
 >     help (g :< A (a@(FVar _ KNum) := Exists)) (t, ps) hs
 >       | a <? t || a <? ps || a <? hs = case solveFor a hs of
@@ -612,11 +613,13 @@ status.
 >     return (PatIgnore : xs, tr, b --> ty)
 
 > inferPat top (PatBrace (Just a) 0 : ps) = do
->     n <- fresh UserVar a KNum Hole
+>     n <- fresh UserVar a KNum Exists
+>     modifyContext (:< Layer GenMark)
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     (xs, tr, ty) <- inferPat top ps
+>     (ty', _) <- generalise ty []
 >     return (PatBrace (Just a) 0 : xs, tr,
->         Bind Pi a KNum (bindTy n ty))
+>         Bind Pi a KNum (bindTy n ty'))
 
 > inferPat top (p : _) =
 >     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p
