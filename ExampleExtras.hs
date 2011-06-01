@@ -20,5 +20,11 @@ deriving instance Show q => Show (Quantity q)
 deriving instance Show Unit
 deriving instance Show Unit2
 deriving instance Show Unit3
+deriving instance Show NumOrdering
+deriving instance Show a => Show (Vec' a)
 
 thirtymk' = thirtymk (*)
+l2v = foldr VCons VNil
+
+v2l VNil = []
+v2l (VCons x xs) = x : v2l xs

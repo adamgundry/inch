@@ -152,15 +152,22 @@ data FlipVec :: * -> Num -> * where
   FV :: forall a (n :: Num) . Vec n a -> FlipVec a n   
 
 unFV (FV xs) = xs
+fVNil        = FV VNil
+fVCons x xs  = FV (VCons x (unFV xs))
+fvzipWith f xs ys = FV (vzipWith f (unFV xs) (unFV ys))
+
+fvfold :: forall (n :: Num) a (f :: Num -> *) . f 0 ->
+    (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> FlipVec a n -> f n
+fvfold n c xs = vfold n c (unFV xs)
 
 vbuild :: forall (n :: Num) a . Vec n a -> Vec n a
 -- vbuild xs = unFV (vfold (FV VNil) (\ y ys -> FV (VCons y (unFV ys))) xs)
 vbuild = comp unFV (vfold (FV VNil) (\ y -> comp FV (comp (VCons y) unFV)))
 
-{-
-vbuild2 :: forall (n :: Num) a . Vec n a -> Vec n a
-vbuild2 = vfold VNil VCons
--}
+vbuild2 = comp unFV (vfold fVNil fVCons)
+
+-- vtranspose :: forall (n m :: Num) a . FlipVec (FlipVec a m) n -> FlipVec (FlipVec a n) m
+-- vtranspose = fvfold fVNil (fvzipWith fVCons)
 
 unat :: pi (n :: Num) . 0 <= n => UNat n
 unat {0}   = UZero
@@ -661,3 +668,229 @@ data Bad :: (Num -> Num) -> * where
 
 badder :: forall (g :: Num -> Num -> Num) . Bad (g 1) -> UNat (g (2-1) 0)
 badder (Eek n) = n
+
+
+narg {n} = unat {n}
+
+
+
+
+
+data IMon :: (Num -> * -> *) -> * where
+  IMon :: forall (m :: Num -> * -> *) .
+    (forall a . a -> m 0 a) ->
+    (forall a b (i j :: Num) . m i a -> (a -> m j b) -> m (i+j) b) -> IMon m
+
+iret   (IMon r _)  = r
+ibind  (IMon _ b)  = b
+iext   m           = flp (ibind m)
+ijoin  m           = iext m (\ x -> x)
+
+
+
+
+
+data PotList :: Num -> Num -> * -> * where
+  PotNil  :: forall a (i :: Num). PotList i 0 a
+  PotCons :: forall a (i j :: Num). a -> PotList i j a -> PotList i (i+j) a
+
+attach :: forall (n :: Num) . Integer -> PotList 1 n Integer ->
+              PotList 0 0 (Pair Integer Integer)
+attach _ PotNil          = PotNil
+attach x (PotCons y ys)  = PotCons (Pair x y) (attach x ys)
+
+
+
+
+vecid :: pi (m :: Num) . forall a . Vec m a -> Vec m a
+vecid {m} = let loop = loop
+            in loop
+
+natcase :: forall t . pi (m :: Num) . 0 <= m =>
+               (m ~ 0 => t) ->
+               (pi (n :: Num) . 0 <= n => m ~ n + 1 => t) -> t
+natcase {0}    zero  _    = zero
+natcase {n+1}  _     suc  = suc {n}
+
+
+
+nateq :: forall (m n :: Num) (c :: Num -> *) . c (m + n) -> c (n + m)
+nateq x = x
+
+
+data EQ :: * -> * -> * where
+  CONG :: forall a b . (forall (c :: * -> *) . c a -> c b) -> EQ a b
+
+fstEq :: forall a1 a2 b1 b2 . EQ (Pair a1 b1) (Pair a2 b2) -> EQ a1 a2
+fstEq (CONG f) = fstEq (CONG f)
+
+
+
+-- Zenger's examples
+
+sprod :: forall (n :: Num) . (Integer -> Integer -> Integer) ->
+             (Integer -> Integer -> Integer) ->
+             Vec n Integer -> Vec n Integer -> Integer
+sprod plus times VNil VNil = 0
+sprod plus times (VCons x xs) (VCons y ys) = plus (times x y) (sprod plus times xs ys)
+
+
+data SplitVector :: Num -> * -> * where
+  Spv :: forall (m k :: Num) a . 0 <= m, 0 <= k => Vec m a -> Vec k a -> SplitVector (m+k) a
+
+spvLeft :: forall (n :: Num) a . a -> SplitVector n a -> SplitVector (n+1) a
+spvLeft x (Spv l r) = Spv (VCons x l) r
+
+spvRight :: forall (n :: Num) a . a -> SplitVector n a -> SplitVector (n+1) a
+spvRight x (Spv l r) = Spv l (VCons x r)
+
+spvMap :: forall (n :: Num) a b . 
+          (forall (m :: Num) . Vec m a -> Vec m b) ->
+          (forall (k :: Num) . Vec k a -> Vec k b) ->
+          SplitVector n a -> SplitVector n b
+spvMap f g (Spv l r) = Spv (f l) (g r)
+
+spvApp :: forall (n :: Num) a . SplitVector n a -> Vec n a
+spvApp (Spv l r) = vappend l r
+
+vpartition :: forall (n :: Num) a . (a -> Bool) -> Vec n a -> SplitVector n a
+vpartition f VNil = Spv VNil VNil
+vpartition f (VCons x xs) | f x   = spvRight x (vpartition f xs)
+vpartition f (VCons x xs) | True  = spvLeft x (vpartition f xs)
+                                  
+vquicksort :: forall (n :: Num) a . (a -> a -> Bool) -> Vec n a -> Vec n a
+vquicksort le VNil          = VNil
+vquicksort le (VCons x xs)  = spvApp (spvRight x (spvMap (vquicksort le) (vquicksort le) (vpartition (le x) xs)))
+
+
+zeroVector :: pi (n :: Num) . Vec n Integer
+zeroVector {0}    = VNil
+zeroVector {n+1}  = VCons 0 (zeroVector {n})
+
+
+
+
+data NumOrdering :: Num -> Num -> * where
+  NLT :: forall (m :: Num) . pi (k :: Num) . k > 0 => NumOrdering m (m + k)
+  NEQ :: forall (m :: Num) . NumOrdering m m
+  NGT :: forall (n :: Num) . pi (k :: Num) . k > 0 => NumOrdering (n + k) n
+
+{-
+sucNO :: forall (m n :: Num) . NumOrdering m n -> NumOrdering (m+1) (n+1)
+sucNO (NLT {k}) = NLT {k}
+sucNO NEQ = NEQ
+sucNO (NGT {k}) = NGT {k}
+
+compareNum :: pi (m n :: Num) . 0 <= m, 0 <= n => NumOrdering m n
+compareNum {0} {0}     = NEQ
+compareNum {0} {n+1}   = NLT {n+1}
+compareNum {m+1} {0}   = NGT {m+1}
+compareNum {m+1} {n+1} = sucNO (compareNum {m} {n})
+-}
+
+
+
+at :: forall (m :: Num) a . Vec m a -> (pi (n :: Num) . 0 <= n, n < m => a)
+at (VCons x xs) {0}    = x
+at (VCons x xs) {n+1}  = at xs {n}
+
+
+
+-- multcomm :: forall a . pi (m n :: Num) . (m * n ~ n * m => a) -> a
+-- multcomm = multcomm
+
+
+mkPair :: forall a b . a -> b -> (forall c. (a -> b -> c) -> c)
+mkPair a b f = f a b
+
+proj1 :: forall a b . (forall c. (a -> b -> c) -> c) -> a
+proj1 p = p (\ x y -> x)
+
+proj2 :: forall a b . (forall c. (a -> b -> c) -> c) -> b
+proj2 p = p (\ x y -> y)
+
+
+mkPair' :: pi (m n :: Num) . (forall c . (pi (x y :: Num) . c) -> c)
+mkPair' {m} {n} f = f {m} {n}
+
+proj1' :: (forall c . (pi (x y :: Num) . c) -> c) -> Integer
+proj1' p = let f {m} {n} = m
+           in p f
+
+
+-- Vec a m = forall (c :: Num -> *) . c 0 -> (forall (n :: Num) . a -> c n -> c (n+1)) -> c m
+
+mkNil :: forall a (c :: Num -> *) . c 0 -> (forall (n :: Num) . a -> c n -> c (n+1)) -> c 0
+mkNil nil cons = nil
+
+mkCons :: forall a (c :: Num -> *) (m :: Num) . c 0 -> (forall (n :: Num) . a -> c n -> c (n+1)) -> a -> c m -> c (m+1)
+mkCons nil cons hd tl = cons hd tl
+
+data Off :: (Num -> *) -> (Num -> *) where
+  Off :: forall (f :: Num -> *)(m :: Num) . pi (o :: Num) . f (m + o) -> Off f m
+
+offset :: forall a (m :: Num) (c :: Num -> *) .
+              (pi (n :: Num) . a -> c n -> c (n+1)) ->
+                  (pi (n :: Num) . a -> Off c n -> Off c (n+1))
+offset = offset
+
+{-
+appendChurch :: forall a . pi (x y :: Num) .
+    (forall (c :: Num -> *) . c 0 ->
+        (pi (n :: Num) . a -> c n -> c (n+1)) -> c x) ->
+    (forall (c :: Num -> *) . c 0 ->
+        (pi (n :: Num) . a -> c n -> c (n+1)) -> c y) ->
+    (forall (c :: Num -> *) . c 0 ->
+        (pi (n :: Num) . a -> c n -> c (n+1)) -> Off c (x + y))
+appendChurch {x} {y} as bs nil cons = as (Off {y} (bs nil cons)) (offset cons)
+-}
+
+-- PairVec a x y = forall (c :: Num -> *) . (forall (m n :: Num) . Vec a m -> Vec a n -> c (m + n)) -> c (x + y)
+
+data Vec' :: * -> Num -> * where
+  VNil'  :: forall a. Vec' a 0
+  VCons' :: forall (n :: Num) a . 0 <= n => a -> Vec' a n -> Vec' a (n+1)
+
+
+mkPairVec :: forall a (x y :: Num) (c :: Num -> *) .
+    Vec' a x -> Vec' a y -> (forall (m n :: Num) . Vec' a m -> Vec' a n -> c m) -> c x
+mkPairVec as bs f = f as bs
+
+fstPairVec :: forall a (x y :: Num) .
+  (forall (c :: Num -> *) .
+    (forall (m n :: Num) . Vec' a m -> Vec' a n -> c m)
+  -> c x) -> Vec' a x
+fstPairVec p = p (\ x y -> x)
+
+
+
+
+elimNat :: forall a . pi (n :: Nat) .
+               (n ~ 0 => a) -> 
+                   (pi (m :: Nat) . n ~ m + 1 => a) ->
+                       a
+elimNat {0}   z s = z
+elimNat {m+1} z s = s {m}
+
+
+natToInt p {n} = let f {m} = p m 1
+                 in elimNat {n} 0 f
+
+
+elimNat2 :: forall (a :: Num -> *) . pi (n :: Nat) . 
+              a 0 ->
+              (pi (m :: Nat) . a m -> a (m + 1)) ->
+              a n
+elimNat2 {0}   z s = z
+elimNat2 {m+1} z s = s {m} (elimNat2 {m} z s)
+
+natToVec2 {n} = let f {m} = VCons' m
+                in elimNat2 {n} VNil' f
+
+
+natToVec1 :: pi (n :: Nat) . Vec' Integer n
+natToVec1 {n} = let f :: pi (m :: Nat) . n ~ m + 1 => Vec' Integer n
+                    f {m} = VCons' m (natToVec1 {m})
+                    g :: n ~ 0 => Vec' Integer n
+                    g = VNil'
+                in elimNat {n} g f

@@ -61,7 +61,7 @@ wires {0}   = Stop
 wires {n+1} = sequ wire (wires {n})
 
 manyWires = wires {1000}
-
+sillyWires {n} = wires {1000000*n}
 
 bind :: forall (m n j :: Num) a . 0 < n, 0 < j =>
             Pro m 1 a -> (a -> Pro n j a) -> Pro (m + n) j a 
