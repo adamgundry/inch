@@ -58,6 +58,7 @@
 > data SKind where
 >     SKSet   :: SKind
 >     SKNum   :: SKind
+>     SKNat   :: SKind
 >     (:-->)  :: SKind -> SKind -> SKind
 >   deriving (Eq, Show)
 > infixr 5 :-->
@@ -76,6 +77,7 @@
 > kindKind :: SKind -> Ex Kind
 > kindKind SKSet       = Ex KSet
 > kindKind SKNum       = Ex KNum
+> kindKind SKNat       = Ex KNum
 > kindKind (k :--> l)  = case (kindKind k, kindKind l) of
 >                            (Ex k, Ex l) -> Ex (k :-> l)
 

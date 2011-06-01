@@ -61,9 +61,10 @@
 Kinds
 
 > kind       = kindBit `chainr1` kindArrow
-> kindBit    = setKind <|> natKind <|> parens kind
+> kindBit    = setKind <|> try numKind <|> natKind <|> parens kind
 > setKind    = symbol "*" >> return SKSet
-> natKind    = symbol "Num" >> return SKNum
+> numKind    = symbol "Num" >> return SKNum
+> natKind    = symbol "Nat" >> return SKNat
 > kindArrow  = reservedOp "->" >> return (:-->)
 
 

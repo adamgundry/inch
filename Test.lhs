@@ -113,6 +113,7 @@
 >   "f x | {x > 0} = x" :
 >   "f x | {x > 0, x ~ 0} = x" :
 >   "f x | {x >= 0} = x\n    | {x <  0} = negate x" :
+>   "f :: forall (m :: Nat) . g m\nf = f" :
 >   []
 
 
@@ -313,6 +314,7 @@
 >   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . UNat n\nunat = unat\nnarg {n} = unat {n}", True) :
 >   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . 0 <= n => UNat n\nunat = unat\nnarg {n} = unat {n}", True) :
 >   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . UNat n\nunat = unat\nf :: UNat 0 -> UNat 0\nf x = x\nnarg {n} = f (unat {n})", True) :
+>   ("f :: pi (m :: Nat) . Integer\nf {m} = m", True) :
 >   []
 
 

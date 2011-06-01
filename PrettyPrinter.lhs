@@ -61,6 +61,7 @@
 > instance Pretty SKind where
 >     pretty SKSet       = const $ text "*"
 >     pretty SKNum       = const $ text "Num"
+>     pretty SKNat       = const $ text "Nat"
 >     pretty (k :--> l)  = wrapDoc AppSize $
 >         pretty k ArgSize <+> text "->" <+> pretty l AppSize
 
@@ -130,7 +131,8 @@
 > instance Pretty STerm where
 >     pretty (TmVar x)    = const $ text x
 >     pretty (TmCon s)    = const $ text s
->     pretty (TmInt k)    = const $ integer k
+>     pretty (TmInt k)    = wrapDoc (if k < 0 then ArrSize else AppSize) $
+>                               integer k
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 

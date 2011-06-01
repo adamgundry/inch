@@ -34,6 +34,12 @@
 >         _ -> errKindNotArrow (fogKind k)
 > inferKind g SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
 > inferKind g (STyNum n)       = (\ n -> TK (TyNum n) KNum) <$> checkNumKind g n
+> inferKind g (SBind b a SKNat t)  = do
+>     v <- freshVar UserVar a KNum
+>     TK ty l <- inferKind (g :< Ex v) t
+>     case l of
+>         KSet  -> return $ TK (Bind b a KNum (bindTy v (Qual (P LE 0 (NumVar v)) ty))) KSet
+>         _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind g (SBind b a k t)  = case kindKind k of
 >     Ex k -> do
 >         v <- freshVar UserVar a k
