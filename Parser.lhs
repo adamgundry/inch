@@ -258,9 +258,9 @@ Programs
 
 > patternStart = I.lineFold $ (,) <$> tmVarName <*> pattern
 
-> patternFor s = I.lineFold $ do
->     try $ do  x <- tmVarName
->               unless (s == x) $ fail $ "expected pattern for " ++ show s
+> patternFor s = I.lineFold $ try $ do
+>     x <- tmVarName
+>     unless (s == x) $ fail $ "expected pattern for " ++ show s
 >     pattern
 
 > pattern = Pat <$> many patTerm <*> patRest <*> expr

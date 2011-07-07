@@ -443,25 +443,26 @@ status.
 > makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
 >     TK ty' k <- inferKind B0 ty
 >     case k of
->         KSet  -> insertBinding x (Just ty')
+>         KSet  -> insertBinding x (Just ty', False)
 >         _     -> errKindNotSet (fogKind k)
-> makeBinding (FunDecl x _) = insertBinding x Nothing <|> return ()
-> makeBinding (DataDecl _ _ _) = return ()
+> makeBinding (FunDecl x _)     = return ()
+> makeBinding (DataDecl _ _ _)  = return ()
 
 > checkInferFunDecl :: SDeclaration -> Contextual () [Declaration]
 > checkInferFunDecl (FunDecl s []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
 > checkInferFunDecl fd@(FunDecl s (p:ps)) = do
->     when (not (null ps) && isVarPat p) $ erk $ "Multiple bindings for variable " ++ s
+>     when (not (null ps) && isVarPat p) $ errDuplicateTmVar s
 >     mty <- optional $ lookupBinding s
 >     case mty of
->         Just (_ ::: ty)  -> (\ x -> [x]) <$> checkFunDecl ty fd
+>         Just (_ ::: ty, False)  -> (\ x -> [x]) <$> checkFunDecl ty fd
+>         Just (_, True) -> errDuplicateTmVar s
 >         Nothing          -> do
 >             (fd, ty) <- inferFunDecl fd
->             updateBinding s (Just ty)
+>             updateBinding s (Just ty, True)
 >             return [SigDecl s ty, fd]
 > checkInferFunDecl (SigDecl x _) = do
->     _ ::: ty <- lookupBinding x
+>     _ ::: ty <- fst <$> lookupBinding x
 >     return [SigDecl x ty]
 
 > inferFunDecl (FunDecl s pats) =
