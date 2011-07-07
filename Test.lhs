@@ -315,6 +315,9 @@
 >   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . 0 <= n => UNat n\nunat = unat\nnarg {n} = unat {n}", True) :
 >   ("data UNat :: Num -> * where\nunat :: pi (n :: Num) . UNat n\nunat = unat\nf :: UNat 0 -> UNat 0\nf x = x\nnarg {n} = f (unat {n})", True) :
 >   ("f :: pi (m :: Nat) . Integer\nf {m} = m", True) :
+>   ("bad :: forall (m n :: Num) . Integer\nbad | {m ~ n} = 0\nbad | True    = 1", False) :
+>   ("worse :: forall (n :: Num) . Integer\nworse = n", False) :
+>   ("f :: pi (m :: Num) . Integer\nf = f\nworse :: forall (n :: Num) . Integer\nworse = f {n}", False) :
 >   []
 
 

@@ -370,11 +370,12 @@ Bindings
 >     seek (g :< _) = seek g
 
 > lookupNumVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                     Bwd (Ex (Var ())) -> String -> m (NVar ())
-> lookupNumVar g x = do
+>                     Binder -> Bwd (Ex (Var ())) -> String -> m (NVar ())
+> lookupNumVar b g x = do
 >     Ex a <- lookupTyVar g x
->     case varKind a of
->         KNum  -> return a
+>     case (varKind a, varBinder a) of
+>         (KNum, Just b') | b' <= b    -> return a
+>                         | otherwise  -> errBadBindingLevel a
 >         _     -> errNonNumericVar a
 
 

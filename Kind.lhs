@@ -16,9 +16,13 @@
 > type TmConName        = String
 
 
+> data Binder where
+>     Pi   :: Binder
+>     All  :: Binder
+>   deriving (Eq, Ord, Show)
 
 > data VarState where
->     UserVar  :: VarState
+>     UserVar  :: Binder -> VarState
 >     SysVar   :: VarState
 >   deriving (Eq, Ord, Show)
 
@@ -33,9 +37,12 @@
 > nameToSysString (N s i _) = s ++ "_" ++ show i
 
 > nameEq :: TyName -> String -> Bool
-> nameEq (N x _ UserVar) y  = x == y
+> nameEq (N x _ (UserVar _)) y  = x == y
 > nameEq (N _ _ SysVar)  _  = False
 
+> nameBinder :: TyName -> Maybe Binder
+> nameBinder (N _ _ (UserVar b))  = Just b
+> nameBinder _                    = Nothing
 
 > data KSet
 > data KNum
@@ -144,6 +151,9 @@
 
 > varKind :: Var () k -> Kind k
 > varKind (FVar _ k) = k
+
+> varBinder :: Var () k -> Maybe Binder
+> varBinder (FVar a _) = nameBinder a
 
 > fogVar :: Var () k -> String
 > fogVar = fogVar' nameToString []

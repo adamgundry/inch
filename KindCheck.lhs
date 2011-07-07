@@ -33,29 +33,29 @@
 >             
 >         _ -> errKindNotArrow (fogKind k)
 > inferKind g SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
-> inferKind g (STyNum n)       = (\ n -> TK (TyNum n) KNum) <$> checkNumKind g n
+> inferKind g (STyNum n)       = (\ n -> TK (TyNum n) KNum) <$> checkNumKind All g n
 > inferKind g (SBind b a SKNat t)  = do
->     v <- freshVar UserVar a KNum
+>     v <- freshVar (UserVar All) a KNum
 >     TK ty l <- inferKind (g :< Ex v) t
 >     case l of
 >         KSet  -> return $ TK (Bind b a KNum (bindTy v (Qual (P LE 0 (NumVar v)) ty))) KSet
 >         _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind g (SBind b a k t)  = case kindKind k of
 >     Ex k -> do
->         v <- freshVar UserVar a k
+>         v <- freshVar (UserVar All) a k
 >         TK ty l <- inferKind (g :< Ex v) t
 >         case l of
 >             KSet  -> return $ TK (Bind b a k (bindTy v ty)) KSet
 >             _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind g (SQual p t) = do
->     p' <- checkPredKind g p
+>     p' <- checkPredKind All g p
 >     TK t' KSet <- inferKind g t
 >     return $ TK (Qual p' t') KSet
 
-> checkNumKind :: Bwd (Ex (Var ())) -> TyNum String -> Contextual t TypeNum
-> checkNumKind g = traverse (lookupNumVar g)
+> checkNumKind :: Binder -> Bwd (Ex (Var ())) -> TyNum String -> Contextual t TypeNum
+> checkNumKind b g = traverse (lookupNumVar b g)
 
-> checkPredKind :: Bwd (Ex (Var ())) -> Pred String -> Contextual t Predicate
-> checkPredKind g = travPred (checkNumKind g)
+> checkPredKind :: Binder -> Bwd (Ex (Var ())) -> Pred String -> Contextual t Predicate
+> checkPredKind b g = travPred (checkNumKind b g)
 
 

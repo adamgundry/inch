@@ -24,11 +24,6 @@
 > data TyKind where
 >     TK :: Type k -> Kind k -> TyKind
 
-> data Binder where
->     Pi   :: Binder
->     All  :: Binder
->   deriving (Eq, Show)
-
 
 > data Ty a k where
 >     TyVar  :: Var a k                                       -> Ty a k
@@ -168,6 +163,7 @@
 > replaceTy a u = substTy f
 >   where
 >     f :: Var a k' -> Ty a k'
+>     f b@(FVar (N _ _ (UserVar Pi)) KNum) = TyVar b -- This is a hack to avoid replacing pivars
 >     f b = hetEq a b u (TyVar b)
 
 

@@ -35,6 +35,7 @@
 >     CannotDeduce       :: [NormalPredicate] -> [NormalPredicate] -> Err
 >     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Pattern] -> Err
 >     ImpossiblePred     :: NormalPredicate -> Err
+>     BadBindingLevel    :: Var () KNum -> Err
 >     Fail               :: String -> Err
 
 > instance Pretty Err where
@@ -76,6 +77,9 @@
 >                                                 ,  nest 2 (vcatPretty $ map fogSys ps)
 >                                                 ]
 >     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred $ reifyPred p)
+>     pretty (BadBindingLevel a) _ = text "Forall-bound variable"
+>                                        <+> prettyVar a
+>                                        <+> text "used where pi-bound variable required"
 >     pretty (Fail s)           _ = text s
 
 > throw :: (E.MonadError ErrorData m) => Err -> m a
@@ -102,7 +106,8 @@
 > errCannotDeduce hs qs     = throw (CannotDeduce hs qs)
 > errBadExistential a t ps  = throw (BadExistential (Ex a) (Ex t) ps)
 > errImpossiblePred p       = throw (ImpossiblePred p)
-                            
+> errBadBindingLevel a      = throw (BadBindingLevel a)                            
+
 
 > type ErrorData = (Err, [Doc])
 

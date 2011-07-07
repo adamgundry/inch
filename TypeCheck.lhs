@@ -67,7 +67,7 @@ status.
 >     return ty
 
 > specialise :: Type l -> Contextual t (Type l)
-> specialise = instS UserVar Given Fixed
+> specialise = instS (UserVar All) Given Fixed
 
 > instantiate :: Type l -> Contextual t (Type l)
 > instantiate = instS SysVar Wanted Hole
@@ -355,7 +355,7 @@ status.
 >     f ::: fty  <- inferRho f   
 >     case fty of
 >         Bind Pi x KNum aty -> do
->             n   <- checkNumKind B0 n
+>             n   <- checkNumKind Pi B0 n
 >             a   <- fresh SysVar "_n" KNum (Some (TyNum n))
 >             ty  <- instSigma (unbindTy a aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
@@ -511,7 +511,7 @@ status.
 > checkGuard (NumGuard ps)  = NumGuard <$> traverse learnPred ps
 >   where
 >     learnPred p = do
->       p <- checkPredKind B0 p
+>       p <- checkPredKind Pi B0 p
 >       np <- normalisePred p
 >       modifyContext (:< Constraint Given np)
 >       return p
@@ -548,19 +548,19 @@ status.
 
 > checkPat top (Bind Pi x KNum t) (PatBrace Nothing k : ps) = do
 >     b        <- fresh SysVar x KNum (Some (TyNum (NumConst k)))
->     aty      <- instS UserVar Given Fixed (unbindTy b t)
+>     aty      <- instS (UserVar All) Given Fixed (unbindTy b t)
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace Nothing k : xs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace (Just a) 0 : ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
->     b <- freshVar UserVar a KNum
+>     b <- freshVar (UserVar Pi) a KNum
 >     let  t'  = unbindTy b t
 >          d   = if top || b `elemTarget` t'
 >                    then Fixed
 >                    else Exists
 >     modifyContext (:< A (b := d))
->     aty      <- instS UserVar Given Fixed t'
+>     aty      <- instS (UserVar All) Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) 0 : xs, r)
 
@@ -571,10 +571,10 @@ status.
 >          d   = if top || b `elemTarget` t'
 >                       then Fixed
 >                       else Exists
->     am <- fresh UserVar a KNum d
+>     am <- fresh (UserVar Pi) a KNum d
 >     modifyContext (:< A (b := Some (TyNum (NumVar am + NumConst k))))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
->     aty      <- instS UserVar Given Fixed t'
+>     aty      <- instS (UserVar All) Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
 >     return (PatBrace (Just a) k : xs, r)
 
@@ -613,7 +613,7 @@ status.
 >     return (PatIgnore : xs, tr, b --> ty)
 
 > inferPat top (PatBrace (Just a) 0 : ps) = do
->     n <- fresh UserVar a KNum Exists
+>     n <- fresh (UserVar Pi) a KNum Exists
 >     modifyContext (:< Layer GenMark)
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     (xs, tr, ty) <- inferPat top ps
