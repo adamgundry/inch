@@ -15,7 +15,7 @@
 > import TyNum
 > import Kind
 > import Type
-> import Syntax
+> import Syntax hiding (Alternative)
 > import Kit
 > import Error
 
@@ -242,7 +242,7 @@ Data constructors
 Bindings
 
 > lookupBindingIn :: (MonadError ErrorData m) =>
->                    TmName -> Bindings -> m (Term ::: Sigma, Bool)
+>                    TmName -> Bindings -> m (Term () ::: Sigma, Bool)
 > lookupBindingIn x bs = case Map.lookup x bs of
 >     Just (Just ty, u)  -> return (TmVar x ::: ty, u)
 >     Just (Nothing, _)  -> erk "Mutual recursion requires explicit signatures"
@@ -253,7 +253,7 @@ Bindings
 >     return $ Map.insert x ty bs
 
 > lookupTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmName -> m (Term ::: Sigma, Bool)
+>                    TmName -> m (Term () ::: Sigma, Bool)
 > lookupTopBinding x = lookupBindingIn x =<< gets bindings 
 
 > modifyTopBindings :: MonadState (ZipState t) m => (Bindings -> m Bindings) -> m ()
@@ -380,7 +380,7 @@ Bindings
 
 
 > lookupTmVar :: (Alternative m, MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    TmName -> m (Term ::: Sigma)
+>                    TmName -> m (Term () ::: Sigma)
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = fst <$> lookupTopBinding x

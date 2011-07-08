@@ -169,7 +169,31 @@
 > varNameEq (FVar nom _)  y = nameEq nom y
 > varNameEq (BVar _)      _ = False
 
+> wkF :: (forall k . Var a k -> t) -> t -> Var (a, l) k' -> t
+> wkF f _ (FVar a k)      = f (FVar a k)
+> wkF f t (BVar Top)      = t
+> wkF f _ (BVar (Pop y))  = f (BVar y)
 
+
+> withBVar :: (BVar a k -> BVar b k) -> Var a k -> Var b k
+> withBVar f (FVar a k)  = FVar a k
+> withBVar f (BVar x)    = BVar (f x)
+
+> wkVar :: Var a k -> Var (a, l) k
+> wkVar = withBVar Pop
+
+> wkRenaming :: (Var a k -> Var b k) -> Var (a, l) k -> Var (b, l) k
+> wkRenaming g (FVar a k)      = wkVar . g $ FVar a k
+> wkRenaming g (BVar Top)      = BVar Top
+> wkRenaming g (BVar (Pop x))  = wkVar . g $ BVar x
+
+> bindVar :: Var a k -> Var a l -> Var (a, k) l
+> bindVar v w = hetEq v w (BVar Top) (wkVar w)
+
+> unbindVar :: Var a k -> Var (a, k) l -> Var a l 
+> unbindVar v (BVar Top)      = v
+> unbindVar v (BVar (Pop x))  = BVar x
+> unbindVar v (FVar a k)      = FVar a k
 
 
 > class FV t where
@@ -190,3 +214,16 @@
 > instance (FV a, FV b) => FV (Either a b) where
 >     alpha <? Left x = alpha <? x
 >     alpha <? Right y = alpha <? y
+
+
+
+
+> data VarSuffix a b where
+>     VS0    :: VarSuffix a a
+>     (:<<)  :: VarSuffix a b -> Var a k -> VarSuffix a (b, k)
+
+> renameBySuffix :: VarSuffix a b -> Var b k -> Var a k
+> renameBySuffix _          (FVar a k)      = FVar a k
+> renameBySuffix VS0        (BVar v)        = BVar v
+> renameBySuffix (_ :<< v)  (BVar Top)      = v
+> renameBySuffix (vs :<< _) (BVar (Pop x))  = renameBySuffix vs (BVar x)

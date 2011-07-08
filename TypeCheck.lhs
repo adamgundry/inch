@@ -3,7 +3,7 @@
 
 > module TypeCheck where
 
-> import Control.Applicative
+> import Control.Applicative hiding (Alternative)
 > import Control.Monad
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
@@ -89,15 +89,15 @@ status.
 >     help isHole (g :< e)             = help isHole g :< e
 
 
-> generalise :: Type KSet -> [Pattern] -> Contextual t (Type KSet, [Pattern])
+> generalise :: Type KSet -> [Alternative ()] -> Contextual t (Type KSet, [Alternative ()])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps) []
 >     putContext g'
 >     return tps
 >   where
->     help :: Context -> (Type KSet, [Pattern]) -> [NormalPredicate] ->
->                 Contextual t (Context, (Type KSet, [Pattern]))
+>     help :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
+>                 Contextual t (Context, (Type KSet, [Alternative ()]))
 >     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
 >     help (g :< Layer (LamBody _ _))           tps hs = help g tps hs
@@ -124,10 +124,10 @@ status.
 >     help g tps hs = erk $ "generalise: can't help " ++ renderMe g
 
 
->     replaceHelp :: Context -> (Type KSet, [Pattern]) -> [NormalPredicate] ->
->         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Pattern]))
+>     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
+>         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Alternative ()]))
 >     replaceHelp g (t, ps) hs a d = help g (replaceTy a d t,
->                                                map (replaceTypes a d) ps)
+>                                                map (error "T0D0: replaceTypes" a d) ps)
 >                                           hs'
 >       where hs' = case a of
 >                       FVar _ KNum -> map (substNormPred a (normalNum (toNum d))) hs
@@ -291,7 +291,7 @@ status.
 > instSigma s Nothing   = instantiate s
 > instSigma s (Just r)  = subsCheck s r >> return r
 
-> checkSigma :: Sigma -> STerm -> Contextual () Term
+> checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
 > checkSigma s e = do
 >     modifyContext (:< Layer GenMark)
 >     s' <- specialise s
@@ -335,7 +335,7 @@ status.
 >     rep a t (Right p) = Right p
 
 
-> checkInfer :: Maybe Rho -> STerm -> Contextual () (Term ::: Rho)
+> checkInfer :: Maybe Rho -> STerm () -> Contextual () (Term () ::: Rho)
 
 > checkInfer mty (TmVar x) = do
 >     sc  <- tyOf <$> lookupTmVar x
@@ -394,7 +394,7 @@ status.
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
 
 
-> declToBinding :: Declaration -> [TmName ::: Sigma]
+> declToBinding :: Declaration () -> [TmName ::: Sigma]
 > declToBinding (SigDecl x ty)  = [x ::: ty]
 > declToBinding _               = []
 
@@ -420,12 +420,12 @@ status.
 > withLayer :: TmLayer -> Contextual () t -> Contextual () t
 > withLayer l m = fst <$> withLayerExtract l (const ()) m
 
-> inferRho :: STerm -> Contextual () (Term ::: Rho)
+> inferRho :: STerm () -> Contextual () (Term () ::: Rho)
 > inferRho t =
 >   inLocation (text "in inferred expression" <+> prettyHigh t) $
 >     checkInfer Nothing t
 
-> checkRho :: Rho -> STerm -> Contextual () Term
+> checkRho :: Rho -> STerm () -> Contextual () (Term ())
 > checkRho ty t =
 >   inLocation (text "in checked expression" <+> prettyHigh t) $
 >     tmOf <$> checkInfer (Just ty) t
@@ -433,13 +433,13 @@ status.
 
 
 
-> checkLocalDecls :: [SDeclaration] -> Contextual () ([Declaration], Bindings)
+> checkLocalDecls :: [SDeclaration ()] -> Contextual () ([Declaration ()], Bindings)
 > checkLocalDecls ds =
 >     withLayerExtract (LetBindings Map.empty) (\ (LetBindings bs) -> bs) $ do
 >         traverse makeBinding ds
 >         Data.List.concat <$> traverse checkInferFunDecl ds  
 
-> makeBinding :: SDeclaration -> Contextual () ()
+> makeBinding :: SDeclaration () -> Contextual () ()
 > makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
 >     TK ty' k <- inferKind B0 ty
 >     case k of
@@ -448,11 +448,11 @@ status.
 > makeBinding (FunDecl x _)     = return ()
 > makeBinding (DataDecl _ _ _)  = return ()
 
-> checkInferFunDecl :: SDeclaration -> Contextual () [Declaration]
+> checkInferFunDecl :: SDeclaration () -> Contextual () [Declaration ()]
 > checkInferFunDecl (FunDecl s []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
 > checkInferFunDecl fd@(FunDecl s (p:ps)) = do
->     when (not (null ps) && isVarPat p) $ errDuplicateTmVar s
+>     when (not (null ps) && isVarAlt p) $ errDuplicateTmVar s
 >     mty <- optional $ lookupBinding s
 >     case mty of
 >         Just (_ ::: ty, False)  -> (\ x -> [x]) <$> checkFunDecl ty fd
@@ -483,9 +483,9 @@ status.
 
 
 
-> checkAlt :: String ::: Sigma -> SPattern -> Contextual () Pattern
-> checkAlt (s ::: sc) (Pat xs g t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
+> checkAlt :: String ::: Sigma -> SAlternative () -> Contextual () (Alternative ())
+> checkAlt (s ::: sc) (Alt xs g t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs g t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     sty <- specialise sc
 >     (xs, rty) <- checkPat True sty xs
@@ -493,22 +493,22 @@ status.
 >     t  <- checkRho rty t
 >     unifySolveConstraints
 >     solveConstraints
->     (_, [p]) <- generalise (TyCon "Fake" KSet) [Pat xs g t] -- to fix up variables
+>     (_, [p]) <- generalise (TyCon "Fake" KSet) [Alt xs g t] -- to fix up variables
 >     return p
 
-> inferAlt :: String ::: Sigma -> SPattern ->
->                 Contextual () (Pattern ::: Rho)
-> inferAlt (s ::: sc) (Pat xs g t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Pat xs g t)) $
+> inferAlt :: String ::: Sigma -> SAlternative () ->
+>                 Contextual () (Alternative () ::: Rho)
+> inferAlt (s ::: sc) (Alt xs g t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs g t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     (xs, t ::: r, ty) <- inferPat t xs
 >     g <- traverse checkGuard g
 >     unifySolveConstraints
 >     solveOrSuspend
->     return $ Pat xs g t ::: ty
+>     return $ Alt xs g t ::: ty
 
 
-> checkGuard :: SGuard -> Contextual () Guard
+> checkGuard :: SGuard () -> Contextual () (Guard ())
 > checkGuard (NumGuard ps)  = NumGuard <$> traverse learnPred ps
 >   where
 >     learnPred p = do
@@ -519,41 +519,41 @@ status.
 > checkGuard (ExpGuard t)   = ExpGuard <$> checkRho boolTy t
 
  
-> checkPat :: Bool -> Rho -> [SPatternTerm] ->
->                 Contextual () ([PatternTerm], Rho)
+> checkPat :: Bool -> Rho -> SPatternList () b ->
+>                 Contextual () (PatternList () b, Rho)
 
-> checkPat top ty [] = return ([], ty)
+> checkPat top ty P0 = return (P0, ty)
 
-> checkPat top ty (PatVar v : ps) = do
+> checkPat top ty (PatVar v :! ps) = do
 >     (dom, cod) <- unifyFun ty
 >     modifyContext (:< Layer (LamBody (v ::: dom) ()))
 >     (xs, r) <- checkPat top cod ps
->     return (PatVar v : xs, r)
+>     return (PatVar v :! xs, r)
 
-> checkPat top ty (PatCon c as : ps) =
+> checkPat top ty (PatCon c as :! ps) =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     (dom, cod) <- unifyFun ty
 >     sc   <- lookupTmCon c
 >     cty  <- existentialise $ instS SysVar Given Hole sc
->     unless (length as == args cty) $
->         errConUnderapplied c (args cty) (length as)
+>     unless (patLength as == args cty) $
+>         errConUnderapplied c (args cty) (patLength as)
 >     (ys, s)  <- checkPat False cty as
 >     unify dom s
 >     (xs, r) <- checkPat top cod ps
->     return (PatCon c ys : xs, r)
+>     return (PatCon c ys :! xs, r)
 
-> checkPat top ty (PatIgnore : ps) = do
+> checkPat top ty (PatIgnore :! ps) = do
 >     (dom, cod) <- unifyFun ty
 >     (xs, r) <- checkPat top cod ps
->     return (PatIgnore : xs, r)
+>     return (PatIgnore :! xs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace Nothing k : ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBraceK k :! ps) = do
 >     b        <- fresh SysVar x KNum (Some (TyNum (NumConst k)))
 >     aty      <- instS (UserVar All) Given Fixed (unbindTy b t)
 >     (xs, r)  <- checkPat top aty ps
->     return (PatBrace Nothing k : xs, r)
+>     return (PatBraceK k :! xs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace (Just a) 0 : ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar (UserVar Pi) a KNum
 >     let  t'  = unbindTy b t
@@ -563,9 +563,9 @@ status.
 >     modifyContext (:< A (b := d))
 >     aty      <- instS (UserVar All) Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
->     return (PatBrace (Just a) 0 : xs, r)
+>     return (PatBrace a 0 :! xs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace (Just a) k : ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
 >     let  t'  = unbindTy b t
@@ -577,50 +577,51 @@ status.
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
 >     aty      <- instS (UserVar All) Given Fixed t'
 >     (xs, r)  <- checkPat top aty ps
->     return (PatBrace (Just a) k : xs, r)
+>     return (PatBrace a k :! xs, r)
 
-> checkPat top ty (p : _) =
+> checkPat top ty (p :! _) =
 >     erk $ "checkPat: couldn't match pattern " ++ renderMe p
 >                ++ " against type " ++ renderMe (fogSysTy ty)
 
 
 
-> inferPat :: STerm -> [SPatternTerm] ->
->                 Contextual () ([PatternTerm], Term ::: Rho, Rho)
+> inferPat :: STerm () -> SPatternList () b ->
+>                 Contextual () (PatternList () b, Term () ::: Rho, Rho)
 
-> inferPat t [] = do
+> inferPat t P0 = do
 >     t ::: r <- inferRho t
->     return ([], t ::: r, r)
+>     return (P0, t ::: r, r)
 
-> inferPat top (PatVar v : ps) = do
+> inferPat top (PatVar v :! ps) = do
 >     a <- unknownTyVar "_a" KSet
 >     modifyContext (:< Layer (LamBody (v ::: a) ()))
 >     (xs, tr, ty) <- inferPat top ps
->     return (PatVar v : xs, tr, a --> ty)
+>     return (PatVar v :! xs, tr, a --> ty)
 
-> inferPat top (PatCon c as : ps) =
+> inferPat top (PatCon c as :! ps) =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     sc   <- lookupTmCon c
 >     cty  <- existentialise $ instS SysVar Given Hole sc
->     unless (length as == args cty) $
->         errConUnderapplied c (args cty) (length as)
+>     unless (patLength as == args cty) $
+>         errConUnderapplied c (args cty) (patLength as)
 >     (ys, s) <- checkPat False cty as
 >     (xs, tr, ty)  <- inferPat top ps
->     return (PatCon c ys : xs, tr, s --> ty)
+>     return (PatCon c ys :! xs, tr, s --> ty)
 
-> inferPat top (PatIgnore : ps) = do
+> inferPat top (PatIgnore :! ps) = do
 >     b <- unknownTyVar "_b" KSet
 >     (xs, tr, ty) <- inferPat top ps
->     return (PatIgnore : xs, tr, b --> ty)
+>     return (PatIgnore :! xs, tr, b --> ty)
 
-> inferPat top (PatBrace (Just a) 0 : ps) = do
+> inferPat top (PatBrace a 0 :! ps) = do
 >     n <- fresh (UserVar Pi) a KNum Exists
 >     modifyContext (:< Layer GenMark)
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
->     (xs, tr, ty) <- inferPat top ps
+>     (xs, tr, ty) <- inferPat top (rawCoerce2 ps)
 >     (ty', _) <- generalise ty []
->     return (PatBrace (Just a) 0 : xs, tr,
->         Bind Pi a KNum (bindTy n ty'))
+>     return $ renameTypes2 (bindVar n) xs $ \ _ xs' ->
+>         (PatBrace a 0 :! xs', tr,
+>             Bind Pi a KNum (bindTy n ty'))
 
-> inferPat top (p : _) =
+> inferPat top (p :! _) =
 >     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p

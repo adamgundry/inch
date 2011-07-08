@@ -33,7 +33,7 @@
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
 >     UnifyNumFixed      :: NVar () -> TypeNum -> Err
 >     CannotDeduce       :: [NormalPredicate] -> [NormalPredicate] -> Err
->     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Pattern] -> Err
+>     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Alternative ()] -> Err
 >     ImpossiblePred     :: NormalPredicate -> Err
 >     BadBindingLevel    :: Var () KNum -> Err
 >     Fail               :: String -> Err
@@ -69,12 +69,12 @@
 >                                                 ,  text "from hypotheses"
 >                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub hs)
 >                                                 ]
->     pretty (BadExistential (Ex a) (Ex t) ps)  _ = sep  [  text "Illegal existential"
+>     pretty (BadExistential (Ex a) (Ex t) as)  _ = sep  [  text "Illegal existential"
 >                                                        <+> prettySysVar a
 >                                                 ,  text "when generalising type"
 >                                                 ,  nest 2 (prettyHigh $ fogSysTy t)
 >                                                 ,  text "and patterns"
->                                                 ,  nest 2 (vcatPretty $ map fogSys ps)
+>                                                 ,  nest 2 (vcatPretty $ fmap fogSys as)
 >                                                 ]
 >     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred $ reifyPred p)
 >     pretty (BadBindingLevel a) _ = text "Forall-bound variable"

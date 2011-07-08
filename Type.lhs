@@ -101,14 +101,6 @@
 > toNum (TyNum n)  = n
 > toNum (TyVar v)  = NumVar v
 
-
-> withBVar :: (BVar a k -> BVar b k) -> Var a k -> Var b k
-> withBVar f (FVar a k)  = FVar a k
-> withBVar f (BVar x)    = BVar (f x)
-
-> wkVar :: Var a k -> Var (a, l) k
-> wkVar = withBVar Pop
-
 > swapTop :: Ty ((a, k), l) x -> Ty ((a, l), k) x
 > swapTop = renameTy (withBVar swapVar)
 >   where
@@ -116,11 +108,6 @@
 >     swapVar Top            = Pop Top
 >     swapVar (Pop Top)      = Top
 >     swapVar (Pop (Pop x))  = Pop (Pop x)
-
-> wkRenaming :: (Var a k -> Var b k) -> Var (a, l) k -> Var (b, l) k
-> wkRenaming g (FVar a k)      = wkVar . g $ FVar a k
-> wkRenaming g (BVar Top)      = BVar Top
-> wkRenaming g (BVar (Pop x))  = wkVar . g $ BVar x
 
 > renameTy :: (forall k. Var a k -> Var b k) -> Ty a l -> Ty b l
 > renameTy g (TyVar v)       = TyVar (g v)
@@ -132,14 +119,10 @@
 > renameTy g Arr             = Arr
 
 > bindTy :: Var a k -> Ty a l -> Ty (a, k) l
-> bindTy v = renameTy (\ w -> hetEq v w (BVar Top) (wkVar w))
+> bindTy v = renameTy (bindVar v)
 
 > unbindTy :: Var a k -> Ty (a, k) l -> Ty a l
-> unbindTy v = renameTy (\ w -> case w of
->                                 BVar Top      -> v
->                                 BVar (Pop x)  -> BVar x
->                                 FVar a k      -> FVar a k)
-
+> unbindTy v = renameTy (unbindVar v)
 
 > wkTy :: Ty a k -> Ty (a, l) k
 > wkTy = renameTy wkVar

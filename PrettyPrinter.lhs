@@ -41,10 +41,10 @@
 > prettySysVar :: Var () k -> Doc
 > prettySysVar = prettyHigh . fogSysVar
 
-> prettyFog :: (TravTypes t, Pretty (t RAW)) => t OK -> Doc
+> prettyFog :: (TravTypes t, Pretty (t RAW ())) => t OK () -> Doc
 > prettyFog = prettyHigh . fog
 
-> prettyFogSys :: (TravTypes t, Pretty (t RAW)) => t OK -> Doc
+> prettyFogSys :: (TravTypes t, Pretty (t RAW ())) => t OK () -> Doc
 > prettyFogSys = prettyHigh . fogSys
 
 > renderMe :: Pretty a => a -> String
@@ -128,7 +128,7 @@
 >     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
 
 
-> instance Pretty STerm where
+> instance Pretty (STerm a) where
 >     pretty (TmVar x)    = const $ text x
 >     pretty (TmCon s)    = const $ text s
 >     pretty (TmInt k)    = wrapDoc (if k < 0 then ArrSize else AppSize) $
@@ -141,12 +141,12 @@
 >     pretty (t :? ty)   = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
-> prettyLam :: Doc -> STerm -> Size -> Doc
+> prettyLam :: Doc -> STerm a -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
-> instance Pretty SDeclaration where
+> instance Pretty (SDeclaration a) where
 >     pretty (DataDecl n k cs) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
@@ -159,30 +159,34 @@
 >   pretty (x ::: p) _ = prettyHigh x <+> text "::" <+> prettyHigh p
 
 
-> instance Pretty SPattern where
->     pretty (Pat vs Nothing e) _ =
->         hsep (map prettyLow vs) <+> text "=" <++> prettyHigh e
->     pretty (Pat vs (Just g) e) _ =
->         hsep (map prettyLow vs) <+> text "|" <+> prettyHigh g
+> instance Pretty (SAlternative a) where
+>     pretty (Alt vs Nothing e) _ =
+>         prettyLow vs <+> text "=" <++> prettyHigh e
+>     pretty (Alt vs (Just g) e) _ =
+>         prettyLow vs <+> text "|" <+> prettyHigh g
 >                                     <+> text "=" <++> prettyHigh e
 
-> instance Pretty SGuard where
+> instance Pretty (SPatternList a b) where
+>     pretty P0 z = empty
+>     pretty (p :! ps) z = pretty p z <+> pretty ps z
+
+> instance Pretty (SPattern a b) where
+>     pretty (PatVar x)    = const $ text x
+>     pretty (PatCon c P0) = const $ text c
+>     pretty (PatCon "+" (a :! b:! P0)) = wrapDoc AppSize $
+>         prettyLow a <+> text "+" <+> prettyLow b
+>     pretty (PatCon c ps) = wrapDoc AppSize $
+>                                text c <+> prettyLow ps
+>     pretty PatIgnore = const $ text "_"
+>     pretty (PatBraceK k)   = const $ braces $ integer k
+>     pretty (PatBrace a 0)  = const $ braces $ text a
+>     pretty (PatBrace a k)  = const $ braces $
+>                                     text a <+> text "+" <+> integer k
+
+> instance Pretty (SGuard a) where
 >     pretty (ExpGuard t)  = pretty t
 >     pretty (NumGuard p)  = const $ braces (fsepPretty p)
 
-
-> instance Pretty SPatternTerm where
->     pretty (PatVar x)    = const $ text x
->     pretty (PatCon c []) = const $ text c
->     pretty (PatCon "+" [a, b]) = wrapDoc AppSize $
->         prettyLow a <+> text "+" <+> prettyLow b
->     pretty (PatCon c ps) = wrapDoc AppSize $
->                                text c <+> hsep (map prettyLow ps)
->     pretty PatIgnore = const $ text "_"
->     pretty (PatBrace Nothing k)   = const $ braces $ integer k
->     pretty (PatBrace (Just a) 0)  = const $ braces $ text a
->     pretty (PatBrace (Just a) k)  = const $ braces $
->                                     text a <+> text "+" <+> integer k
 
 > instance Pretty SNormalPred where
 >     pretty p = pretty (reifyPred p)
