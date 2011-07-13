@@ -14,7 +14,6 @@ Things that would be nice:
 * Type application in user syntax
 * Kind inference
 * Infix operators
-* Anonymous lambda for pi-types
 * Coverage checking
 -}
 
@@ -830,8 +829,7 @@ mkPair' :: pi (m n :: Num) . (forall c . (pi (x y :: Num) . c) -> c)
 mkPair' {m} {n} f = f {m} {n}
 
 proj1' :: (forall c . (pi (x y :: Num) . c) -> c) -> Integer
-proj1' p = let f {m} {n} = m
-           in p f
+proj1' p = p (\ {m} {n} -> m)
 
 
 -- Vec a m = forall (c :: Num -> *) . c 0 -> (forall (n :: Num) . a -> c n -> c (n+1)) -> c m
@@ -889,8 +887,7 @@ elimNat {0}   z s = z
 elimNat {m+1} z s = s {m}
 
 
-natToInt p {n} = let f {m} = p m 1
-                 in elimNat {n} 0 f
+natToInt p {n} = elimNat {n} 0 (\ {m} -> p m 1)
 
 
 elimNat2 :: forall (a :: Num -> *) . pi (n :: Nat) . 
@@ -900,8 +897,7 @@ elimNat2 :: forall (a :: Num -> *) . pi (n :: Nat) .
 elimNat2 {0}   z s = z
 elimNat2 {m+1} z s = s {m} (elimNat2 {m} z s)
 
-natToVec2 {n} = let f {m} = VCons' m
-                in elimNat2 {n} VNil' f
+natToVec2 {n} = elimNat2 {n} VNil' (\ {m} -> VCons' m)
 
 
 natToVec1 :: pi (n :: Nat) . Vec' Integer n
@@ -909,7 +905,7 @@ natToVec1 {n} = let f :: pi (m :: Nat) . n ~ m + 1 => Vec' Integer n
                     f {m} = VCons' m (natToVec1 {m})
                     g :: n ~ 0 => Vec' Integer n
                     g = VNil'
-                in elimNat {n} g f
+                in elimNat {n} g f {-(\ {m} -> VCons' m (natToVec1 {m}))-}
 
 
 data Thing :: Num -> * where

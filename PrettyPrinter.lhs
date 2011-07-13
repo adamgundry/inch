@@ -137,12 +137,14 @@
 >         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
 >     pretty (Lam x t)   = prettyLam (text x) t
+>     pretty (NumLam x t) = prettyLam (braces (text x)) t
 >     pretty (Let ds t)  = wrapDoc ArgSize $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
 >     pretty (t :? ty)   = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t
+> prettyLam d (NumLam a t) = prettyLam (d <+> braces (text a)) t
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 

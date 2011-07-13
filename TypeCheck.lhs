@@ -292,7 +292,7 @@ status.
 > instSigma s (Just r)  = subsCheck s r >> return r
 
 > checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
-> checkSigma s e = do
+> checkSigma s e = inLocation (text "when checking" <+> prettyHigh e <+> text "has type " <+> prettyHigh (fogTy s)) $ do
 >     modifyContext (:< Layer GenMark)
 >     s' <- specialise s
 >     as <- getNames <$> getContext
@@ -378,6 +378,22 @@ status.
 >     a <- unknownTyVar x KSet
 >     b ::: ty <- withLayer (LamBody (x ::: a) ()) $ inferRho t
 >     return $ Lam x b ::: a --> ty
+
+> checkInfer (Just r@(Bind Pi x KNum ty)) (NumLam n t) = do
+>     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
+>     b <- withLayer (LamBody (n ::: numTy) ()) $
+>              checkSigma (unbindTy a ty) (rawCoerce t)
+>     return $ NumLam n (bindTm a b) ::: r
+
+> checkInfer (Just r) (NumLam n t) = erk $
+>     "Type " ++ renderMe (fogSysTy r) ++
+>       " is not a pi-type with numeric domain, so it does not accept " ++
+>         renderMe (NumLam n t)
+
+> checkInfer Nothing (NumLam n t) = do
+>     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
+>     b ::: ty <- withLayer (LamBody (n ::: numTy) ()) $ inferRho (rawCoerce t)
+>     return $ NumLam n (bindTm a b) ::: Bind Pi n KNum (bindTy a ty)
 
 > checkInfer mty (Let ds t) = do
 >     (ds, bs) <- checkLocalDecls ds

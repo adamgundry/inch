@@ -80,6 +80,9 @@
 > elemTypes :: TravTypes t => Var () k -> t OK a -> Bool
 > elemTypes a t = getAny $ getConst $ travTypes (Const . Any . (a <?)) t
 
+> bindTm v = renameTypes (bindVar v)
+> unbindTm v = renameTypes (unbindVar v)
+
 > fog :: TravTypes t => t OK () -> t RAW ()
 > fog = fogTypes fogVar
 

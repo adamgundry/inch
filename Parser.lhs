@@ -202,13 +202,14 @@ Terms
 
 > lambda = do
 >     reservedOp "\\"
->     ss <- many1 tmVarName
+>     ss <- many1 $ (Left <$> tmVarName) <|> (Right <$> braces numVarName)
 >     reservedOp "->"
 >     t <- expr
 >     return $ wrapLam ss t
 >   where
->     wrapLam [] t      = t
->     wrapLam (s:ss) t  = Lam s $ wrapLam ss t
+>     wrapLam []              t = t
+>     wrapLam (Left s : ss)   t = Lam s $ wrapLam ss t
+>     wrapLam (Right s : ss)  t = NumLam s $ rawCoerce $ wrapLam ss t
 
 
 Programs

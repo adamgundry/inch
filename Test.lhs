@@ -114,6 +114,8 @@
 >   "f x | {x > 0, x ~ 0} = x" :
 >   "f x | {x >= 0} = x\n    | {x <  0} = negate x" :
 >   "f :: forall (m :: Nat) . g m\nf = f" :
+>   "f = \\ {x} -> x" :
+>   "f = \\ {x} y {z} -> plus x y" :
 >   []
 
 
@@ -318,6 +320,27 @@
 >   ("bad :: forall (m n :: Num) . Integer\nbad | {m ~ n} = 0\nbad | True    = 1", False) :
 >   ("worse :: forall (n :: Num) . Integer\nworse = n", False) :
 >   ("f :: pi (m :: Num) . Integer\nf = f\nworse :: forall (n :: Num) . Integer\nworse = f {n}", False) :
+>   ("f = \\ {x} -> x", True) :
+>   ("f = \\ {x} y {z} -> x", True) :
+>   ("f = \\ {x} y {z} -> x y", False) :
+>   ("f = \\ {x} y {z} -> y x", True) :
+>   ("f = \\ {x} y {z} -> y {x}", False) :
+>   ("f :: pi (n :: Num) . Integer\nf = \\ {x} -> x", True) :
+>   ("f :: forall a . pi (m :: Num) . (Integer -> a) -> a\nf = \\ {x} y -> y x", True) :
+>   ("f :: forall a . pi (m :: Num) . (pi (n :: Num) . a) -> a\nf = \\ {x} y -> y {x}", True) :
+>   ("f = \\ a -> a\ng = \\ {x} -> f (\\ {y} -> y) {x}", True) :
+>   ("f :: (pi (n :: Num) . Integer) -> (pi (n :: Num) . Integer)\nf = \\ a -> a\ng = \\ {x} -> f (\\ {y} -> y) {x}", True) :
+>   ("f :: pi (n :: Num) . forall a . a -> a\nf = \\ {n} x -> x", True) :
+>   ("f g {n} = g {n}", True) :
+>   ("f :: forall a. (pi (n :: Num) . a) -> (pi (n :: Num) . a)\nf g {n} = g {n}", True) :
+>   ("f :: pi (n :: Num) . Integer\nf = \\ {n} -> n\ng = \\ {n} -> f {n}", True) :
+>   ("f :: pi (n :: Nat) . Integer\nf = \\ {n} -> n\ng = \\ {n} -> f {n}", True) :
+>   ("f :: pi (n :: Nat) . Integer\nf = \\ {n} -> n\ng :: pi (n :: Num) . Integer\ng = \\ {n} -> f {n}", False) :
+>   ("f :: pi (n :: Nat) . Integer\nf = \\ {n} -> n\ng :: pi (n :: Nat) . Integer\ng = \\ {n} -> f {n}", True) :
+>   ("f :: (pi (n :: Nat) . Integer) -> Integer\nf g = g {3}", True):
+>   ("f :: (pi (n :: Nat) . Integer) -> Integer\nf h = h {3}\ny :: pi (n :: Nat) . Integer\ny {n} = 3\ng = f (\\ {n} -> y {n})", True):
+>   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero Zero", False) :
+>   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero NonZero", True) :
 >   []
 
 

@@ -80,6 +80,9 @@
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
+> eraseTm (NumLam n b)  = do
+>     a <- fresh (UserVar Pi) n KNum Hole
+>     Lam n <$> eraseTm (unbindTm a b)
 > eraseTm (Let ds t)   = Let <$> traverse eraseDecl ds <*> eraseTm t
 > eraseTm (t :? ty)    = do
 >     t <- eraseTm t
