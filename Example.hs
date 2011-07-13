@@ -4,17 +4,18 @@
 
 {-
 Things that would be nice:
-* Fix existential numeric types bug
-* Better representation of lexical type variable scope
 * Pattern-matching let and lambda bindings
 * Mutually recursive binding groups
-* Nat kind (desugars to Num with inequality constraint)
 * Higher-order unification
 * Type synonyms
 * GHC LINE pragmas that make some kind of sense
 * Sigma-types
 * Type-level lambda
 * Type application in user syntax
+* Kind inference
+* Infix operators
+* Anonymous lambda for pi-types
+* Coverage checking
 -}
 
 module Example where
@@ -415,13 +416,10 @@ evconcat (Ex (FV VNil)) = Ex (FV VNil)
 evconcat (Ex (FV (VCons xs xss))) = evappend xs (evconcat (Ex (FV xss)))
 
 
-data ExPi where
-  ExPi :: pi (n :: Num) . 0 <= n => ExPi
+data ExPi :: (Num -> *) -> * where
+  ExPi :: forall (f :: Num -> *) . pi (n :: Nat) . f n -> ExPi f
 
-unExPi (ExPi {n+1})  = Suc (unExPi (ExPi {n}))
-unExPi (ExPi {0})    = Zero
-
-unExPi2 (ExPi {n}) = nat {n}
+unExPi (ExPi {n} fn) = nat {n}
 
 
 data ExSet :: (* -> *) -> * where
@@ -521,6 +519,24 @@ append (Cons x xs) ys = Cons x (append xs ys)
 listConcat :: forall a. List (List a) -> List a
 listConcat Nil = Nil
 listConcat (Cons xs xss) = append xs (listConcat xss)
+
+
+
+vreplicate :: forall a. pi (m :: Nat) . a -> Vec m a
+vreplicate {0}   _ = VNil
+vreplicate {n+1} x = VCons x (vreplicate {n} x)
+
+vjoin :: forall a (m :: Nat) . Vec m (Vec m a) -> Vec m a
+vjoin VNil                     = VNil
+vjoin (VCons (VCons x xs) xss) = VCons x (vjoin (vmap vtail xss))
+
+bindJoin :: forall (m :: * -> *) a b .
+    (forall c d . (c -> d) -> m c -> m d) ->
+    (forall c . m (m c) -> m c) -> m a -> (a -> m b) -> m b
+bindJoin map join ma f = join (map f ma)
+
+vectorMon {m} = Mon (vreplicate {m}) (bindJoin vmap vjoin)
+
 
 
 
@@ -894,3 +910,194 @@ natToVec1 {n} = let f :: pi (m :: Nat) . n ~ m + 1 => Vec' Integer n
                     g :: n ~ 0 => Vec' Integer n
                     g = VNil'
                 in elimNat {n} g f
+
+
+data Thing :: Num -> * where
+  Thing :: forall (n :: Num) . Thing n
+
+mkThing {n} = Thing :: Thing n
+
+
+madNil :: forall a (m :: Num) . 0 <= m, m < 1 => Vec' a m
+madNil = VNil'
+
+
+
+
+data Mul :: Num -> Num -> Num -> * where
+  MulBase :: forall (m :: Num) . Mul m 0 0
+  MulInd :: forall (m n p :: Num) . Mul m n p -> Mul m (n+1) (p+m)
+
+mul :: pi (m n :: Nat) . Ex (Mul m n)
+mul {m} {0}   = Ex MulBase
+mul {m} {n+1} = unEx (comp Ex MulInd) (mul {m} {n})
+
+mul2 :: pi (m n :: Nat) . ExPi (Mul m n)
+mul2 {m} {0}   = ExPi {0} MulBase
+mul2 {m} {n+1} = 
+  let
+     f :: ExPi (Mul m n) -> ExPi (Mul m (n+1))
+     f (ExPi {p} x) = ExPi {p+m} (MulInd x)
+  in f (mul2 {m} {n})
+
+data ExPair :: (Num -> *) -> (Num -> *) -> * where
+  ExPair :: forall (f g :: Num -> *)(p :: Num) . f p -> g p -> ExPair f g
+
+vappend' :: forall (m n :: Num) a . Vec' a m -> Vec' a n -> Vec' a (m+n)
+vappend' VNil' ys = ys
+vappend' (VCons' x xs) VNil' = VCons' x (vappend' xs VNil')
+vappend' (VCons' x xs) (VCons' y ys) = VCons' x (vappend' xs (VCons' y ys))
+
+
+vconcat :: forall a (m n :: Num) . Vec' (Vec' a m) n -> ExPair (Mul m n) (Vec' a)
+vconcat VNil'            = ExPair MulBase VNil'
+vconcat (VCons' xs xss)  =
+    let
+       f :: ExPair (Mul m (n-1)) (Vec' a) -> ExPair (Mul m n) (Vec' a)
+       f (ExPair p ys) = ExPair (MulInd p) (vappend' xs ys) 
+    in f (vconcat xss)
+
+
+
+
+
+data LeibnizEq :: Num -> Num -> * where
+  LEN :: forall (m n :: Num) . (forall (f :: Num -> *) . f m -> f n) ->
+                                   LeibnizEq m n
+
+-- leibnizRefl :: forall (n :: Num) . LeibnizEq n n 
+leibnizRefl = LEN (\ x -> x)
+
+-- leibnizLeibniz :: forall (f :: Num -> *)(m n :: Num) .
+--                       LeibnizEq m n -> f m -> f n
+leibnizLeibniz (LEN f) = f
+
+
+
+
+
+
+
+finj :: forall (k :: Nat) . pi (n :: Nat) . Fin (n+k+1)
+finj {0} = FZero
+finj {m+1} = FSuc (finj {m})
+
+{-
+finwk :: forall (n :: Num) . Fin n -> Fin (n+1)
+finwk FZero = FZero
+finwk (FSuc i) = FSuc (finwk i)
+
+varwk :: forall s (n :: Num) . Var s n -> Var s (n+1)
+varwk (Var i) = Var (finwk i)
+-}
+
+
+data Var :: * -> Num -> * where
+  Var :: forall (n :: Nat) s . Fin n -> Var s n
+
+varalloc :: forall s (k :: Nat) . pi (n :: Nat) . Var s (n+k+1)
+varalloc {n} = Var (finj {n})
+
+varlookup :: forall s (n :: Nat) . Var s n -> Vec' Integer n -> Integer
+varlookup (Var FZero) (VCons' x _) = x
+varlookup (Var (FSuc i)) (VCons' _ xs) = varlookup (Var i) xs
+
+varwrite :: forall s (n :: Nat) . Var s n -> Integer -> Vec' Integer n -> Vec' Integer n
+varwrite (Var FZero)     k (VCons' _ xs) = VCons' k xs
+varwrite (Var (FSuc i))  k (VCons' x xs) = VCons' x (varwrite (Var i) k xs)
+
+
+vsnoc :: forall a (n :: Num) . Vec' a n -> a -> Vec' a (n+1)
+vsnoc VNil'          a = VCons' a VNil'
+vsnoc (VCons' x xs)  a = VCons' x (vsnoc xs a)
+
+
+data IST :: * -> * -> Num -> * where
+  Return  :: forall s a (n :: Nat) .
+                 a -> IST s a n
+  Bind    :: forall s a b (n :: Nat) .
+                 IST s a n -> (a -> IST s b n) -> IST s b n
+  Alloc   :: forall s b (n :: Nat) . 
+                 Integer -> ((forall (k :: Nat) . Var s (n+k+1)) ->
+                                                      IST s b (n+1)) ->
+                     IST s b n
+  Read    :: forall s b (n :: Nat) . 
+                 Var s n -> (Integer -> IST s b n) -> IST s b n
+  Write   :: forall s b (n :: Nat) . 
+                 Var s n -> Integer -> IST s b n -> IST s b n
+  Reset   :: forall s b (n :: Nat) . (forall s'. IST s' b 0) -> IST s b n
+  Free    :: forall s b (n :: Nat) . 
+                 IST s b n -> IST s b (n+1)
+
+runIST :: forall a . (forall s . IST s a 0) -> a
+runIST ist = 
+  let help :: forall a s . pi (n :: Nat) . Vec' Integer n -> IST s a n -> a
+      help {n} as (Return x)     = x
+      help {n} as (Bind x f)     = help {n} as (f (help {n} as x))
+      help {n} as (Alloc i f)    = help {n+1} (vsnoc as i)
+                                                  (f (varalloc {n}))
+      help {n} as (Read v f)     = help {n} as (f (varlookup v as))
+      help {n} as (Write v i t)  = help {n} (varwrite v i as) t
+      help {n} as (Reset t)      = help {0} VNil' t
+      help {n} (VCons' _ as) (Free t) = help {n-1} as t
+  in help {0} VNil' ist
+
+prog :: forall s . (Integer -> Integer -> Integer) -> IST s Integer 0
+prog plus = Alloc 3 (\ v3 ->
+            Alloc 2 (\ v2 ->
+            Read v3 (\ i ->
+            Read v2 (\ j ->
+            Write v2 (plus i j) (
+            Read v2 Return
+            )))))
+
+prog2 :: forall s . IST s Integer 0
+prog2 = Bind (Return 3) (\ i -> Return i)
+
+prog3 :: forall s . IST s Integer 0
+prog3 = Alloc 0 (\ v0 ->
+        Reset (
+        Alloc 1 (\ v1 ->
+        Read v1 Return -- v0 won't typecheck
+        )))
+
+prog4 = Alloc 0 (\ v0 ->
+        Free (
+        Alloc 1 (\ v1 ->
+        Read v0 Return -- this shouldn't work, but it does
+        )))
+
+
+
+
+data EndoComp :: (* -> *) -> (* -> *) -> * -> * where
+  EndoComp :: forall (f g :: * -> *) x . f (g x) -> EndoComp f g x
+
+
+-- TLL a f n represents f^n(a) = f (f (...(f a)...))
+
+data TLL :: * -> (* -> *) -> Num -> * where
+  TLLNil   :: forall a (f :: * -> *) . f a -> TLL a f 1
+  TLLCons  :: forall a (f :: * -> *)(n :: Nat) . TLL a (EndoComp f f) n ->
+                  TLL a f (n+1)
+
+threeZero :: TLL Integer (Vec 3) 1
+threeZero = TLLNil (VCons 1 (VCons 2 (VCons 3 VNil)))
+
+twoOne :: TLL Integer (Vec 2) 2
+twoOne = TLLCons (TLLNil (EndoComp (VCons (VCons 1 (VCons 2 VNil)) (VCons (VCons 3 (VCons 4 VNil)) VNil))))
+
+
+
+data TriTrans :: (Num -> *) -> Num -> * where
+  TTZero  :: forall (f :: Num -> *) . TriTrans f 0
+  TTSuc   :: forall (f :: Num -> *)(n :: Nat) .
+                 f n -> TriTrans f n -> TriTrans f (n+1)
+
+-- Tri a n = TriTrans (Vec' a) n
+
+
+tri :: TriTrans (Vec' Integer) 3
+tri = TTSuc (VCons' 42 (VCons' 42 VNil'))
+      (TTSuc (VCons' 42 VNil')
+       (TTSuc VNil' TTZero))

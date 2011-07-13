@@ -22,6 +22,9 @@ deriving instance Show Unit2
 deriving instance Show Unit3
 deriving instance Show NumOrdering
 deriving instance Show a => Show (Vec' a)
+deriving instance Show Mul
+deriving instance (Show a, Show b) => Show (ExPair a b)
+deriving instance Show a => Show (ExPi a)
 
 thirtymk' = thirtymk (*)
 l2v = foldr VCons VNil
