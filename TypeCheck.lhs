@@ -127,7 +127,7 @@ status.
 >     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
 >         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Alternative ()]))
 >     replaceHelp g (t, ps) hs a d = help g (replaceTy a d t,
->                                                map (error "T0D0: replaceTypes" a d) ps)
+>                                                map (replaceTypes a d) ps)
 >                                           hs'
 >       where hs' = case a of
 >                       FVar _ KNum -> map (substNormPred a (normalNum (toNum d))) hs
@@ -484,28 +484,33 @@ status.
 
 
 > checkAlt :: String ::: Sigma -> SAlternative () -> Contextual () (Alternative ())
-> checkAlt (s ::: sc) (Alt xs g t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs g t)) $
+> checkAlt (s ::: sc) (Alt xs mg t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs mg t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     sty <- specialise sc
->     (xs, rty) <- checkPat True sty xs
->     g <- traverse checkGuard g
->     t  <- checkRho rty t
->     unifySolveConstraints
->     solveConstraints
->     (_, [p]) <- generalise (TyCon "Fake" KSet) [Alt xs g t] -- to fix up variables
->     return p
+>     checkPat True sty xs $ \ (xs, ex, vs, rty) -> do
+>       mg <- traverse (checkGuard . rawCoerce) mg
+>       t  <- checkRho rty (rawCoerce t)
+>       unifySolveConstraints
+>       solveConstraints
+>       let t'   = renameTypes (renameVS vs) t
+>           mg'  = fmap (renameTypes (renameVS vs)) mg
+>       (_, [p]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
+>                   -- to fix up variables
+>       return p
 
 > inferAlt :: String ::: Sigma -> SAlternative () ->
 >                 Contextual () (Alternative () ::: Rho)
-> inferAlt (s ::: sc) (Alt xs g t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs g t)) $
->   withLayer (PatternTop (s ::: sc) [] [] []) $ do
->     (xs, t ::: r, ty) <- inferPat t xs
->     g <- traverse checkGuard g
->     unifySolveConstraints
->     solveOrSuspend
->     return $ Alt xs g t ::: ty
+> inferAlt (s ::: sc) (Alt xs mg t) =
+>   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs mg t)) $
+>   withLayer (PatternTop (s ::: sc) [] [] []) $
+>     inferPat (rawCoerce t) xs $ \ (xs, ex, vs, t ::: r, ty) -> do
+>       mg <- traverse (checkGuard . rawCoerce) mg
+>       unifySolveConstraints
+>       solveOrSuspend
+>       let t'   = renameTypes (renameVS vs) t
+>           mg'  = fmap (renameTypes (renameVS vs)) mg
+>       return $ Alt xs mg' t' ::: ty
 
 
 > checkGuard :: SGuard () -> Contextual () (Guard ())
@@ -519,41 +524,44 @@ status.
 > checkGuard (ExpGuard t)   = ExpGuard <$> checkRho boolTy t
 
  
-> checkPat :: Bool -> Rho -> SPatternList () b ->
->                 Contextual () (PatternList () b, Rho)
+> checkPat :: Bool -> Rho -> SPatternList o a ->
+>               (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Rho) -> Contextual () p) ->
+>                 Contextual () p
 
-> checkPat top ty P0 = return (P0, ty)
+> checkPat top ty P0 q = q (P0, E0, VS0, ty)
 
-> checkPat top ty (PatVar v :! ps) = do
+> checkPat top ty (PatVar v :! ps) q = do
 >     (dom, cod) <- unifyFun ty
 >     modifyContext (:< Layer (LamBody (v ::: dom) ()))
->     (xs, r) <- checkPat top cod ps
->     return (PatVar v :! xs, r)
+>     checkPat top cod ps $ \ (xs, ex, vs, r) ->
+>         q (PatVar v :! xs, ex, vs, r)
 
-> checkPat top ty (PatCon c as :! ps) =
+> checkPat top ty (PatCon c as :! ps) q =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     (dom, cod) <- unifyFun ty
 >     sc   <- lookupTmCon c
 >     cty  <- existentialise $ instS SysVar Given Hole sc
 >     unless (patLength as == args cty) $
 >         errConUnderapplied c (args cty) (patLength as)
->     (ys, s)  <- checkPat False cty as
->     unify dom s
->     (xs, r) <- checkPat top cod ps
->     return (PatCon c ys :! xs, r)
+>     checkPat False cty as $ \ (ys, yex, yvs, s) -> do
+>         unify dom s
+>         checkPat top cod ps $ \ (xs, xex, xvs, r) ->
+>             renameTypes2 (renameVS yvs) xex xs $ \ xex' xs' ->
+>                 extComp yex xex' $ \ ex ->
+>                     q (PatCon c ys :! xs', ex, error "checkPat vs", r)
 
-> checkPat top ty (PatIgnore :! ps) = do
+> checkPat top ty (PatIgnore :! ps) q = do
 >     (dom, cod) <- unifyFun ty
->     (xs, r) <- checkPat top cod ps
->     return (PatIgnore :! xs, r)
+>     checkPat top cod ps $ \ (xs, ex, vs, r) ->
+>         q (PatIgnore :! xs, ex, vs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBraceK k :! ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBraceK k :! ps) q = do
 >     b        <- fresh SysVar x KNum (Some (TyNum (NumConst k)))
 >     aty      <- instS (UserVar All) Given Fixed (unbindTy b t)
->     (xs, r)  <- checkPat top aty ps
->     return (PatBraceK k :! xs, r)
+>     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
+>         q (PatBraceK k :! xs, ex, vs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) q = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar (UserVar Pi) a KNum
 >     let  t'  = unbindTy b t
@@ -562,10 +570,12 @@ status.
 >                    else Exists
 >     modifyContext (:< A (b := d))
 >     aty      <- instS (UserVar All) Given Fixed t'
->     (xs, r)  <- checkPat top aty ps
->     return (PatBrace a 0 :! xs, r)
+>     checkPat top aty ps $ \ (xs, ex, vs, r) ->
+>       bindUn b ex vs xs $ \ ex' vs' xs' ->
+>         extComp (EC E0) ex' $ \ ex'' ->
+>           q (PatBrace a 0 :! xs', ex'', vs', r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) = do
+> checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) q = do
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
 >     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
 >     let  t'  = unbindTy b t
@@ -576,52 +586,58 @@ status.
 >     modifyContext (:< A (b := Some (TyNum (NumVar am + NumConst k))))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
 >     aty      <- instS (UserVar All) Given Fixed t'
->     (xs, r)  <- checkPat top aty ps
->     return (PatBrace a k :! xs, r)
+>     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
+>       bindUn am ex vs xs $ \ ex' vs' xs' ->
+>         extComp (EC E0) ex' $ \ ex'' ->
+>           q (PatBrace a k :! xs', ex'', vs', r)
 
-> checkPat top ty (p :! _) =
+> checkPat top ty (p :! _) _ =
 >     erk $ "checkPat: couldn't match pattern " ++ renderMe p
 >                ++ " against type " ++ renderMe (fogSysTy ty)
 
 
 
-> inferPat :: STerm () -> SPatternList () b ->
->                 Contextual () (PatternList () b, Term () ::: Rho, Rho)
+> inferPat :: STerm () -> SPatternList o a ->
+>     (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Term () ::: Rho, Rho) -> Contextual () p) ->
+>                 Contextual () p
 
-> inferPat t P0 = do
+> inferPat t P0 q = do
 >     t ::: r <- inferRho t
->     return (P0, t ::: r, r)
+>     q (P0, E0, VS0, t ::: r, r)
 
-> inferPat top (PatVar v :! ps) = do
+> inferPat top (PatVar v :! ps) q = do
 >     a <- unknownTyVar "_a" KSet
 >     modifyContext (:< Layer (LamBody (v ::: a) ()))
->     (xs, tr, ty) <- inferPat top ps
->     return (PatVar v :! xs, tr, a --> ty)
+>     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> 
+>         q (PatVar v :! xs, ex, vs, tr, a --> ty)
 
-> inferPat top (PatCon c as :! ps) =
+> inferPat top (PatCon c as :! ps) q =
 >   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
 >     sc   <- lookupTmCon c
 >     cty  <- existentialise $ instS SysVar Given Hole sc
 >     unless (patLength as == args cty) $
 >         errConUnderapplied c (args cty) (patLength as)
->     (ys, s) <- checkPat False cty as
->     (xs, tr, ty)  <- inferPat top ps
->     return (PatCon c ys :! xs, tr, s --> ty)
+>     checkPat False cty as $ \ (ys, yex, yvs, s) ->
+>       inferPat top ps $ \ (xs, xex, xvs, tr, ty) ->
+>         renameTypes2 (renameVS yvs) xex xs $ \ xex' xs' ->
+>           extComp yex xex' $ \ ex ->
+>             q (PatCon c ys :! xs', ex, error "inferPat vs", tr, s --> ty)
 
-> inferPat top (PatIgnore :! ps) = do
+> inferPat top (PatIgnore :! ps) q = do
 >     b <- unknownTyVar "_b" KSet
->     (xs, tr, ty) <- inferPat top ps
->     return (PatIgnore :! xs, tr, b --> ty)
+>     inferPat top ps $ \ (xs, ex, vs, tr, ty) ->
+>         q (PatIgnore :! xs, ex, vs, tr, b --> ty)
 
-> inferPat top (PatBrace a 0 :! ps) = do
+> inferPat top (PatBrace a 0 :! ps) q = do
 >     n <- fresh (UserVar Pi) a KNum Exists
 >     modifyContext (:< Layer GenMark)
 >     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
->     (xs, tr, ty) <- inferPat top (rawCoerce2 ps)
->     (ty', _) <- generalise ty []
->     return $ renameTypes2 (bindVar n) xs $ \ _ xs' ->
->         (PatBrace a 0 :! xs', tr,
->             Bind Pi a KNum (bindTy n ty'))
+>     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> do
+>         (ty', _) <- generalise ty []
+>         bindUn n ex vs xs $ \ ex' vs' xs' ->
+>           extComp (EC E0) ex' $ \ ex'' ->
+>             q (PatBrace a 0 :! xs', ex'', vs', tr,
+>                 Bind Pi a KNum (bindTy n ty'))
 
-> inferPat top (p :! _) =
+> inferPat top (p :! _) _ =
 >     erk $ "inferPat: couldn't infer type of pattern " ++ renderMe p

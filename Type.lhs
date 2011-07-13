@@ -36,8 +36,8 @@
 
 > deriving instance Show (Ty a k)
 
-> instance FV (Ty () k) where
->     a <? t = elemTy a t
+> instance FV (Ty a k) where
+>     a <? t = elemTy (wkClosedVar a) t
 
 > data SType where
 >     STyVar  :: String                                     -> SType
@@ -126,6 +126,9 @@
 
 > wkTy :: Ty a k -> Ty (a, l) k
 > wkTy = renameTy wkVar
+
+> wkClosedTy :: Ty () k -> Ty a k
+> wkClosedTy = renameTy wkClosedVar
 
 > wkSubst :: (Var a k -> Ty b k) -> Var (a, l) k -> Ty (b, l) k
 > wkSubst g (FVar a k)      = wkTy (g (FVar a k))

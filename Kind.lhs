@@ -195,6 +195,8 @@
 > unbindVar v (BVar (Pop x))  = BVar x
 > unbindVar v (FVar a k)      = FVar a k
 
+> wkClosedVar :: Var () k -> Var a k
+> wkClosedVar (FVar a k) = FVar a k
 
 > class FV t where
 >     (<?) :: Var () k -> t -> Bool
@@ -222,8 +224,16 @@
 >     VS0    :: VarSuffix a a
 >     (:<<)  :: VarSuffix a b -> Var a k -> VarSuffix a (b, k)
 
-> renameBySuffix :: VarSuffix a b -> Var b k -> Var a k
-> renameBySuffix _          (FVar a k)      = FVar a k
-> renameBySuffix VS0        (BVar v)        = BVar v
-> renameBySuffix (_ :<< v)  (BVar Top)      = v
-> renameBySuffix (vs :<< _) (BVar (Pop x))  = renameBySuffix vs (BVar x)
+> renameBVarVS :: VarSuffix a b -> BVar a k -> BVar b k
+> renameBVarVS VS0         x = x
+> renameBVarVS (vs :<< _)  x = Pop (renameBVarVS vs x)
+
+> renameVS :: VarSuffix a b -> Var a k -> Var b k
+> renameVS _   (FVar a k)  = FVar a k
+> renameVS vs  (BVar x)    = BVar (renameBVarVS vs x)
+
+> renameVSinv :: VarSuffix a b -> Var b k -> Var a k
+> renameVSinv _          (FVar a k)      = FVar a k
+> renameVSinv VS0        (BVar v)        = BVar v
+> renameVSinv (_ :<< v)  (BVar Top)      = v
+> renameVSinv (vs :<< _) (BVar (Pop x))  = renameVSinv vs (BVar x)

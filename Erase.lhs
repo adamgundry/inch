@@ -3,9 +3,10 @@
 
 > module Erase where
 
-> import Control.Applicative
+> import Control.Applicative hiding (Alternative)
 > import Control.Monad
 > import Data.Traversable
+> import Unsafe.Coerce
 
 > import BwdFwd
 > import Error
@@ -72,7 +73,7 @@
 >     return t
 
 
-> eraseTm :: Term -> Contextual t Term
+> eraseTm :: Term () -> Contextual t (Term ())
 > eraseTm (TmVar x)    = pure $ TmVar x
 > eraseTm (TmCon c)    = pure $ TmCon c
 > eraseTm (TmInt k)    = pure $ TmInt k
@@ -87,7 +88,7 @@
 
 This is a bit of a hack; we really ought to extend the syntax of terms:
 
-> numToTm :: TypeNum -> Term
+> numToTm :: TypeNum -> Term ()
 > numToTm (NumVar x)    = TmCon . fogVar $ x
 > numToTm (NumConst k)  = TmInt k
 > numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
@@ -98,10 +99,10 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > eraseCon :: Constructor -> Contextual a Constructor
 > eraseCon (c ::: t) = (c :::) <$> eraseToSet t
 
-> erasePat :: Pattern -> Contextual a Pattern
-> erasePat (Pat ps g t) = Pat (map erasePatTm ps) (eraseGuard <$> g) <$> eraseTm t
+> eraseAlt :: Alternative () -> Contextual a (Alternative ())
+> eraseAlt (Alt ps g t) = Alt (erasePatList ps) (eraseGuard <$> unsafeCoerce g) <$> eraseTm (unsafeCoerce t)
 
-> eraseGuard :: Guard -> Guard
+> eraseGuard :: Guard () -> Guard ()
 > eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)
 >   where
 >     andExp a b = TmApp (TmApp (TmCon "(&&)") a) b
@@ -113,21 +114,27 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 >     toS EL = "(==)"
 > eraseGuard g              = g
 
-> erasePatTm :: PatternTerm -> PatternTerm
-> erasePatTm (PatBrace Nothing k)   = PatCon (show k) []
-> erasePatTm (PatBrace (Just a) 0)  = PatVar a
-> erasePatTm (PatBrace (Just a) k)  = PatCon "+" [PatVar a, PatCon (show k) []]
-> erasePatTm (PatCon c ps) = PatCon c (map erasePatTm ps)
-> erasePatTm t = t
+> erasePat :: Pattern a b -> Pattern () ()
+> erasePat (PatVar v)      = PatVar v
+> erasePat (PatCon c ps)   = PatCon c (erasePatList ps)
+> erasePat PatIgnore       = PatIgnore
+> erasePat (PatBrace a 0)  = PatVar a
+> erasePat (PatBrace a k)  = PatCon "+" (PatVar a :! PatCon (show k) P0 :! P0)
+> erasePat (PatBraceK k)   = PatCon (show k) P0
 
-> eraseDecl :: Declaration -> Contextual a Declaration
+
+> erasePatList :: PatternList a b -> PatternList () ()
+> erasePatList P0 = P0
+> erasePatList (p :! ps) = erasePat p :! erasePatList ps
+
+> eraseDecl :: Declaration () -> Contextual a (Declaration ())
 > eraseDecl (DataDecl s k cs) =
 >     case eraseKind k of
 >         Just (Ex k') -> do
 >             cs <- traverse eraseCon cs
 >             return $ DataDecl s k' cs
 > eraseDecl (FunDecl x ps) =
->     FunDecl x <$> traverse erasePat ps
+>     FunDecl x <$> traverse eraseAlt ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
 
 > eraseProg :: Program -> Contextual a Program

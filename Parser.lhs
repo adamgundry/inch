@@ -182,7 +182,7 @@ Terms
 
 > fexp = foldl1 TmApp <$> many1 aexp
 
-> aexp :: I.IndentCharParser st STerm
+> aexp :: I.IndentCharParser st (STerm ())
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  TmInt <$> integer
@@ -251,23 +251,26 @@ Programs
 
 
 > funDecl = do
->     (s, p)  <- patternStart
->     ps      <- many $ patternFor s
+>     (s, p)  <- alternativeStart
+>     ps      <- many $ alternativeFor s
 >     return $ FunDecl s (p:ps)
 
 
-> patternStart = I.lineFold $ (,) <$> tmVarName <*> pattern
+> alternativeStart = I.lineFold $ (,) <$> tmVarName <*> alternative
 
-> patternFor s = I.lineFold $ try $ do
+> alternativeFor s = I.lineFold $ try $ do
 >     x <- tmVarName
 >     unless (s == x) $ fail $ "expected pattern for " ++ show s
->     pattern
+>     alternative
 
-> pattern = Pat <$> many patTerm <*> patRest <*> expr
+> alternative = Alt <$> patList <*> altRest <*> expr
 
-> patTerm  =    parens (PatCon <$> dataConName <*> many patTerm)
+> patList  =    (:!) <$> pattern <*> patList
+>          <|>  pure P0
+
+> pattern  =    parens (PatCon <$> dataConName <*> patList)
 >          <|>  braces patBrace
->          <|>  PatCon <$> dataConName <*> pure []
+>          <|>  PatCon <$> dataConName <*> pure P0
 >          <|>  PatVar <$> patVarName
 >          <|>  reservedOp "_" *> pure PatIgnore
 >          
@@ -276,12 +279,14 @@ Programs
 
 > patBrace = do
 >     ma  <- optional patVarName
->     mk  <- optional $ case ma of
+>     k   <- option 0 $ case ma of
 >                           Just _   -> reservedOp "+" *> integer
 >                           Nothing  -> integer
->     return $ PatBrace ma (maybe 0 id mk)
+>     return $ case ma of
+>         Just a   -> rawCoerce2 $ PatBrace a k
+>         Nothing  -> PatBraceK k
 
-> patRest  =    reservedOp "=" *> pure Nothing
+> altRest  =    reservedOp "=" *> pure Nothing
 >          <|>  reservedOp "|" *> (Just <$> guarded) <* reservedOp "="
 
 > guarded  =    NumGuard <$> braces predicates

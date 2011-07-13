@@ -35,7 +35,7 @@
 >     traverse makeBinding ds
 >     concat <$> traverse checkDecl ds
 >   where
->     makeTyCon :: SDeclaration -> Contextual () ()
+>     makeTyCon :: SDeclaration () -> Contextual () ()
 >     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
@@ -43,7 +43,7 @@
 >             insertTyCon t (Ex k')
 >     makeTyCon _ = return ()
 
-> checkDecl :: SDeclaration -> Contextual () [Declaration]
+> checkDecl :: SDeclaration () -> Contextual () [Declaration ()]
 > checkDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ 
 >   unEx (kindKind k) $ \ k -> do
 >     cs    <- traverse (checkConstructor t) cs
