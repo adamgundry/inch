@@ -31,10 +31,6 @@
 > import KindCheck
 
 
-> numTy   = TyCon "Integer" KSet
-> boolTy  = TyCon "Bool" KSet
-
-
 The |inst| function takes a name-mangling function (for modifying the
 names of binders), a type definition (for use when introducing binders
 into the context) and a type to instantiate. It instantiates
@@ -348,8 +344,8 @@ status.
 >     return $ TmCon c ::: ty
 
 > checkInfer mty (TmInt k) = do
->     instSigma numTy mty
->     return $ TmInt k ::: numTy
+>     instSigma tyInteger mty
+>     return $ TmInt k ::: tyInteger
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
 >     f ::: fty  <- inferRho f   
@@ -381,7 +377,7 @@ status.
 
 > checkInfer (Just r@(Bind Pi x KNum ty)) (NumLam n t) = do
 >     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
->     b <- withLayer (LamBody (n ::: numTy) ()) $
+>     b <- withLayer (LamBody (n ::: tyInteger) ()) $
 >              checkSigma (unbindTy a ty) (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: r
 
@@ -392,7 +388,7 @@ status.
 
 > checkInfer Nothing (NumLam n t) = do
 >     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
->     b ::: ty <- withLayer (LamBody (n ::: numTy) ()) $ inferRho (rawCoerce t)
+>     b ::: ty <- withLayer (LamBody (n ::: tyInteger) ()) $ inferRho (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: Bind Pi n KNum (bindTy a ty)
 
 > checkInfer mty (Let ds t) = do
@@ -537,7 +533,7 @@ status.
 >       np <- normalisePred p
 >       modifyContext (:< Constraint Given np)
 >       return p
-> checkGuard (ExpGuard t)   = ExpGuard <$> checkRho boolTy t
+> checkGuard (ExpGuard t)   = ExpGuard <$> checkRho tyBool t
 
  
 > checkPat :: Bool -> Rho -> SPatternList o a ->
@@ -578,7 +574,7 @@ status.
 >         q (PatBraceK k :! xs, ex, vs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) q = do
->     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
+>     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
 >     b <- freshVar (UserVar Pi) a KNum
 >     let  t'  = unbindTy b t
 >          d   = if top || b `elemTarget` t'
@@ -592,7 +588,7 @@ status.
 >           q (PatBrace a 0 :! xs', ex'', vs', r)
 
 > checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) q = do
->     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
+>     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
 >     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
 >     let  t'  = unbindTy b t
 >          d   = if top || b `elemTarget` t'
@@ -647,7 +643,7 @@ status.
 > inferPat top (PatBrace a 0 :! ps) q = do
 >     n <- fresh (UserVar Pi) a KNum Exists
 >     modifyContext (:< Layer GenMark)
->     modifyContext (:< Layer (LamBody (a ::: numTy) ()))
+>     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
 >     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> do
 >         (ty', _) <- generalise ty []
 >         bindUn n ex vs xs $ \ ex' vs' xs' ->

@@ -127,20 +127,34 @@
 
 Initial state
 
+> tyInteger   = TyCon "Integer" KSet
+> tyBool      = TyCon "Bool" KSet
+> tyOrdering  = TyCon "Ordering" KSet
+> tyMaybe     = TyApp (TyCon "Maybe" (KSet :-> KSet))
+
 > initialState = St 0 () B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
 >   ("Bool",     Ex KSet) :
 >   ("Integer",  Ex KSet) :
 >   ("String",   Ex KSet) :
+>   ("Maybe",    Ex (KSet :-> KSet)) :
+>   ("Ordering",  Ex KSet) :
 >   []
 > initTmCons = Map.fromList $
->   ("True",   TyCon "Bool" KSet) :
->   ("False",  TyCon "Bool" KSet) :
+>   ("True",     tyBool) :
+>   ("False",    tyBool) :
+>   ("Nothing",  Bind All "a" KSet (tyMaybe (TyVar (BVar Top)))) :
+>   ("Just",     Bind All "a" KSet
+>                    (TyVar (BVar Top) --> (tyMaybe (TyVar (BVar Top))))) :
+>   ("LT",       tyOrdering) :
+>   ("EQ",       tyOrdering) :
+>   ("GT",       tyOrdering) :
 >   []
 > initBindings = Map.fromList $
 >   ("undefined",  (Just (Bind All "a" KSet (TyVar (BVar Top))), True)) :
 >   ("id",         (Just (Bind All "a" KSet 
 >                           (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
+>   ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
 >   []
 
 

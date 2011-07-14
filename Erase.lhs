@@ -57,7 +57,7 @@
 >   where
 >     insertNumArrow :: Ty a KSet -> Ty a KSet
 >     insertNumArrow (Bind All x k t) = Bind All x k (insertNumArrow t)
->     insertNumArrow t = numTy --> t
+>     insertNumArrow t = tyInteger --> t
 > eraseType (Bind All x k t)        = 
 >     case eraseKind k of
 >         Just (Ex k') -> do
