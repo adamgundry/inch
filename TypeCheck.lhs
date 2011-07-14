@@ -548,13 +548,14 @@ status.
 >     checkPat top cod ps $ \ (xs, ex, vs, r) ->
 >         q (PatVar v :! xs, ex, vs, r)
 
-> checkPat top ty (PatCon c as :! ps) q =
->   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
->     (dom, cod) <- unifyFun ty
->     sc   <- lookupTmCon c
->     cty  <- existentialise $ instS SysVar Given Hole sc
->     unless (patLength as == args cty) $
->         errConUnderapplied c (args cty) (patLength as)
+> checkPat top ty (PatCon c as :! ps) q = do
+>     (cty, dom, cod) <- inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>         (dom, cod) <- unifyFun ty
+>         sc   <- lookupTmCon c
+>         cty  <- existentialise $ instS SysVar Given Hole sc
+>         unless (patLength as == args cty) $
+>             errConUnderapplied c (args cty) (patLength as)
+>         return (cty, dom, cod)
 >     checkPat False cty as $ \ (ys, yex, yvs, s) -> do
 >         unify dom s
 >         checkPat top cod ps $ \ (xs, xex, xvs, r) ->
@@ -623,12 +624,13 @@ status.
 >     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> 
 >         q (PatVar v :! xs, ex, vs, tr, a --> ty)
 
-> inferPat top (PatCon c as :! ps) q =
->   inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
->     sc   <- lookupTmCon c
->     cty  <- existentialise $ instS SysVar Given Hole sc
->     unless (patLength as == args cty) $
->         errConUnderapplied c (args cty) (patLength as)
+> inferPat top (PatCon c as :! ps) q = do
+>     cty <- inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>         sc   <- lookupTmCon c
+>         cty  <- existentialise $ instS SysVar Given Hole sc
+>         unless (patLength as == args cty) $
+>             errConUnderapplied c (args cty) (patLength as)
+>         return cty
 >     checkPat False cty as $ \ (ys, yex, yvs, s) ->
 >       inferPat top ps $ \ (xs, xex, xvs, tr, ty) ->
 >         renameTypes2 (renameVS yvs) xex xs $ \ xex' xs' ->
