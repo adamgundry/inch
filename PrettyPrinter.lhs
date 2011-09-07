@@ -111,6 +111,7 @@
 > prettyBind :: Binder -> Bwd (String, SKind) ->
 >     SType -> Size -> Doc
 > prettyBind b bs (SBind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) t
+> prettyBind b (bs :< (a, SKNum)) (SQual (P LE (NumConst 0) (NumVar a')) t) | a == a' = prettyBind b (bs :< (a, SKNat)) t
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <++> pretty t ArrSize
@@ -138,7 +139,7 @@
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
 >     pretty (Lam x t)   = prettyLam (text x) t
 >     pretty (NumLam x t) = prettyLam (braces (text x)) t
->     pretty (Let ds t)  = wrapDoc ArgSize $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
+>     pretty (Let ds t)  = wrapDoc maxBound $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
 >     pretty (t :? ty)   = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
