@@ -295,7 +295,7 @@ status.
 > instSigma s (Just r)  = subsCheck s r >> return r
 
 > checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
-> checkSigma s e = inLocation (text "when checking" <+> prettyHigh e <+> text "has type " <+> prettyHigh (fogTy s)) $ do
+> checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e), text "has type", nest 2 (prettyHigh (fogTy s))]) $ do
 >     modifyContext (:< Layer GenMark)
 >     s' <- specialise s
 >     as <- getNames <$> getContext
@@ -314,9 +314,9 @@ status.
 >     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry NormalPredicate] ->
 >                 Contextual () Context
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
->     help as (g :< Layer GenMark) h  = erk $ "Bad as"
+>     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish " ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
 >     help as (g :< A (a := Fixed)) h
->         | a <? h     = erk "checkSigma help: bad h"
+>         | a <? h     = erk $ "checkSigma help: fixed variable " ++ renderMe (fogSysVar a) ++ " occurred illegally in " ++ intercalate ", " (map (either show (renderMe . fogSysNormPred)) h)
 >         | otherwise  = help (delete (Ex a) as) g h
 >     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
 >     help as (g :< A a) h                   = help as g (Left (TE a) : h)
@@ -441,12 +441,12 @@ status.
 
 > inferRho :: STerm () -> Contextual () (Term () ::: Rho)
 > inferRho t =
->   inLocation (text "in inferred expression" <+> prettyHigh t) $
+>   inLocation (text "in inferred expression" <++> prettyHigh t) $
 >     checkInfer Nothing t
 
 > checkRho :: Rho -> STerm () -> Contextual () (Term ())
 > checkRho ty t =
->   inLocation (text "in checked expression" <+> prettyHigh t) $
+>   inLocation (text "in checked expression" <++> prettyHigh t) $
 >     tmOf <$> checkInfer (Just ty) t
 
 
@@ -504,7 +504,7 @@ status.
 
 > checkAlt :: String ::: Sigma -> SAlternative () -> Contextual () (Alternative ())
 > checkAlt (s ::: sc) (Alt xs mg t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs mg t)) $
+>   inLocation (text ("in alternative " ++ s) <++> prettyHigh (Alt xs mg t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $ do
 >     sty <- specialise sc
 >     checkPat True sty xs $ \ (xs, ex, vs, rty) -> do
@@ -521,7 +521,7 @@ status.
 > inferAlt :: String ::: Sigma -> SAlternative () ->
 >                 Contextual () (Alternative () ::: Rho)
 > inferAlt (s ::: sc) (Alt xs mg t) =
->   inLocation (text ("in alternative " ++ s) <+> prettyHigh (Alt xs mg t)) $
+>   inLocation (text ("in alternative " ++ s) <++> prettyHigh (Alt xs mg t)) $
 >   withLayer (PatternTop (s ::: sc) [] [] []) $
 >     inferPat (rawCoerce t) xs $ \ (xs, ex, vs, t ::: r, ty) -> do
 >       mg <- traverse (checkGuard . rawCoerce) mg
@@ -556,7 +556,7 @@ status.
 >         q (PatVar v :! xs, ex, vs, r)
 
 > checkPat top ty (PatCon c as :! ps) q = do
->     (cty, dom, cod) <- inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>     (cty, dom, cod) <- inLocation (text "in pattern" <++> prettyHigh (PatCon c as)) $ do
 >         (dom, cod) <- unifyFun ty
 >         sc   <- lookupTmCon c
 >         cty  <- existentialise $ instS SysVar Given Hole sc
@@ -632,7 +632,7 @@ status.
 >         q (PatVar v :! xs, ex, vs, tr, a --> ty)
 
 > inferPat top (PatCon c as :! ps) q = do
->     cty <- inLocation (text "in pattern" <+> prettyHigh (PatCon c as)) $ do
+>     cty <- inLocation (text "in pattern" <++> prettyHigh (PatCon c as)) $ do
 >         sc   <- lookupTmCon c
 >         cty  <- existentialise $ instS SysVar Given Hole sc
 >         unless (patLength as == args cty) $

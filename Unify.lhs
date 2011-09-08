@@ -241,7 +241,7 @@ This is wrong, I think:
 >   \ (gamma := d) -> let occurs = gamma <? tau || gamma <? _Xi in
 >     hetEq gamma alpha
 >       (if occurs
->          then erk "Occurrence detected!"
+>          then erk $ "Occurrence of " ++ fogSysVar alpha ++ " detected when unifying with " ++ show (prettyHigh (fogTy tau))
 >          else case d of
 >            Hole          ->  replace (_Xi <.> (TE (alpha := Some tau) :> F0))
 >            Some upsilon  ->  modifyContext (<>< _Xi)

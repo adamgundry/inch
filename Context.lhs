@@ -76,6 +76,7 @@
 
 
 > data TyDef k = Hole | Some (Type k) | Fixed | Exists
+>   deriving Show
 
 > instance FV (TyDef k) where
 >     a <? Some t = a <? t
@@ -90,6 +91,9 @@
 
 > data AnyTyEntry where
 >     TE :: TyEntry k -> AnyTyEntry
+
+> instance Show AnyTyEntry where
+>     show (TE t) = show t
 
 > instance FV AnyTyEntry where
 >     a <? TE t = a <? t
