@@ -227,7 +227,14 @@ status.
 >     g <- getContext
 >     let hs'  = map (expandPred g . reifyPred) hs
 >         p'   = expandPred g (reifyPred p)
->     return $ convert (expandContext g) [] hs' p'
+>     case trivialPred p' of
+>         Just True   -> return P.TRUE
+>         Just False  -> return P.FALSE
+>         Nothing     -> do
+>             let f = convert (expandContext g) [] hs' p'
+>             -- mtrace $ "toFormula [" ++ intercalate "," (map (renderMe . fogNormPred) hs) ++ "] => (" ++ renderMe (fogNormPred p) ++ ")"
+>             -- mtrace (show f)
+>             return f
 >   where
 >     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
 >                    Predicate -> P.Formula

@@ -176,6 +176,12 @@
 > normalPred p = either error id $ normalisePred p
 
 
+> trivialPred :: Ord a => Pred a -> Maybe Bool
+> trivialPred = trivialNormPred . normalPred
+
+> trivialNormPred (IsPos n)   = (>= 0) <$> getConstant n
+> trivialNormPred (IsZero n)  = (== 0) <$> getConstant n
+
 
 > subsTyNum :: Applicative f =>
 >     (a -> f (TyNum b)) ->
