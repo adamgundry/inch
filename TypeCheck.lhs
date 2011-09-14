@@ -10,7 +10,7 @@
 > import Data.List
 > import Data.Maybe
 > import qualified Data.Map as Map
-> import Data.Foldable hiding (foldr)
+> import Data.Foldable hiding (foldr, any)
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
@@ -241,7 +241,7 @@ status.
 >     convert B0 axs hs p =
 >         foldr (P.:/\:) P.TRUE (map (predToFormula . apply axs) hs)
 >             P.:=>: predToFormula (apply axs p)
->     convert (g :< A (a@(FVar _ KNum) := _)) axs hs p = 
+>     convert (g :< A (a@(FVar _ KNum) := _)) axs hs p | any (elemPred a) (p:hs) = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
 
