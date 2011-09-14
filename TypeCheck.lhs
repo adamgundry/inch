@@ -296,6 +296,7 @@ status.
 
 > checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
 > checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e), text "has type", nest 2 (prettyHigh (fogTy s))]) $ do
+>     unifySolveConstraints
 >     modifyContext (:< Layer GenMark)
 >     s' <- specialise s
 >     as <- getNames <$> getContext
