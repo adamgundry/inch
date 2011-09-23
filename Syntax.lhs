@@ -45,6 +45,7 @@
 > type Term             = Tm OK
 > type Constructor      = Con OK
 > type Alternative      = Alt OK
+> type CaseAlternative  = CaseAlt OK
 > type PatternList      = PatList OK
 > type Pattern          = Pat OK
 > type Declaration      = Decl OK
@@ -54,6 +55,7 @@
 > type STerm             = Tm RAW
 > type SConstructor      = Con RAW
 > type SAlternative      = Alt RAW
+> type SCaseAlternative  = CaseAlt RAW
 > type SPatternList      = PatList RAW
 > type SPattern          = Pat RAW
 > type SDeclaration      = Decl RAW
@@ -102,6 +104,7 @@
 >     Lam      :: TmName -> Tm s a          -> Tm s a
 >     NumLam   :: String -> Tm s (a, KNum)  -> Tm s a
 >     Let      :: [Decl s a] -> Tm s a      -> Tm s a
+>     Case     :: Tm s a -> [CaseAlt s a]   -> Tm s a
 >     (:?)     :: Tm s a -> ATy s a KSet    -> Tm s a
 
 > deriving instance Eq (Tm RAW a)
@@ -126,6 +129,7 @@
 >     fogTypes g (NumLam x b)  = NumLam x (fogTypes (wkF g x) b)
 >     fogTypes g (Let ds t)    = Let (map (fogTypes g) ds)
 >                                    (fogTypes g t)
+>     fogTypes g (Case t as)   = Case (fogTypes g t) (map (fogTypes g) as)
 >     fogTypes g (t :? ty)     = fogTypes g t :? fogTy' g [] ty
 
 >     renameTypes g (TmVar x)     = TmVar x
@@ -137,6 +141,7 @@
 >     renameTypes g (NumLam x b)  = NumLam x (renameTypes (wkRenaming g) b)
 >     renameTypes g (Let ds t)    = Let (map (renameTypes g) ds)
 >                                    (renameTypes g t)
+>     renameTypes g (Case t as)   = Case (renameTypes g t) (map (renameTypes g) as)
 >     renameTypes g (t :? ty)     = renameTypes g t :? renameTy g ty
 
 
@@ -249,9 +254,38 @@
 
 > isVarAlt :: Alt s a -> Bool
 > isVarAlt (Alt P0 Nothing _)  = True
-> isVarAlt _                     = False
+> isVarAlt _                   = False
 
 
+
+> data CaseAlt s a where
+>     CaseAlt :: Pat s a b -> Maybe (Grd s b) -> Tm s b -> CaseAlt s a
+
+> instance Eq (CaseAlt RAW a) where
+>    (CaseAlt x mg t) == (CaseAlt x' mg' t') =
+>        hetEq x x' (mg == mg' && t == t') False
+
+> instance TravTypes CaseAlt where
+
+>     travTypes g (CaseAlt x ms t) = 
+>         CaseAlt x
+>             <$> traverse (travTypes g) ms
+>             <*> travTypes g t
+
+>     fogTypes g (CaseAlt x ms t) = 
+>         CaseAlt x'
+>             (fmap (fogTypes g') ms)
+>             (fogTypes g' t)
+>       where (x', g') = fogTypes2 g x
+
+>     renameTypes g (CaseAlt x ms t) = extPat x $ \ ex -> 
+>       renameTypes2 g ex x $ \ ex' x' ->
+>         CaseAlt x'
+>             (fmap (renameTypes (extRenaming ex ex' g)) ms)
+>             (renameTypes (extRenaming ex ex' g) t)
+
+> instance FV (CaseAlt OK a) where
+>     (<?) = elemTypes
 
 
 

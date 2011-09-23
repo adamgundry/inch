@@ -91,7 +91,7 @@ Types
 > tyNum = buildExpressionParser
 >     [
 >         [binary "*" (:*:) AssocLeft],    
->         [binary "+" (:+:) AssocLeft, binary "-" (-) AssocLeft]
+>         [binary "+" (:+:) AssocLeft, sbinary "-" (-) AssocLeft]
 >     ]
 >     tyNumTerm
 
@@ -100,9 +100,10 @@ Types
 >            <|>  Neg <$> (specialOp "-" *> tyNumTerm)
 >            <|>  parens tyNum
 
-> binary  name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
-> prefix  name fun       = Prefix (do{ reservedOp name; return fun })
-> postfix name fun       = Postfix (do{ reservedOp name; return fun })
+> binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
+> sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc
+> prefix   name fun       = Prefix (do{ reservedOp name; return fun })
+> postfix  name fun       = Postfix (do{ reservedOp name; return fun })
 
 
 > tyQuant q f = do
@@ -155,6 +156,7 @@ Terms
 
 > expi 10  =    lambda
 >          <|>  letExpr
+>          <|>  caseExpr
 >          <|>  fexp
 > expi i = expi (i+1) -- <|> lexpi i <|> rexpi i
 
@@ -166,26 +168,28 @@ Terms
 >     t <- expr
 >     return $ Let ds t
 
-> {-
-> letExpr = do
->     reserved "let"
->     a <- tmVarName
->     reservedOp "="
->     w <- expr
->     reserved "in"
+> caseExpr = do
+>     reserved "case"
 >     t <- expr
->     return $ Let [FunDecl a Nothing [Pat [] Trivial w]] t
-> -}
+>     reserved "of"
+>     as <- I.block $ many caseAlternative
+>     return $ Case t as
 
-<   Let <$> (reserved "let" *> many funDecl <* reserved "in") <*> expr
+> caseAlternative = CaseAlt <$> casePattern <*> caseAltRest <*> I.lineFold expr
+> caseAltRest  =    reservedOp "->" *> pure Nothing
+>              <|>  reservedOp "|" *> (Just <$> guarded) <* reservedOp "->"
 
+> casePattern  =    PatCon <$> dataConName <*> patList
+>              <|>  parens casePattern
+>              <|>  PatVar <$> patVarName
+>              <|>  reservedOp "_" *> pure PatIgnore
 
 > fexp = foldl1 TmApp <$> many1 aexp
 
 > aexp :: I.IndentCharParser st (STerm ())
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
->       <|>  TmInt <$> integer
+>       <|>  TmInt <$> try integer
 >       <|>  parens expr
 >       <|>  braces (TmBrace <$> tyNum) 
 
@@ -247,7 +251,7 @@ Programs
 
 
 > sigDecl = I.lineFold $ do
->     s   <- try $ tmVarName <* reservedOp "::"
+>     s   <- try $ tmVarName <* doubleColon
 >     ty  <- tyExp
 >     return $ SigDecl s ty
 

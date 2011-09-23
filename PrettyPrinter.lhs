@@ -137,10 +137,11 @@
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
->     pretty (Lam x t)   = prettyLam (text x) t
+>     pretty (Lam x t)    = prettyLam (text x) t
 >     pretty (NumLam x t) = prettyLam (braces (text x)) t
->     pretty (Let ds t)  = wrapDoc maxBound $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
->     pretty (t :? ty)   = wrapDoc ArrSize $ 
+>     pretty (Let ds t)   = wrapDoc maxBound $ text "let" <+> vcatSpacePretty ds $$ text "in" <+> prettyHigh t
+>     pretty (Case t as)  = wrapDoc maxBound $ text "case" <+> prettyHigh t <+> text "of" <++> vcatPretty as
+>     pretty (t :? ty)    = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
@@ -162,12 +163,22 @@
 >   pretty (x ::: p) _ = prettyHigh x <+> text "::" <+> prettyHigh p
 
 
+
+> instance Pretty (SCaseAlternative a) where
+>     pretty (CaseAlt v Nothing e) _ =
+>         prettyHigh v <+> text "->" <++> prettyHigh e
+>     pretty (CaseAlt v (Just g) e) _ =
+>         prettyHigh v <+> text "|" <+> prettyHigh g
+>                                     <+> text "->" <++> prettyHigh e
+
 > instance Pretty (SAlternative a) where
 >     pretty (Alt vs Nothing e) _ =
 >         prettyLow vs <+> text "=" <++> prettyHigh e
 >     pretty (Alt vs (Just g) e) _ =
 >         prettyLow vs <+> text "|" <+> prettyHigh g
 >                                     <+> text "=" <++> prettyHigh e
+
+
 
 > instance Pretty (SPatternList a b) where
 >     pretty P0 z = empty

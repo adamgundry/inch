@@ -16,7 +16,6 @@ Things that would be nice:
 * Infix operators
 * Coverage checking
 * Module imports of some sort (Prelude in particular)
-* Case statements
 -}
 
 module Example where

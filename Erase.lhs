@@ -84,6 +84,7 @@
 >     a <- fresh (UserVar Pi) n KNum Hole
 >     Lam n <$> eraseTm (unbindTm a b)
 > eraseTm (Let ds t)   = Let <$> traverse eraseDecl ds <*> eraseTm t
+> eraseTm (Case t as)  = Case <$> eraseTm t <*> traverse eraseCaseAlt as
 > eraseTm (t :? ty)    = do
 >     t <- eraseTm t
 >     ty <- eraseToSet ty
@@ -104,6 +105,9 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 
 > eraseAlt :: Alternative () -> Contextual a (Alternative ())
 > eraseAlt (Alt ps g t) = Alt (erasePatList ps) (eraseGuard <$> unsafeCoerce g) <$> eraseTm (unsafeCoerce t)
+
+> eraseCaseAlt :: CaseAlternative () -> Contextual a (CaseAlternative ())
+> eraseCaseAlt (CaseAlt p g t) = CaseAlt (erasePat p) (eraseGuard <$> unsafeCoerce g) <$> eraseTm (unsafeCoerce t)
 
 > eraseGuard :: Guard () -> Guard ()
 > eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)

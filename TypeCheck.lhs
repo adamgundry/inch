@@ -411,7 +411,55 @@ status.
 >     r           <- instSigma sc mty
 >     return $ (t :? sc) ::: r
 
+> checkInfer (Just r) (Case t as) = do
+>     t ::: ty <- inferRho t
+>     as <- traverse (checkCaseAlt ty r) as
+>     return $ Case t as ::: r
+
+> checkInfer Nothing (Case t as) = do
+>     t ::: ty <- inferRho t
+>     atys  <- traverse (inferCaseAlt ty) as
+>     r     <- unknownTyVar "_r" KSet
+>     let as ::: tys = unzipAsc atys
+>     traverse (unify r) tys
+>     return (Case t as ::: r)
+
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
+
+
+-- This is horrible, please improve it
+
+> checkCaseAlt :: Rho -> Rho -> SCaseAlternative () -> Contextual () (CaseAlternative ())
+> checkCaseAlt sty resty c@(CaseAlt p mg t) =
+>   inLocation (text ("in case alternative") <++> prettyHigh c) $
+>   withLayer (PatternTop ("case" ::: error "womble") [] [] []) $ do
+>     checkPat True (sty --> resty) (p :! P0) $ \ (xs, ex, vs, rty) -> do
+>       mg <- traverse (checkGuard . rawCoerce) mg
+>       t  <- checkRho rty (rawCoerce t)
+>       unifySolveConstraints
+>       solveConstraints
+>       let t'   = renameTypes (renameVS vs) t
+>           mg'  = fmap (renameTypes (renameVS vs)) mg
+>       (_, [Alt (p :! P0) mg t]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
+>                   -- to fix up variables
+>       return $ CaseAlt p mg t
+
+> inferCaseAlt :: Rho -> SCaseAlternative () -> Contextual () (CaseAlternative () ::: Rho)
+> inferCaseAlt sty c@(CaseAlt p mg t) = do
+>   resty <- unknownTyVar "_res" KSet
+>   inLocation (text ("in case alternative") <++> prettyHigh c) $
+>    withLayer (PatternTop ("case" ::: error "womble") [] [] []) $
+>     checkPat True (sty --> resty) (p :! P0) $ \ (xs, ex, vs, rty) -> do
+>       mg <- traverse (checkGuard . rawCoerce) mg
+>       t  <- checkRho rty (rawCoerce t)
+>       unifySolveConstraints
+>       solveConstraints
+>       let t'   = renameTypes (renameVS vs) t
+>           mg'  = fmap (renameTypes (renameVS vs)) mg
+>       (_, [Alt (p :! P0) mg t]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
+>                   -- to fix up variables
+>       return $ CaseAlt p mg t ::: resty
+
 
 
 > declToBinding :: Declaration () -> [TmName ::: Sigma]

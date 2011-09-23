@@ -116,6 +116,14 @@
 >   "f :: forall (m :: Nat) . g m\nf = f" :
 >   "f = \\ {x} -> x" :
 >   "f = \\ {x} y {z} -> plus x y" :
+>   "x = case True of  False -> undefined\n                  True -> 3" :
+>   "x = case True of\n      False -> undefined\n      True -> 3" :
+>   "x = case f 1 3 of\n    (Baz boo) -> boo boo" :
+>   "x = case f 1 3 of\n     (Baz boo) -> boo boo\n     (Bif bof) -> bah" :
+>   "x = case f 1 3 of\n    (Baz boo) | {2 ~ 3} -> boo boo" :
+>   "x = case f 1 3 of\n     Baz boo | womble -> boo boo" :
+>   "x = case f 1 3 of\n     Baz boo | {2 ~ 3} -> boo boo" :
+>   "x = case a of\n  Wim -> Wam\n          Wom " :
 >   []
 
 
@@ -341,6 +349,15 @@
 >   ("f :: (pi (n :: Nat) . Integer) -> Integer\nf h = h {3}\ny :: pi (n :: Nat) . Integer\ny {n} = 3\ng = f (\\ {n} -> y {n})", True):
 >   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero Zero", False) :
 >   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero NonZero", True) :
+>   ("f :: forall (n :: Num) . n <= 42 => Integer\nf = f", True) :
+>   ("f :: forall (t :: Num -> *)(n :: Num) . n <= 42 => t n -> Integer\nf = f\ng :: forall (s :: Num -> *) . (forall (n :: Num) . n <= 42 => s n -> Integer) -> Integer\ng = g\nh = g f", True) :
+>   ("a :: forall (x :: Num) . Integer\na =\n  let f :: forall (t :: Num -> *)(n :: Num) . n <= x => t n -> Integer\n      f = f\n      g :: forall (s :: Num -> *) . (forall (n :: Num) . n <= x => s n -> Integer) -> Integer\n      g = g\n  in g f", True) :
+>   ("noo :: Bool -> Bool\nnoo x = case x of\n  True -> False\n  False -> True", True) :
+>   ("noo :: Bool -> Bool\nnoo x = case x of\n  True -> False\n  False -> 3", False) :
+>   (vecDecl ++ "f :: forall (n :: Num) a . Vec n a -> Vec n a\nf x = case x of\n  Nil -> Nil\n  Cons x xs -> Cons x xs", True) :
+>   ("noo x = case x of\n  True -> False\n  False -> True", True) :
+>   ("noo x = case x of\n  True -> False\n  False -> 3", False) :
+>   (vecDecl ++ "f x = case x of\n  Nil -> Nil\n  Cons x xs -> Cons x xs", False) :
 >   []
 
 
