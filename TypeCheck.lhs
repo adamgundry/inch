@@ -17,7 +17,6 @@
 > import qualified Data.Integer.Presburger as P
 
 > import BwdFwd
-> import TyNum
 > import Kind 
 > import Type
 > import Num
@@ -45,7 +44,7 @@ a list of predicates found.
 >     beta <- fresh vs x k d
 >     inst vs d (unbindTy beta t)
 > inst vs d (Qual p t) = do
->     p' <- lift $ normalisePred p
+>     p' <- lift $ normalisePredCx p
 >     tell [p']
 >     inst vs d t
 > inst vs d t = return t
@@ -122,12 +121,11 @@ status.
 
 >     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
 >         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Alternative ()]))
->     replaceHelp g (t, ps) hs a d = help g (replaceTy a d t,
->                                                map (replaceTypes a d) ps)
->                                           hs'
->       where hs' = case a of
->                       FVar _ KNum -> map (substNormPred a (normalNum (toNum d))) hs
->                       _           -> hs
+>     replaceHelp g (t, ps) hs a d = do
+>         hs' <- case a of
+>                    FVar _ KNum -> (\ d' -> map (substNormPred a d') hs) <$> normaliseNumCx d
+>                    _           -> return hs
+>         help g (replaceTy a d t, map (replaceTypes a d) ps) hs'
 
 >     solveFor :: Var () KNum -> [NormalPredicate] -> Maybe NormalNum
 >     solveFor a = getFirst . foldMap (First . solveForVar a) . mapMaybe f
@@ -184,7 +182,7 @@ status.
 >     collect (g :< Constraint Given h)   hs ps =
 >         collect g (h:hs) ps <:< Constraint Given h
 >     collect (g :< A e@(a@(FVar _ KNum) := Some d)) hs ps =
->         let  dn = normalNum (toNum d)
+>         let  dn = normalNum "TypeCheck.trySolveConstraints" d
 >         in   collect g (subsPreds a dn hs) (subsPreds a dn ps ) <:< A e
 >     collect (g :< Layer l) hs ps = case layerStops l of
 >         Nothing        -> collect g hs ps <:< Layer l
@@ -239,17 +237,14 @@ status.
 >     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
 >                    Predicate -> P.Formula
 >     convert B0 axs hs p =
->         foldr (P.:/\:) P.TRUE (map (predToFormula . apply axs) hs)
->             P.:=>: predToFormula (apply axs p)
+>         foldr (P.:/\:) P.TRUE (map (predToFormula axs) hs)
+>             P.:=>: predToFormula axs p
 >     convert (g :< A (a@(FVar _ KNum) := _)) axs hs p | any (elemPred a) (p:hs) = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
-
->     apply :: [(Var () KNum, P.Term)] -> Predicate -> Pred P.Term
->     apply xs = bindPred (NumVar . fromJust . flip lookup xs)
->                
->     predToFormula :: Pred P.Term -> P.Formula
->     predToFormula (P c m n) = compToFormula c (numToTerm m) (numToTerm n)
+                
+>     predToFormula :: [(Var () KNum, P.Term)] -> Predicate -> P.Formula
+>     predToFormula xs (P c m n) = compToFormula c (numToTerm xs m) (numToTerm xs n)
 
 >     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
 >     compToFormula EL  = (P.:=:)
@@ -258,12 +253,16 @@ status.
 >     compToFormula GE  = (P.:>=:)
 >     compToFormula GR  = (P.:>:)
 
->     numToTerm :: TyNum P.Term -> P.Term
->     numToTerm (NumConst k)  = fromInteger k
->     numToTerm (NumVar t)    = t
->     numToTerm (n :+: m)     = numToTerm n + numToTerm m
->     numToTerm (n :*: m)     = numToTerm n * numToTerm m
->     numToTerm (Neg n)       = - numToTerm n
+>     opToTerm :: BinOp -> P.Term -> P.Term -> P.Term
+>     opToTerm Plus   = (+)
+>     opToTerm Minus  = (-)
+>     opToTerm Times  = (*)
+
+>     numToTerm :: [(Var () KNum, P.Term)] -> Type KNum -> P.Term
+>     numToTerm xs (TyInt i)  = fromInteger i
+>     numToTerm xs (TyVar t)  = fromJust (lookup t xs)
+>     numToTerm xs (TyApp (TyApp (BinOp o) m) n) = opToTerm o (numToTerm xs m) (numToTerm xs n)
+>     numToTerm xs t = error $ "numToTerm: bad " ++ show t
 
 
 
@@ -317,7 +316,7 @@ status.
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
 >     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish " ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
 >     help as (g :< A (a := Fixed)) h
->         | a <? h     = erk $ "checkSigma help: fixed variable " ++ renderMe (fogSysVar a) ++ " occurred illegally in " ++ intercalate ", " (map (either show (renderMe . fogSysNormPred)) h)
+>         | a <? h     = erk $ "checkSigma help: fixed variable " ++ renderMe (fogSysVar a) ++ " occurred illegally in " ++ intercalate ", " (map (either show (renderMe . fogSysPred . reifyPred)) h)
 >         | otherwise  = help (delete (Ex a) as) g h
 >     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
 >     help as (g :< A a) h                   = help as g (Left (TE a) : h)
@@ -335,7 +334,7 @@ status.
 >         Left (TE (b := Some (replaceTy a t d)))
 >     rep a t (Left e) = Left e
 >     rep a@(FVar _ KNum) t (Right p) =
->         Right (substNormPred a (normalNum $ toNum t) p)
+>         Right (substNormPred a (normalNum "TypeCheck.rep" t) p)
 >     rep a t (Right p) = Right p
 
 
@@ -360,7 +359,7 @@ status.
 >     case fty of
 >         Bind Pi x KNum aty -> do
 >             n   <- checkNumKind Pi B0 n
->             a   <- fresh SysVar "_n" KNum (Some (TyNum n))
+>             a   <- fresh SysVar "_n" KNum (Some n)
 >             ty  <- instSigma (unbindTy a aty) mty
 >             return $ TmApp f (TmBrace n) ::: ty
 >         _ -> erk $ "Inferred type " ++ renderMe (fogSysTy fty) ++ " of " ++
@@ -406,7 +405,7 @@ status.
 >     return $ Let ds t ::: ty
 
 > checkInfer mty (t :? xty) = do
->     TK sc KSet  <- inferKind B0 xty
+>     TK sc KSet  <- inferKind All B0 xty
 >     t           <- checkSigma sc t
 >     r           <- instSigma sc mty
 >     return $ (t :? sc) ::: r
@@ -509,7 +508,7 @@ status.
 
 > makeBinding :: SDeclaration () -> Contextual () ()
 > makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
->     TK ty' k <- inferKind B0 ty
+>     TK ty' k <- inferKind All B0 ty
 >     case k of
 >         KSet  -> insertBinding x (Just ty', False)
 >         _     -> errKindNotSet (fogKind k)
@@ -586,7 +585,7 @@ status.
 >   where
 >     learnPred p = do
 >       p <- checkPredKind Pi B0 p
->       np <- normalisePred p
+>       np <- normalisePredCx p
 >       modifyContext (:< Constraint Given np)
 >       return p
 > checkGuard (ExpGuard t)   = ExpGuard <$> checkRho tyBool t
@@ -625,7 +624,7 @@ status.
 >         q (PatIgnore :! xs, ex, vs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBraceK k :! ps) q = do
->     b        <- fresh SysVar x KNum (Some (TyNum (NumConst k)))
+>     b        <- fresh SysVar x KNum (Some (TyInt k))
 >     aty      <- instS (UserVar All) Given Fixed (unbindTy b t)
 >     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
 >         q (PatBraceK k :! xs, ex, vs, r)
@@ -652,7 +651,7 @@ status.
 >                       then Fixed
 >                       else Exists
 >     am <- fresh (UserVar Pi) a KNum d
->     modifyContext (:< A (b := Some (TyNum (NumVar am + NumConst k))))
+>     modifyContext (:< A (b := Some (TyVar am + TyInt k)))
 >     modifyContext (:< Constraint Given (IsPos (mkVar am)))
 >     aty      <- instS (UserVar All) Given Fixed t'
 >     checkPat top aty ps $ \ (xs, ex, vs, r) -> 

@@ -7,7 +7,6 @@
 > import qualified Control.Monad.Error as E
 > import Text.PrettyPrint.HughesPJ
 
-> import TyNum
 > import Kind
 > import Type
 > import Kit
@@ -31,7 +30,7 @@
 >     NonNumericVar      :: Ex (Var ()) -> Err
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
->     UnifyNumFixed      :: NVar () -> TypeNum -> Err
+>     UnifyNumFixed      :: NVar () -> Ty () KNum -> Err
 >     CannotDeduce       :: [NormalPredicate] -> [NormalPredicate] -> Err
 >     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Alternative ()] -> Err
 >     ImpossiblePred     :: NormalPredicate -> Err
@@ -59,7 +58,7 @@
 >                                                 ,  nest 2 (prettyHigh u)
 >                                                 ]
 >     pretty (UnifyFixed (Ex a) (Ex t))  _ = text "Cannot unify fixed variable" <+> prettySysVar a <+> text "with" <+> prettyHigh (fogSysTy t)
->     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTyNum n) <+> text "with 0"
+>     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTy n) <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
 >                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub qs)
 >                                                 ,  text "in empty context"

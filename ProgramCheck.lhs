@@ -12,7 +12,6 @@
 > import Text.PrettyPrint.HughesPJ
 
 > import BwdFwd
-> import TyNum
 > import Kind
 > import Type
 > import Num
@@ -52,7 +51,7 @@
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
->     TK ty' k <- inferKind B0 ty
+>     TK ty' k <- inferKind All B0 ty
 >     case k of
 >       KSet -> do
 >         unless (ty' `targets` t) $ errConstructorTarget ty
@@ -79,7 +78,7 @@
 >     return $ foldr makeEq ty' vts
 >   where
 >     makeEq :: (Var () KNum, Maybe TypeNum) -> Type KSet -> Type KSet
->     makeEq (a, Just n)   = Qual (NumVar a %==% n)
+>     makeEq (a, Just n)   = Qual (TyVar a %==% n)
 >     makeEq (a, Nothing)  = id
 
 > gadtMangle :: [Ex (Var ())] -> Type k ->
@@ -99,13 +98,9 @@
 > gadtMangle as (TyApp f s) = help as (TyApp f s)
 >   where
 >     isAllBound :: [Ex (Var ())] -> Type k -> Either String [Ex (Var ())]
->     isAllBound as (TyNum (NumVar a))
->         | Ex a `elem` as     = Right $ delete (Ex a) as
->         | otherwise          = Left  $ fogVar a ++ "'"
 >     isAllBound as (TyVar a)
 >         | Ex a `elem` as     = Right $ delete (Ex a) as
 >         | otherwise          = Left  $ fogVar a ++ "'"
->     isAllBound _  (TyNum _)  = Left "_gn"
 >     isAllBound _  _          = Left "_ga"
 
 >     help :: [Ex (Var ())] -> Type k ->
@@ -122,8 +117,8 @@
 >         (Right as', _) -> pure (t, as')
 >         (Left x, KNum) -> do
 >             a <- freshVar SysVar x KNum
->             tell [(a, Just (toNum t))]
->             return (TyNum (NumVar a), as)
+>             tell [(a, Just t)]
+>             return (TyVar a, as)
 >         (Left _, _) -> erk "Non-numeric GADT"
 
 > gadtMangle as t = pure t

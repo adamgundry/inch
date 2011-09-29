@@ -7,7 +7,6 @@
 > import Kit
 > import Kind
 > import Type
-> import TyNum
 > import PrettyPrinter
 > import Context
 

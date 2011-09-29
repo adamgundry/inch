@@ -12,13 +12,12 @@
 > import Data.Traversable
 
 > import BwdFwd
-> import TyNum
 > import Kind
 > import Type
 > import Syntax hiding (Alternative)
 > import Kit
 > import Error
-
+> import PrettyPrinter
 
 > type Bindings = Map.Map TmName (Maybe Sigma, Bool)
 
@@ -66,8 +65,8 @@
 > bindLayerTypes g (PatternTop (x ::: ty) bs ps cs) =
 >     PatternTop (x ::: substTy g ty)
 >                (map (\ (y ::: yty) -> y ::: substTy g yty) bs)
->                (map (bindNormPred (normalNum . toNum . g)) ps)
->                (map (bindNormPred (normalNum . toNum . g)) cs)
+>                (map (fmap (error "bindNExp g")) ps)
+>                (map (fmap (error "bindNExp g")) cs)
 >                
 
 
@@ -323,23 +322,14 @@ Bindings
 >                                                          _       -> TyVar (FVar b k)
 > seekTy (g :< _)                 a           = seekTy g a
 > seekTy B0                       a           = error "seekTy: missing!"
-
 > -}
-
-> seekNum :: Context -> Var () KNum -> TypeNum
-> seekNum (g :< A (b@(FVar _ KNum) := d))  a
->     | a == b  = case d of  Some t  -> toNum t
->                            _       -> NumVar a
-> seekNum (g :< _)          a           = seekNum g a
-> seekNum B0                a           = error "seekNum: missing!"
-
 
 > expandContext :: Context -> Context
 > expandContext B0 = B0
 > expandContext (g :< A (a := Some t))  = expandContext g
 > expandContext (g :< a@(A _))          = expandContext g :< a
 > expandContext (g :< Constraint s p)   =
->     expandContext g :< Constraint s (bindNormPred (normalNum . seekNum g) p)
+>     expandContext g :< Constraint s (bindNormPred (normalNum "expandContext" . expandTyVar g) p)
 > expandContext (g :< Layer l) =
 >     expandContext g :< Layer (bindLayerTypes (expandTyVar g) l)
 
@@ -356,20 +346,8 @@ Bindings
 > expandType :: Context -> Type k -> Type k
 > expandType g = substTy (expandTyVar g)
     
-> expandNum :: Context -> TypeNum -> TypeNum
-> expandNum g n = n >>= expandNumVar g
-
-> expandNumVar :: Context -> Var () KNum -> TypeNum
-> expandNumVar g a = case seek g a of
->     Some d  -> expandNum g (toNum d)
->     _       -> NumVar a
->   where
->     seek (g :< A (b := d))  a = hetEq a b d (seek g a)
->     seek (g :< _)           a = seek g a
->     seek B0                 a = error "expandNumVar: erk"
-
 > expandPred :: Context -> Predicate -> Predicate
-> expandPred g = mapPred (expandNum g)
+> expandPred g = fmap (expandType g)
 
 > niceType :: Type KSet -> Contextual t (Type KSet)
 > niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext
@@ -381,24 +359,23 @@ Bindings
 
 
 > lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                    Bwd (Ex (Var ())) -> String -> m (Ex (Var ()))
-> lookupTyVar (g :< Ex a) x
->     | varNameEq a x  = return $ Ex a
->     | otherwise      = lookupTyVar g x
-> lookupTyVar B0 x = getContext >>= seek
+>                    Binder -> Bwd (Ex (Var ())) -> String -> m (Ex (Var ()))
+> lookupTyVar b (g :< Ex a) x
+>     | varNameEq a x  = checkBinder b a >> return (Ex a)
+>     | otherwise      = lookupTyVar b g x
+> lookupTyVar b B0 x = getContext >>= seek
 >   where
 >     seek B0 = missingTyVar x
->     seek (g :< A (a := _)) | varNameEq a x = return $ Ex a
+>     seek (g :< A (a := _)) | varNameEq a x = checkBinder b a >> return (Ex a)
 >     seek (g :< _) = seek g
 
-> lookupNumVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
->                     Binder -> Bwd (Ex (Var ())) -> String -> m (NVar ())
-> lookupNumVar b g x = do
->     Ex a <- lookupTyVar g x
->     case (varKind a, varBinder a) of
->         (KNum, Just b') | b' <= b    -> return a
->                         | otherwise  -> errBadBindingLevel a
->         _     -> errNonNumericVar a
+> checkBinder :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+>                    Binder -> Var () k -> m ()
+> checkBinder All  _  = return ()
+> checkBinder Pi   a  = case (varKind a, varBinder a) of
+>                         (KNum, Just Pi)  -> return ()
+>                         (KNum, _)        -> errBadBindingLevel a
+>                         _                -> errNonNumericVar a
 
 
 > lookupTmVar :: (Alternative m, MonadState (ZipState t) m, MonadError ErrorData m) =>
@@ -420,3 +397,16 @@ Bindings
 >     lookIn [] = Nothing
 >     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
 >                               | otherwise  = lookIn bs
+
+
+
+
+> normaliseNumCx :: Type KNum -> Contextual t NormalNum
+> normaliseNumCx t = case normaliseNum t of
+>     Just n   -> return n
+>     Nothing  -> erk $ "normaliseNumCx: cannot normalise " ++ renderMe (fogSysTy t)
+
+> normalisePredCx ::  Predicate -> Contextual t NormalPredicate
+> normalisePredCx p = case normalisePred p of
+>     Just np -> return np
+>     Nothing -> erk $ "normalisePredCx: cannot normalise " ++ renderMe (fogSysPred p)

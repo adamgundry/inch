@@ -7,7 +7,6 @@
 > import Data.List
 > import Text.PrettyPrint.HughesPJ
 
-> import TyNum
 > import Kind
 > import Type
 > import BwdFwd
@@ -69,23 +68,7 @@
 >     pretty Pi _   = text "pi"
 >     pretty All _  = text "forall"
 
-> instance Pretty STypeNum where
->     pretty (NumConst k)  = const $ integer k
->     pretty (NumVar a)    = const $ text a
->     pretty (m :+: NumConst k) | k < 0 = wrapDoc AppSize $ 
->         pretty m ArgSize <+> text "-" <+> integer (-k)
->     pretty (m :+: Neg n) = wrapDoc AppSize $ 
->         pretty m ArgSize <+> text "-" <+> pretty n ArgSize
->     pretty (Neg m :+: n) = wrapDoc AppSize $ 
->         pretty n ArgSize <+> text "-" <+> pretty m ArgSize
->     pretty (m :+: n) = wrapDoc AppSize $ 
->         pretty m ArgSize <+> text "+" <+> pretty n ArgSize
->     pretty (m :*: n) = wrapDoc AppSize $ 
->         pretty m ArgSize <+> text "*" <+> pretty n ArgSize
->     pretty (Neg n) = wrapDoc AppSize $
->         text "-" <+> pretty n ArgSize
-
-> instance Pretty SPredicate where
+> instance Pretty ty => Pretty (Pred ty) where
 >     pretty (P c n m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> pretty c ArgSize <+> pretty m ArgSize
 
@@ -96,22 +79,33 @@
 >     pretty GE _ = text ">="
 >     pretty EL _ = text "~"
 
+> instance Pretty BinOp where
+>     pretty o _ = text $ "(" ++ binOpString o ++ ")"
+
 > instance Pretty SType where
 >     pretty (STyVar v)                  = const $ text v
 >     pretty (STyCon c)                  = const $ text c
->     pretty (STyApp (STyApp SArr s) t)  = wrapDoc ArrSize $ 
->         pretty s AppSize <+> text "->" <++> pretty t ArrSize
+>     pretty (STyApp (STyApp f s) t) | Just fx <- infixName f = wrapDoc ArrSize $ 
+>         pretty s AppSize <+> text fx <++> pretty t AppSize
 >     pretty (STyApp f s)  = wrapDoc AppSize $ 
 >         pretty f AppSize <+> pretty s ArgSize
->     pretty (STyNum n) = pretty n
->     pretty (SBind b a k t) = prettyBind b (B0 :< (a, k)) t
->     pretty (SQual p t) = prettyQual (B0 :< p) t
->     pretty SArr = const $ text "(->)"
+>     pretty (SBind b a k t)  = prettyBind b (B0 :< (a, k)) t
+>     pretty (SQual p t)      = prettyQual (B0 :< p) t
+>     pretty SArr             = const $ text "(->)"
+>     pretty (STyInt k)       = const $ integer k
+>     pretty (SBinOp o)       = pretty o
+ 
+> infixName :: SType -> Maybe String
+> infixName SArr              = Just "->"
+> infixName (SBinOp o)        = Just (binOpString o)
+> infixName (STyCon ('(':s))  = Just (init s)
+> infixName _                 = Nothing
+
 
 > prettyBind :: Binder -> Bwd (String, SKind) ->
 >     SType -> Size -> Doc
 > prettyBind b bs (SBind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) t
-> prettyBind b (bs :< (a, SKNum)) (SQual (P LE (NumConst 0) (NumVar a')) t) | a == a' = prettyBind b (bs :< (a, SKNat)) t
+> prettyBind b (bs :< (a, SKNum)) (SQual (P LE 0 (STyVar a')) t) | a == a' = prettyBind b (bs :< (a, SKNat)) t
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <++> pretty t ArrSize
@@ -202,11 +196,13 @@
 >     pretty (NumGuard p)  = const $ braces (fsepPretty p)
 
 
+> {-
 > instance Pretty SNormalPred where
 >     pretty p = pretty (reifyPred p)
 
 > instance Pretty SNormalNum where
->     pretty n _ = prettyHigh $ simplifyNum $ reifyNum n
+>     pretty n _ = prettyHigh $ reifyNum n
+> -}
 
 > instance Pretty x => Pretty (Bwd x) where
 >     pretty bs _ = fsep $ punctuate (text ",") (map prettyHigh (trail bs))

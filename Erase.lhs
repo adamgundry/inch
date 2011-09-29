@@ -13,10 +13,10 @@
 > import Kit
 > import Kind
 > import Type
-> import TyNum
 > import Syntax
 > import Context
 > import TypeCheck
+> import PrettyPrinter
 
 
 > eraseKind :: Kind k -> Maybe (Ex Kind)
@@ -92,12 +92,10 @@
 
 This is a bit of a hack; we really ought to extend the syntax of terms:
 
-> numToTm :: TypeNum -> Term ()
-> numToTm (NumVar x)    = TmCon . fogVar $ x
-> numToTm (NumConst k)  = TmInt k
-> numToTm (m :+: n)     = TmApp (TmApp (TmCon "(+)") (numToTm m)) (numToTm n)
-> numToTm (m :*: n)     = TmApp (TmApp (TmCon "(*)") (numToTm m)) (numToTm n)
-> numToTm (Neg m)       = TmApp (TmCon "-") (numToTm m)
+> numToTm :: Type KNum -> Term ()
+> numToTm (TyVar x)  = TmCon . fogVar $ x
+> numToTm (TyInt i)  = TmInt i
+> numToTm (TyApp (TyApp (BinOp o) m) n) = TmApp (TmApp (TmCon (renderMe o)) (numToTm m)) (numToTm n)
 
 
 > eraseCon :: Constructor -> Contextual a Constructor

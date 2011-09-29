@@ -682,8 +682,8 @@ thirtymk3 times  = multU3 times fivem3 sixk3
 data Bad :: (Num -> Num) -> * where
   Eek :: forall (f :: Num -> Num) . UNat (f 0) -> Bad f
 
-badder :: forall (g :: Num -> Num -> Num) . Bad (g 1) -> UNat (g (2-1) 0)
-badder (Eek n) = n
+-- badder :: forall (g :: Num -> Num -> Num) . Bad (g 1) -> UNat (g (2-1) 0)
+-- badder (Eek n) = n
 
 
 narg {n} = unat {n}

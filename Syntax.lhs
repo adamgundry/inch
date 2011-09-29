@@ -14,7 +14,6 @@
 
 > import Kit
 > import Kind
-> import TyNum
 > import Type
 
 
@@ -100,7 +99,7 @@
 >     TmCon    :: TmConName                 -> Tm s a
 >     TmInt    :: Integer                   -> Tm s a
 >     TmApp    :: Tm s a -> Tm s a          -> Tm s a
->     TmBrace  :: TyNum (AVar s a KNum)     -> Tm s a
+>     TmBrace  :: ATy s a KNum              -> Tm s a
 >     Lam      :: TmName -> Tm s a          -> Tm s a
 >     NumLam   :: String -> Tm s (a, KNum)  -> Tm s a
 >     Let      :: [Decl s a] -> Tm s a      -> Tm s a
@@ -112,7 +111,7 @@
 > instance TravTypes Tm where
 
 >     travTypes g (TmApp f s)  = TmApp <$> travTypes g f <*> travTypes g s
->     travTypes g (TmBrace n)  = TmBrace . toNum <$> g (TyNum n)
+>     travTypes g (TmBrace n)  = TmBrace <$> g n
 >     travTypes g (Lam x b)    = Lam x <$> travTypes g b
 >     travTypes g (NumLam a b) = NumLam a <$> travTypes g b 
 >     travTypes g (Let ds t)   = Let <$> traverse (travTypes g) ds
@@ -124,7 +123,7 @@
 >     fogTypes g (TmCon c)     = TmCon c
 >     fogTypes g (TmInt k)     = TmInt k
 >     fogTypes g (TmApp f s)   = TmApp (fogTypes g f) (fogTypes g s)
->     fogTypes g (TmBrace n)   = TmBrace (fogTyNum' g n)
+>     fogTypes g (TmBrace n)   = TmBrace (fogTy' g [] n)
 >     fogTypes g (Lam x b)     = Lam x (fogTypes g b)
 >     fogTypes g (NumLam x b)  = NumLam x (fogTypes (wkF g x) b)
 >     fogTypes g (Let ds t)    = Let (map (fogTypes g) ds)
@@ -136,7 +135,7 @@
 >     renameTypes g (TmCon c)     = TmCon c
 >     renameTypes g (TmInt k)     = TmInt k
 >     renameTypes g (TmApp f s)   = TmApp (renameTypes g f) (renameTypes g s)
->     renameTypes g (TmBrace n)   = TmBrace (fmap g n)
+>     renameTypes g (TmBrace n)   = TmBrace (renameTy g n)
 >     renameTypes g (Lam x b)     = Lam x (renameTypes g b)
 >     renameTypes g (NumLam x b)  = NumLam x (renameTypes (wkRenaming g) b)
 >     renameTypes g (Let ds t)    = Let (map (renameTypes g) ds)
@@ -175,21 +174,20 @@
 
 > data Grd s a where
 >     ExpGuard  :: Tm s a -> Grd s a
->     NumGuard  :: [Pred (AVar s a KNum)] -> Grd s a
+>     NumGuard  :: [Pred (ATy s a KNum)] -> Grd s a
 
 > deriving instance Eq (Grd RAW a)
 
 > instance TravTypes Grd where
 
 >     travTypes g (ExpGuard t)   = ExpGuard <$> travTypes g t
->     travTypes g (NumGuard ps)  = NumGuard <$> traverse (travPred gn) ps
->       where gn = (toNum <$>) . g . TyNum
+>     travTypes g (NumGuard ps)  = NumGuard <$> traverse (traverse g) ps
 
 >     fogTypes g (ExpGuard t)  = ExpGuard (fogTypes g t)
->     fogTypes g (NumGuard ps) = NumGuard (map (fogPred' g) ps)
+>     fogTypes g (NumGuard ps) = NumGuard (map (fmap (fogTy' g [])) ps)
 
 >     renameTypes g (ExpGuard t)  = ExpGuard (renameTypes g t)
->     renameTypes g (NumGuard ps) = NumGuard (map (fmap g) ps)
+>     renameTypes g (NumGuard ps) = NumGuard (map (fmap (renameTy g)) ps)
 
 
 

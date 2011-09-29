@@ -12,7 +12,6 @@
 > import qualified Text.ParserCombinators.Parsec.IndentParser.Token as IT
 
 
-> import TyNum
 > import Type
 > import Syntax
 > import Kit
@@ -80,25 +79,34 @@ Types
 > tyPi       = tyQuant "pi" (SBind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
 > tyArrow    = reservedOp "->" >> return (--->)
+
+
 > tyBit      = tyBob `chainl1` pure STyApp
+
+> {-
 > tyBob      =    tyVar
 >            <|>  tyCon
->            <|>  STyNum <$> try tyNumTerm
->            <|>  parens (reservedOp "->" *> pure SArr <|> tyExp)
+>            <|>  STyInt <$> try integer
+>            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp) <|> tyExp)
+> -}
 
 > numVarName   = identLike True "numeric type variable"
+> numVar       = STyVar <$> numVarName
 
-> tyNum = buildExpressionParser
+> tyBob = buildExpressionParser
 >     [
->         [binary "*" (:*:) AssocLeft],    
->         [binary "+" (:+:) AssocLeft, sbinary "-" (-) AssocLeft]
+>         [prefix "-" negate],
+>         [binary "*" (*) AssocLeft],    
+>         [binary "+" (+) AssocLeft, sbinary "-" (-) AssocLeft]
 >     ]
->     tyNumTerm
+>     tyAtom
 
-> tyNumTerm  =    NumVar <$> numVarName
->            <|>  NumConst <$> try integer
->            <|>  Neg <$> (specialOp "-" *> tyNumTerm)
->            <|>  parens tyNum
+> tyAtom     =    tyVar
+>            <|>  tyCon
+>            <|>  STyInt <$> try integer
+>            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp)
+>                        <|> tyExp)
+
 
 > binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
 > sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc
@@ -127,9 +135,9 @@ Types
 > predicates = predicate `sepBy1` reservedOp ","
 
 > predicate = do
->     n   <- tyNum
+>     n   <- tyBit
 >     op  <- predOp
->     m   <- tyNum
+>     m   <- tyBit
 >     return $ op n m
 
 > predOp = eqPred <|> lPred <|> lePred <|> gPred <|> gePred
@@ -191,7 +199,7 @@ Terms
 >       <|>  TmCon <$> dataConName
 >       <|>  TmInt <$> try integer
 >       <|>  parens expr
->       <|>  braces (TmBrace <$> tyNum) 
+>       <|>  braces (TmBrace <$> tyBit) 
 
 > isVar :: String -> Bool
 > isVar = isLower . head

@@ -13,7 +13,6 @@
 > import Text.PrettyPrint.HughesPJ
 
 > import BwdFwd
-> import TyNum
 > import Kind
 > import Type
 > import Syntax
@@ -89,8 +88,7 @@
 > unifyTypes :: Type k -> Type k -> Contextual t ()
 > -- unifyTypes s t | s == t = return ()
 > unifyTypes Arr Arr  = return ()
-> unifyTypes (TyVar a@(FVar _ KNum)) (TyVar b) =
->     unifyNum (NumVar a) (NumVar b)
+> unifyTypes s t | KNum <- getTyKind s = unifyNum s t
 > unifyTypes (TyVar alpha) (TyVar beta) = onTop $
 >   \ (gamma := d) ->
 >     hetEq gamma alpha
@@ -166,9 +164,6 @@
 >     unless (p' == q') $ erk $ "Mismatched qualifiers " ++ renderMe p' ++ " and " ++ renderMe q'
 > -}
 
-> unifyTypes (TyNum m)      (TyNum n)      = unifyNum m n
-> unifyTypes (TyNum m)      (TyVar a)      = unifyNum m (NumVar a)
-> unifyTypes (TyVar a)      (TyNum n)      = unifyNum (NumVar a) n
 > unifyTypes (TyVar alpha)  tau            = startSolve alpha tau
 > unifyTypes tau            (TyVar alpha)  = startSolve alpha tau
 > unifyTypes tau            upsilon        = errCannotUnify (fogTy tau) (fogTy upsilon)
@@ -185,30 +180,31 @@
 
 > type FlexConstraint = (Var () KNum, TypeNum, TypeNum)
 
-> makeFlex :: [Var () KNum] -> TypeNum ->
+> makeFlex :: [Var () KNum] -> Type KNum ->
 >                 Contextual t (Type KNum, Fwd FlexConstraint)
 > makeFlex as n = do
->     n' <- normaliseNum n
+>     n' <- normaliseNumCx n
 >     let (l, r) = partitionNExp as n'
 >     if isZero r
->         then return (TyNum n, F0)
+>         then return (n, F0)
 >         else do
 >             v <- freshVar SysVar "_i" KNum
 >             -- traceContext $ "mF\nas = " ++ show as ++ "\nn = " ++ show n ++ "\nl' = " ++ show l' ++ "\nr' = " ++ show r'
->             return (TyNum (reifyNum (mkVar v +~ l)), (v, NumVar v, reifyNum r) :> F0)
+>             return (reifyNum (mkVar v +~ l), (v, TyVar v, reifyNum r) :> F0)
 
 
 > rigidHull :: [Var () KNum] -> Type k ->
 >                  Contextual t (Type k, Fwd FlexConstraint)
 > rigidHull as (TyVar a)    = case varKind a of
->                              KNum  -> makeFlex as (NumVar a)
+>                              KNum  -> makeFlex as (TyVar a)
 >                              _     -> return (TyVar a, F0)
 > rigidHull as (TyCon c k)  = return (TyCon c k, F0)
 > rigidHull as (TyApp f s)  = do  (f',  xs  )  <- rigidHull as f
 >                                 (s',  ys  )  <- rigidHull as s
 >                                 return (TyApp f' s', xs <.> ys)
 > rigidHull as Arr          = return (Arr, F0)
-> rigidHull as (TyNum n)    = makeFlex as n
+> rigidHull as (BinOp o)    = return (BinOp o, F0)
+> rigidHull as t | KNum <- getTyKind t = makeFlex as t
 
 > rigidHull as (Bind b x KNum t) = do
 >     v <- freshVar SysVar "_magical" KNum
@@ -264,8 +260,8 @@ This is wrong, I think:
 
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (NumConst 0)  n = unifyZero F0 =<< normaliseNum n
-> unifyNum m             n = unifyZero F0 =<< normaliseNum (m - n)
+> unifyNum (TyInt 0)  n = unifyZero F0 =<< normaliseNumCx n
+> unifyNum m          n = unifyZero F0 =<< normaliseNumCx (m - n)
 
 > constrainZero :: NormalNum -> Contextual t ()
 > constrainZero e = modifyContext (:< Constraint Wanted (IsZero e))
@@ -273,7 +269,7 @@ This is wrong, I think:
 > unifyZero :: Suffix -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isZero e      = return ()
->   | isConstant e  = errCannotUnify (fogTy (numToType e)) (STyNum (NumConst 0))
+>   | isConstant e  = errCannotUnify (fogTy (numToType e)) (STyInt 0)
 >   | otherwise     = onTopNum (IsZero e, modifyContext (<>< _Psi)) $
 >     \ (alpha := d) ->
 >     case lookupVariable alpha e of
@@ -281,7 +277,7 @@ This is wrong, I think:
 >       Just n -> case d of
 >         Some x -> do
 >             modifyContext (<>< _Psi)
->             x' <- normaliseNum (toNum x)
+>             x' <- normaliseNumCx x
 >             unifyZero F0 (substNum alpha x' e)
 >             restore
 >         Hole  | n `dividesCoeffs` e -> do
