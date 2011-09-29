@@ -23,43 +23,14 @@
 
 > data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Sigma
 >                              ,  ptBinds        :: [TmName ::: Sigma]
->                              ,  ptPreds        :: [NormalPredicate]
->                              ,  ptConstraints  :: [NormalPredicate]
+>                              ,  ptPreds        :: [Predicate]
+>                              ,  ptConstraints  :: [Predicate]
 >                              }
 >                   |  LamBody (TmName ::: Tau) ()
 >                   |  LetBindings Bindings
 >                   |  LetBody Bindings ()
 >                   |  FunTop
 >                   |  GenMark
-
-
-> {-
-> bindLayer :: (Ord a, Ord b) => (Kind -> a -> Ty Kind b) -> TmLayer a x -> TmLayer b x
-> bindLayer f (PatternTop (x ::: t) yts ps cs) =
->     PatternTop (x ::: bindTy f t)
->         (map (\ (y ::: t) -> y ::: bindTy f t) yts)
->         (map (bindNormPred (normalNum . toNum . f KindNum)) ps)
->         (map (bindNormPred (normalNum . toNum . f KindNum)) cs)
-> bindLayer f (AppLeft () tm mty)         = AppLeft () (bindTypes f tm) (fmap (bindTy f) mty)
-> bindLayer f (AppRight (tm ::: ty) ())   = AppRight (bindTypes f tm ::: bindTy f ty) ()
-> bindLayer f (LamBody (x ::: ty) ())     = LamBody (x ::: bindTy f ty) ()
-> bindLayer f (AnnotLeft () ty)           = AnnotLeft () (bindTy f ty)
-> bindLayer f FunTop                      = FunTop
-> -}
-
-> {-
-> instance Trav3 TmLayer where
->     trav3 fn fa fx (PatternTop b bs hs ps) =
->         PatternTop <$> travBind b
->                    <*> traverse travBind bs
->                    <*> traverse ((normalPred <$>) . travPred fn . reifyPred) hs
->                    <*> traverse ((normalPred <$>) . travPred fn . reifyPred) ps
->       where
->         travBind (x ::: ty) = (:::) <$> fx x <*> fa ty
->     trav3 fn fa fx (AppLeft () tm mty) = AppLeft () <$> trav3 fn fa fx tm
->         <*> maybe (pure Nothing) (fmap Just . fa) mty
->     trav3 fn fa fx FunTop = pure $ FunTop
-> -}
 
 > bindLayerTypes :: (forall k . Var () k -> Type k) -> TmLayer -> TmLayer
 > bindLayerTypes g (PatternTop (x ::: ty) bs ps cs) =
@@ -103,7 +74,7 @@
 > data Entry where
 >     A           :: TyEntry k -> Entry
 >     Layer       :: TmLayer -> Entry
->     Constraint  :: CStatus -> NormalPredicate -> Entry
+>     Constraint  :: CStatus -> Predicate -> Entry
 
 
 
@@ -329,7 +300,7 @@ Bindings
 > expandContext (g :< A (a := Some t))  = expandContext g
 > expandContext (g :< a@(A _))          = expandContext g :< a
 > expandContext (g :< Constraint s p)   =
->     expandContext g :< Constraint s (bindNormPred (normalNum "expandContext" . expandTyVar g) p)
+>     expandContext g :< Constraint s (fmap (substTy (expandTyVar g)) p)
 > expandContext (g :< Layer l) =
 >     expandContext g :< Layer (bindLayerTypes (expandTyVar g) l)
 

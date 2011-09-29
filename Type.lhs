@@ -17,14 +17,13 @@
 
 > type NVar a     = Var a KNum
 > type NormNum a  = NExp a
+> type NormalNum        = NormNum (NVar ())
+> type SNormalNum       = NormNum String
 
 > type Predicate        = Pred TypeNum
-> type NormalNum        = NormNum (NVar ())
-> type NormalPredicate  = NormPred NormalNum
+> type NormalPredicate  = Pred NormalNum
 
 > type SPredicate       = Pred SType
-> type SNormalNum       = NormNum String
-> type SNormalPred      = NormPred SNormalNum
 
 > type TyNum a  = Ty a KNum
 > type TypeNum  = TyNum ()
@@ -49,23 +48,6 @@
 > (%<%)   = P LS
 > (%>=%)  = P GE
 > (%>%)   = P GR
-
-> data NormPred ty where
->     IsPos   :: ty -> NormPred ty
->     IsZero  :: ty -> NormPred ty
->   deriving (Eq, Show, Functor, Foldable, Traversable)
-
-
-
-> bindNormPred ::  (Eq a, Eq b) => (a -> NormNum b) ->
->                      NormPred (NormNum a) -> NormPred (NormNum b)
-> bindNormPred g = fmap (bindNExp g)
-
-> substNormPred ::  Eq a => a -> NormNum a ->
->                       NormPred (NormNum a) -> NormPred (NormNum a)
-> substNormPred a n = fmap (substNum a n)
-
-
 
 
 > data BinOp = Plus | Minus | Times
@@ -175,16 +157,6 @@
 
 > fogNormNum' :: (NVar a -> String) -> NormNum (NVar a) -> SNormalNum
 > fogNormNum' = fmap
-
-
-> fogNormPred :: NormalPredicate -> SNormalPred
-> fogNormPred = fogNormPred' fogVar
-
-> fogSysNormPred :: NormalPredicate -> SNormalPred
-> fogSysNormPred = fogNormPred' fogSysVar
-
-> fogNormPred' :: (NVar a -> String) -> NormPred (NormNum (NVar a)) -> SNormalPred
-> fogNormPred' = fmap . fogNormNum'
 
 
 
@@ -328,9 +300,6 @@
 > targets (Qual _ ty)               t = targets ty t
 > targets _                         _ = False
 
-> numToType :: NormalNum -> Type KNum
-> numToType  = reifyNum
-
 
 > elemTy :: Var a k -> Ty a l -> Bool
 > elemTy a (TyVar b)       = a =?= b
@@ -353,11 +322,8 @@
 > reifyNum :: NormNum (NVar a) -> Ty a KNum
 > reifyNum = simplifyNum . foldNExp (\ k n m -> TyInt k * TyVar n + m) TyInt
 
-> reifyPred :: NormPred (NormNum (NVar a)) -> Pred (Ty a KNum)
-> reifyPred (IsPos n) = simplifyPred $ TyInt 0 %<=% reifyNum n
-> reifyPred (IsZero n) = simplifyPred $ reifyNum n %==% TyInt 0
-
-
+> reifyPred :: Pred (NormNum (NVar a)) -> Pred (Ty a KNum)
+> reifyPred = fmap reifyNum
 
 > normaliseNum :: Ord a => Ty a KNum -> Maybe (NormNum (NVar a))
 > normaliseNum (TyInt i)     = return $ mkConstant i
@@ -375,27 +341,19 @@
 >             (Nothing,  Nothing)  -> Nothing
 > normaliseNum t = Nothing
 
-> normalNum s t = maybe (error $ "normalNum: cannot normalise " ++ show t) id $ normaliseNum t
-
-> normalisePred ::  Ord a => Pred (Ty a KNum) -> Maybe (NormPred (NormNum (NVar a)))
-> normalisePred (P LE m n)  = IsPos <$> normaliseNum (n - m)
-> normalisePred (P LS m n)  = IsPos <$> normaliseNum (n - (m + 1))
-> normalisePred (P GE m n)  = IsPos <$> normaliseNum (m - n)
-> normalisePred (P GR m n)  = IsPos <$> normaliseNum (m - (n + 1))
-> normalisePred (P EL m n)  = IsZero <$> normaliseNum (n - m)
+> normalisePred ::  Ord a => Pred (Ty a KNum) -> Maybe (Pred (NormNum (NVar a)))
+> normalisePred = traverse normaliseNum 
 
 
 > trivialPred :: Ord a => Pred (Ty a KNum) -> Maybe Bool
-> trivialPred p = trivialNormPred =<< normalisePred p
+> trivialPred (P c m n) = comp c <$> (getConstant =<< normaliseNum (m - n))
+>   where
+>     comp EL = (== 0)
+>     comp LE = (<= 0)
+>     comp LS = (< 0)
+>     comp GE = (>= 0)
+>     comp GR = (> 0)
 
-> trivialNormPred (IsPos n)   = (>= 0) <$> getConstant n
-> trivialNormPred (IsZero n)  = (== 0) <$> getConstant n
 
-
-> instance FV NormalNum where
->     a@(FVar _ KNum) <? n = isJust $ lookupVariable a n
->     _ <? _               = False
-
-> instance FV NormalPredicate where
->     a <? IsPos n   = a <? n
->     a <? IsZero n  = a <? n
+> instance FV ty => FV (Pred ty) where
+>     a <? (P _ m n) = a <? m || a <? n

@@ -31,9 +31,9 @@
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
 >     UnifyNumFixed      :: NVar () -> Ty () KNum -> Err
->     CannotDeduce       :: [NormalPredicate] -> [NormalPredicate] -> Err
+>     CannotDeduce       :: [Predicate] -> [Predicate] -> Err
 >     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Alternative ()] -> Err
->     ImpossiblePred     :: NormalPredicate -> Err
+>     ImpossiblePred     :: Predicate -> Err
 >     BadBindingLevel    :: Var () KNum -> Err
 >     Fail               :: String -> Err
 
@@ -60,13 +60,13 @@
 >     pretty (UnifyFixed (Ex a) (Ex t))  _ = text "Cannot unify fixed variable" <+> prettySysVar a <+> text "with" <+> prettyHigh (fogSysTy t)
 >     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTy n) <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub qs)
 >                                                 ,  text "in empty context"
 >                                                 ]
 >     pretty (CannotDeduce hs qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub qs)
 >                                                 ,  text "from hypotheses"
->                                                 ,  nest 2 (fsepPretty $ map (fogSysPred . reifyPred) $ nub hs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub hs)
 >                                                 ]
 >     pretty (BadExistential (Ex a) (Ex t) as)  _ = sep  [  text "Illegal existential"
 >                                                        <+> prettySysVar a
@@ -75,7 +75,7 @@
 >                                                 ,  text "and patterns"
 >                                                 ,  nest 2 (vcatPretty $ fmap fogSys as)
 >                                                 ]
->     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred $ reifyPred p)
+>     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred p)
 >     pretty (BadBindingLevel a) _ = text "Forall-bound variable"
 >                                        <+> prettyVar a
 >                                        <+> text "used where pi-bound variable required"

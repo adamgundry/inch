@@ -37,15 +37,14 @@ forall-binders with fresh variables to produce a rho-type, and writes
 a list of predicates found.
 
 > inst :: VarState -> (forall k. TyDef k) -> Type l ->
->             ContextualWriter [NormalPredicate] t (Type l)
+>             ContextualWriter [Predicate] t (Type l)
 > inst vs d (TyApp (TyApp Arr a) t) =
 >     TyApp (TyApp Arr a) <$> inst vs d t
 > inst vs d (Bind All x k t) = do
 >     beta <- fresh vs x k d
 >     inst vs d (unbindTy beta t)
 > inst vs d (Qual p t) = do
->     p' <- lift $ normalisePredCx p
->     tell [p']
+>     tell [p]
 >     inst vs d t
 > inst vs d t = return t
 
@@ -91,7 +90,7 @@ status.
 >     putContext g'
 >     return tps
 >   where
->     help :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
+>     help :: Context -> (Type KSet, [Alternative ()]) -> [Predicate] ->
 >                 Contextual t (Context, (Type KSet, [Alternative ()]))
 >     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
 >     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
@@ -100,7 +99,7 @@ status.
 
 >     help (g :< A (a@(FVar _ KNum) := Exists)) (t, ps) hs
 >       | a <? t || a <? ps || a <? hs = case solveFor a hs of
->             Just n   -> replaceHelp g (t, ps) hs a (numToType n)
+>             Just n   -> replaceHelp g (t, ps) hs a (reifyNum n)
 >             Nothing  | a <? t -> traceContext "oh no" >>
 >                                     errBadExistential a t ps
 >                      | otherwise -> help g (t, ps) (filter (not . (a <?)) hs)
@@ -114,34 +113,26 @@ status.
 
 >     help (g :< Constraint Given h)   tps hs      = help g tps (h:hs)
 >     help (g :< Constraint Wanted p)  (t, ps) hs  =
->         help g (Qual (reifyPred p) t, ps) hs
+>         help g (Qual p t, ps) hs
 
 >     help g tps hs = erk $ "generalise: can't help " ++ renderMe g
 
 
->     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [NormalPredicate] ->
+>     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [Predicate] ->
 >         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Alternative ()]))
 >     replaceHelp g (t, ps) hs a d = do
->         hs' <- case a of
->                    FVar _ KNum -> (\ d' -> map (substNormPred a d') hs) <$> normaliseNumCx d
->                    _           -> return hs
+>         let hs' = case a of
+>                    FVar _ KNum -> map (fmap (replaceTy a d)) hs
+>                    _           -> hs
 >         help g (replaceTy a d t, map (replaceTypes a d) ps) hs'
 
->     solveFor :: Var () KNum -> [NormalPredicate] -> Maybe NormalNum
+>     solveFor :: Var () KNum -> [Predicate] -> Maybe NormalNum
 >     solveFor a = getFirst . foldMap (First . solveForVar a) . mapMaybe f
->       where  f (IsZero n)  = Just n
+>       where  f (P EL m n)  = normaliseNum (m - n)
 >              f _           = Nothing
 
-> {-
-> traceContext "oh no" >>
->                                     errBadExistential a t ps
-> case solveFor a (collectHyps g (hs ++ ps)) of
->             Just n   -> collect g hs ps <:< A (a := Some (numToType n))
->             Nothing  -> collect g hs ps <:< A e
-> -}
 
-
-> layerStops :: TmLayer -> Maybe (TmLayer, [NormalPredicate], [NormalPredicate])
+> layerStops :: TmLayer -> Maybe (TmLayer, [Predicate], [Predicate])
 > layerStops FunTop                   = Just (FunTop, [], [])
 > layerStops GenMark                  = Just (GenMark, [], [])
 > layerStops (PatternTop s bs hs ps)  = Just (PatternTop s bs [] [], hs, ps)
@@ -152,20 +143,20 @@ status.
 > unifySolveConstraints = do
 >     (g, ns) <- runWriter . collectEqualities <$> getContext
 >     putContext g
->     traverse (unifyZero F0) ns
+>     traverse (uncurry unifyNum) ns
 >     return ()
 >   where
->     collectEqualities :: Context -> Writer [NormalNum] Context
+>     collectEqualities :: Context -> Writer [(Type KNum, Type KNum)] Context
 >     collectEqualities B0 = return B0
 >     collectEqualities (g :< Layer l) = case layerStops l of
 >         Just _   -> return $ g :< Layer l
 >         Nothing  -> (:< Layer l) <$> collectEqualities g
->     collectEqualities (g :< Constraint Wanted (IsZero n)) = tell [n]
+>     collectEqualities (g :< Constraint Wanted (P EL m n)) = tell [(m, n)]
 >         >> collectEqualities g
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
 
 
-> trySolveConstraints :: Contextual t ([NormalPredicate], [NormalPredicate])
+> trySolveConstraints :: Contextual t ([Predicate], [Predicate])
 > trySolveConstraints = do
 >     g <- getContext
 >     let (g', hs, ps) = collect g [] []
@@ -175,15 +166,14 @@ status.
 >   where
 >     formulaic hs p = (not . P.check) <$> toFormula hs p
 >
->     collect :: Context -> [NormalPredicate] -> [NormalPredicate] ->
->                    (Context, [NormalPredicate], [NormalPredicate])
+>     collect :: Context -> [Predicate] -> [Predicate] ->
+>                    (Context, [Predicate], [Predicate])
 >     collect B0 hs ps = (B0, hs, ps)
 >     collect (g :< Constraint Wanted p)  hs ps = collect g hs (p:ps)
 >     collect (g :< Constraint Given h)   hs ps =
 >         collect g (h:hs) ps <:< Constraint Given h
 >     collect (g :< A e@(a@(FVar _ KNum) := Some d)) hs ps =
->         let  dn = normalNum "TypeCheck.trySolveConstraints" d
->         in   collect g (subsPreds a dn hs) (subsPreds a dn ps ) <:< A e
+>         collect g (subsPreds a d hs) (subsPreds a d ps) <:< A e
 >     collect (g :< Layer l) hs ps = case layerStops l of
 >         Nothing        -> collect g hs ps <:< Layer l
 >         Just (l', ks, ws)  -> (g :< Layer l', collectHyps g (ks ++ hs), ws ++ ps)
@@ -195,6 +185,8 @@ status.
 
 >     (g, a, b) <:< e = (g :< e, a, b)
 
+>     subsPreds :: Var () KNum -> Type KNum -> [Predicate] -> [Predicate]
+>     subsPreds a n = map (fmap (replaceTy a n))
 
 > solveConstraints :: Contextual t ()
 > solveConstraints = do
@@ -206,25 +198,29 @@ status.
 > solveOrSuspend :: Contextual t ()
 > solveOrSuspend = want . snd =<< trySolveConstraints
 >   where
->     want :: [NormalPredicate] -> Contextual t ()
+>     want :: [Predicate] -> Contextual t ()
 >     want [] = return ()
 >     want (p:ps)
 >         | nonsense p  = errImpossiblePred p
 >         | otherwise   = modifyContext (:< Constraint Wanted p)
 >                                 >> want ps
 >
->     nonsense :: NormalPredicate -> Bool
->     nonsense (IsZero n) = maybe False (/= 0) (getConstant n)
->     nonsense (IsPos  n) = maybe False (< 0)  (getConstant n)
+>     nonsense :: Predicate -> Bool
+>     nonsense (P c m n) = maybe False (nonc c) (getConstant =<< normaliseNum (m - n))
+>     
+>     nonc EL = (/= 0)
+>     nonc LE = (> 0)
+>     nonc LS = (>= 0)
+>     nonc GE = (< 0)
+>     nonc GR = (<= 0)
 
 
-
-> toFormula :: [NormalPredicate] -> NormalPredicate ->
+> toFormula :: [Predicate] -> Predicate ->
 >                  Contextual t P.Formula
 > toFormula hs p = do
 >     g <- getContext
->     let hs'  = map (expandPred g . reifyPred) hs
->         p'   = expandPred g (reifyPred p)
+>     let hs'  = map (expandPred g) hs
+>         p'   = expandPred g p
 >     case trivialPred p' of
 >         Just True   -> return P.TRUE
 >         Just False  -> return P.FALSE
@@ -294,7 +290,8 @@ status.
 > instSigma s (Just r)  = subsCheck s r >> return r
 
 > checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
-> checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e), text "has type", nest 2 (prettyHigh (fogTy s))]) $ do
+> checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e),
+>                                   text "has type", nest 2 (prettyHigh (fogTy s))]) $ do
 >     unifySolveConstraints
 >     modifyContext (:< Layer GenMark)
 >     s' <- specialise s
@@ -311,12 +308,16 @@ status.
 >     getNames (g :< A (a := _)) = Ex a : getNames g
 >     getNames (g :< e) = getNames g
 
->     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry NormalPredicate] ->
+>     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry Predicate] ->
 >                 Contextual () Context
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
->     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish " ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
+>     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish "
+>                                         ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
 >     help as (g :< A (a := Fixed)) h
->         | a <? h     = erk $ "checkSigma help: fixed variable " ++ renderMe (fogSysVar a) ++ " occurred illegally in " ++ intercalate ", " (map (either show (renderMe . fogSysPred . reifyPred)) h)
+>         | a <? h     = erk $ "checkSigma help: fixed variable "
+>                                 ++ renderMe (fogSysVar a)
+>                                 ++ " occurred illegally in "
+>                                 ++ intercalate ", " (map (either show (renderMe . fogSysPred)) h)
 >         | otherwise  = help (delete (Ex a) as) g h
 >     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
 >     help as (g :< A a) h                   = help as g (Left (TE a) : h)
@@ -328,13 +329,13 @@ status.
 >     toEnt (Left (TE a)) = A a
 >     toEnt (Right p)  = Constraint Wanted p
 
->     rep :: Var () k -> Type k -> Either AnyTyEntry NormalPredicate
->                -> Either AnyTyEntry NormalPredicate
+>     rep :: Var () k -> Type k -> Either AnyTyEntry Predicate
+>                -> Either AnyTyEntry Predicate
 >     rep a t (Left (TE (b := Some d))) =
 >         Left (TE (b := Some (replaceTy a t d)))
 >     rep a t (Left e) = Left e
 >     rep a@(FVar _ KNum) t (Right p) =
->         Right (substNormPred a (normalNum "TypeCheck.rep" t) p)
+>         Right (fmap (replaceTy a t) p)
 >     rep a t (Right p) = Right p
 
 
@@ -585,8 +586,7 @@ status.
 >   where
 >     learnPred p = do
 >       p <- checkPredKind Pi B0 p
->       np <- normalisePredCx p
->       modifyContext (:< Constraint Given np)
+>       modifyContext (:< Constraint Given p)
 >       return p
 > checkGuard (ExpGuard t)   = ExpGuard <$> checkRho tyBool t
 
@@ -652,7 +652,7 @@ status.
 >                       else Exists
 >     am <- fresh (UserVar Pi) a KNum d
 >     modifyContext (:< A (b := Some (TyVar am + TyInt k)))
->     modifyContext (:< Constraint Given (IsPos (mkVar am)))
+>     modifyContext (:< Constraint Given (0 %<=% TyVar am))
 >     aty      <- instS (UserVar All) Given Fixed t'
 >     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
 >       bindUn am ex vs xs $ \ ex' vs' xs' ->

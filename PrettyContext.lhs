@@ -18,9 +18,9 @@
 >   pretty (A a)                  _ = prettyHigh a
 >   pretty (Layer l)              _ = prettyHigh l
 >   pretty (Constraint Given p)   _ =
->       braces (prettyHigh $ fogSysPred $ reifyPred p) <> text "!!"
+>       braces (prettyHigh $ fogSysPred p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ =
->       braces (prettyHigh $ fogSysPred $ reifyPred p) <> text "??"
+>       braces (prettyHigh $ fogSysPred p) <> text "??"
 
 > instance Pretty (TyDef k) where
 >   pretty Hole      _ = text "?"

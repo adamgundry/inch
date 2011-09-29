@@ -39,7 +39,7 @@
 >             modifyContext (:< xD)
 >         B0 -> erk $ "onTop: ran out of context"
 
-> onTopNum ::  (NormalPredicate, Contextual t ()) ->
+> onTopNum ::  (Predicate, Contextual t ()) ->
 >                  (TyEntry KNum -> Contextual t Extension) ->
 >                  Contextual t ()
 > onTopNum (p, m) f = do
@@ -62,7 +62,7 @@
 >             modifyContext $ (:< xD) . (:< Constraint Wanted p)
 > -}
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
->     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred $ reifyPred p)) $
+>     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred p)) $
 >               erk $ "onTopNum: ran out of context"
 
 > restore :: Contextual t Extension
@@ -123,47 +123,6 @@
 >         (unifyTypes f1 f2 >> unifyTypes s1 s2)
 >         (erk "Mismatched kinds")
 
-
-
-> {-
-> unifyTypes (Bind b1 a1 k1 t1) (Bind b2 a2 k2 t2) | b1 == b2 && k1 == k2 = do
->     nm <- fresh (a1 ++ "_u") (Fixed ::: KNum)
->     unifyTypes (unbind nm t1) (unbind nm t2)
-> -}
-
-> {-
-> unifyTypes (Bind b a k ty) tau = do
->     nm <- fresh a (Hole ::: k)
->     unifyTypes (unbind nm ty) tau
-
-> unifyTypes tau (Bind b a k ty) = do
->     nm <- fresh a (Hole ::: k)
->     unifyTypes tau (unbind nm ty)
-> -}
-
-
-> -- unifyTypes (Qual p s) (Qual q t) | p == q = unifyTypes s t
-
-> {-
-> unifyTypes (Qual p t) tau = do
->     p <- normalisePred p
->     modifyContext (:< Constraint Wanted p)
->     unifyTypes t tau
-> unifyTypes tau (Qual p t) = do
->     p <- normalisePred p
->     modifyContext (:< Constraint Wanted p)
->     unifyTypes tau t
-> -}
-
-> {-
-> unifyTypes (Qual p s) (Qual q t) = do
->     unifyTypes s t
->     g <- getContext
->     let p' = expandPred g p
->         q' = expandPred g q
->     unless (p' == q') $ erk $ "Mismatched qualifiers " ++ renderMe p' ++ " and " ++ renderMe q'
-> -}
-
 > unifyTypes (TyVar alpha)  tau            = startSolve alpha tau
 > unifyTypes tau            (TyVar alpha)  = startSolve alpha tau
 > unifyTypes tau            upsilon        = errCannotUnify (fogTy tau) (fogTy upsilon)
@@ -193,18 +152,20 @@
 >             return (reifyNum (mkVar v +~ l), (v, TyVar v, reifyNum r) :> F0)
 
 
+
 > rigidHull :: [Var () KNum] -> Type k ->
 >                  Contextual t (Type k, Fwd FlexConstraint)
-> rigidHull as (TyVar a)    = case varKind a of
->                              KNum  -> makeFlex as (TyVar a)
->                              _     -> return (TyVar a, F0)
+
+> rigidHull as t | KNum <- getTyKind t = makeFlex as t
+
+> rigidHull as (TyVar a)    = return (TyVar a, F0)
 > rigidHull as (TyCon c k)  = return (TyCon c k, F0)
+> rigidHull as Arr          = return (Arr, F0)
+> rigidHull as (BinOp o)    = return (BinOp o, F0)
+
 > rigidHull as (TyApp f s)  = do  (f',  xs  )  <- rigidHull as f
 >                                 (s',  ys  )  <- rigidHull as s
 >                                 return (TyApp f' s', xs <.> ys)
-> rigidHull as Arr          = return (Arr, F0)
-> rigidHull as (BinOp o)    = return (BinOp o, F0)
-> rigidHull as t | KNum <- getTyKind t = makeFlex as t
 
 > rigidHull as (Bind b x KNum t) = do
 >     v <- freshVar SysVar "_magical" KNum
@@ -223,6 +184,7 @@ This is wrong, I think:
 > rigidHull as b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
 
 
+
 > pairsToSuffix :: Fwd FlexConstraint -> Suffix
 > pairsToSuffix = fmap (TE . (:= Hole) . fst3)
 >   where fst3 (a, _, _) = a
@@ -237,7 +199,9 @@ This is wrong, I think:
 >   \ (gamma := d) -> let occurs = gamma <? tau || gamma <? _Xi in
 >     hetEq gamma alpha
 >       (if occurs
->          then erk $ "Occurrence of " ++ fogSysVar alpha ++ " detected when unifying with " ++ show (prettyHigh (fogTy tau))
+>          then erk $ "Occurrence of " ++ fogSysVar alpha
+>                     ++ " detected when unifying with "
+>                     ++ renderMe (fogTy tau)
 >          else case d of
 >            Hole          ->  replace (_Xi <.> (TE (alpha := Some tau) :> F0))
 >            Some upsilon  ->  modifyContext (<>< _Xi)
@@ -264,13 +228,13 @@ This is wrong, I think:
 > unifyNum m          n = unifyZero F0 =<< normaliseNumCx (m - n)
 
 > constrainZero :: NormalNum -> Contextual t ()
-> constrainZero e = modifyContext (:< Constraint Wanted (IsZero e))
+> constrainZero e = modifyContext (:< Constraint Wanted (reifyNum e %==% 0))
 
 > unifyZero :: Suffix -> NormalNum -> Contextual t ()
 > unifyZero _Psi e
 >   | isZero e      = return ()
->   | isConstant e  = errCannotUnify (fogTy (numToType e)) (STyInt 0)
->   | otherwise     = onTopNum (IsZero e, modifyContext (<>< _Psi)) $
+>   | isConstant e  = errCannotUnify (fogTy (reifyNum e)) (STyInt 0)
+>   | otherwise     = onTopNum (reifyNum e %==% TyInt 0, modifyContext (<>< _Psi)) $
 >     \ (alpha := d) ->
 >     case lookupVariable alpha e of
 >       Nothing -> unifyZero _Psi e >> restore
@@ -282,13 +246,13 @@ This is wrong, I think:
 >             restore
 >         Hole  | n `dividesCoeffs` e -> do
 >                   modifyContext (<>< _Psi)
->                   replace $ TE (alpha := Some (numToType (pivot (alpha, n) e))) :> F0
+>                   replace $ TE (alpha := Some (reifyNum (pivot (alpha, n) e))) :> F0
 >               | (alpha, n) `notMaxCoeff` e -> do
 >                   modifyContext (<>< _Psi)
 >                   error "this really ought to be tested"
 >                   (p, beta) <- insertFreshVar $ pivot (alpha, n) e
 >                   unifyZero (TE (beta := Hole) :> F0) $ substNExp (alpha, n) p e
->                   replace $ TE (alpha := Some (numToType p)) :> F0
+>                   replace $ TE (alpha := Some (reifyNum p)) :> F0
 >         _  | numVariables e > fwdLength _Psi + 1 -> do
 >                          unifyZero (TE (alpha := d) :> _Psi) e
 >                          replace F0
@@ -297,18 +261,6 @@ This is wrong, I think:
 >                modifyContext (<>< _Psi)
 >                constrainZero e
 >                replace F0
-
-
-> subsPreds a dn = map (substNormPred a dn)
-
-> findRewrite :: Var () KNum -> [NormalPredicate] -> Maybe NormalNum
-> findRewrite a hs = listToMaybe $ catMaybes $ map (toRewrite a) hs
-
-> toRewrite :: Var () KNum -> NormalPredicate -> Maybe NormalNum
-> toRewrite a (IsZero n) = case lookupVariable a n of
->     Just i | i `dividesCoeffs` n  -> Just $ pivot (a, i) n
->     _                             -> Nothing
-> toRewrite a (IsPos _) = Nothing
 
 
 
