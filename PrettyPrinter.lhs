@@ -71,6 +71,9 @@
 > instance Pretty ty => Pretty (Pred ty) where
 >     pretty (P c n m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> pretty c ArgSize <+> pretty m ArgSize
+>     pretty (Op o m n t) = wrapDoc AppSize $ 
+>         pretty o ArgSize <+> pretty m ArgSize <+> pretty n ArgSize
+>         <+> pretty EL ArgSize <+> pretty t ArgSize
 
 > instance Pretty Comparator where
 >     pretty LS _ = text "<"
@@ -80,7 +83,8 @@
 >     pretty EL _ = text "~"
 
 > instance Pretty BinOp where
->     pretty o _ = text $ "(" ++ binOpString o ++ ")"
+>     pretty o _ | binOpInfix o  = text $ "(" ++ binOpString o ++ ")"
+>                | otherwise     = text $ binOpString o
 
 > instance Pretty SType where
 >     pretty (STyVar v)                  = const $ text v
@@ -96,10 +100,10 @@
 >     pretty (SBinOp o)       = pretty o
  
 > infixName :: SType -> Maybe String
-> infixName SArr              = Just "->"
-> infixName (SBinOp o)        = Just (binOpString o)
-> infixName (STyCon ('(':s))  = Just (init s)
-> infixName _                 = Nothing
+> infixName SArr                       = Just "->"
+> infixName (SBinOp o) | binOpInfix o  = Just (binOpString o)
+> infixName (STyCon ('(':s))           = Just (init s)
+> infixName _                          = Nothing
 
 
 > prettyBind :: Binder -> Bwd (String, SKind) ->

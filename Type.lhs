@@ -8,6 +8,7 @@
 > import Control.Applicative
 > import Data.Foldable hiding (notElem)
 > import Data.Maybe
+> import qualified Data.Monoid as M
 > import Data.Traversable
 
 > import Kit
@@ -38,8 +39,16 @@
 > data Comparator = LE | LS | GE | GR | EL
 >   deriving (Eq, Show)
 
+> compFun :: Comparator -> Integer -> Integer -> Bool
+> compFun LE = (<=)
+> compFun LS = (<)
+> compFun GE = (>=)
+> compFun GR = (>)
+> compFun EL = (==)
+
 > data Pred ty where
->     P  :: Comparator -> ty -> ty -> Pred ty
+>     P   :: Comparator -> ty -> ty -> Pred ty
+>     Op  :: BinOp -> ty -> ty -> ty -> Pred ty
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > (%==%), (%<=%), (%<%), (%>=%), (%>%) :: forall ty. ty -> ty -> Pred ty
@@ -50,22 +59,38 @@
 > (%>%)   = P GR
 
 
-> data BinOp = Plus | Minus | Times
+> data BinOp = Plus | Minus | Times | Min | Max | Mod
 >   deriving (Eq, Show)
 
 > {-
 >     Pow    :: NumOp (KNum :-> KNum :-> KNum)
->     Min    :: NumOp (KNum :-> KNum :-> KNum)
->     Max    :: NumOp (KNum :-> KNum :-> KNum)
 >     Abs    :: NumOp (KNum :-> KNum)
 >     Sig    :: NumOp (KNum :-> KNum)
->     Mod    :: NumOp (KNum :-> KNum :-> KNum)
 > -}
+
+> binOpFun :: BinOp -> Integer -> Integer -> Integer
+> binOpFun Plus   = (+)
+> binOpFun Minus  = (-)
+> binOpFun Times  = (*)
+> binOpFun Min    = min
+> binOpFun Max    = max
+> binOpFun Mod    = mod
 
 > binOpString :: BinOp -> String
 > binOpString Plus   = "+"
 > binOpString Minus  = "-"
 > binOpString Times  = "*"
+> binOpString Min    = "min"
+> binOpString Max    = "max"
+> binOpString Mod    = "mod"
+
+> binOpInfix :: BinOp -> Bool
+> binOpInfix Plus   = True
+> binOpInfix Minus  = True
+> binOpInfix Times  = True
+> binOpInfix Min    = False
+> binOpInfix Max    = False
+> binOpInfix Mod    = False
 
 
 
@@ -88,13 +113,26 @@
 > instance FV (Ty a k) where
 >     a <? t = elemTy (wkClosedVar a) t
 
+> instance HetEq (Ty a) where
+>     hetEq (TyVar a)       (TyVar b)           yes no = hetEq a b yes no
+>     hetEq (TyCon c k)     (TyCon c' k')       yes no | c == c'    = hetEq k k' yes no
+>     hetEq (TyApp f s)     (TyApp f' s')       yes no = hetEq f f' (hetEq s s' yes no) no
+>     hetEq (Bind b x k t)  (Bind b' x' k' t')  yes no | b == b' && x == x' = hetEq k k' (hetEq t t' yes no) no
+>     hetEq (Qual p t)      (Qual p' t')        yes no | p == p'    = hetEq t t' yes no
+>     hetEq Arr             Arr                 yes _  = yes
+>     hetEq (TyInt i)       (TyInt j)           yes no  | i == j     = yes
+>     hetEq (BinOp o)       (BinOp o')          yes no  | o == o'    = yes
+>     hetEq _               _                   _   no = no
+
 > instance Eq (Ty a k) where
+>     (==) = (=?=)
 
 > instance Num (Ty a KNum) where
 >     fromInteger  = TyInt
 >     (+)          = TyApp . TyApp (BinOp Plus)
 >     (*)          = TyApp . TyApp (BinOp Times)
 >     (-)          = TyApp . TyApp (BinOp Minus)
+
 
 > data SType where
 >     STyVar  :: String                              ->  SType
@@ -174,6 +212,8 @@
 > getTyKind (Bind _ _ __ _)  = KSet
 > getTyKind Arr              = KSet :-> KSet :-> KSet
 
+
+
 > (-->) :: forall a. Ty a KSet -> Ty a KSet -> Ty a KSet
 > s --> t = TyApp (TyApp Arr s) t
 > infixr 5 -->
@@ -182,12 +222,18 @@
 > s ---> t = STyApp (STyApp SArr s) t
 > infixr 5 --->
 
-
 > (/->) :: Foldable f => f (Ty a KSet) -> Ty a KSet -> Ty a KSet
 > ts /-> t = Data.Foldable.foldr (-->) t ts
 
 > (/=>) :: Foldable f => f (Pred (Ty a KNum)) -> Ty a KSet -> Ty a KSet
 > ps /=> t = Data.Foldable.foldr Qual t ps
+
+> binOp :: BinOp -> Ty a KNum -> Ty a KNum -> Ty a KNum
+> binOp o m n = TyApp (TyApp (BinOp o) m) n
+
+> sbinOp :: BinOp -> SType -> SType -> SType
+> sbinOp o m n = STyApp (STyApp (SBinOp o) m) n
+
 
 
 > swapTop :: Ty ((a, k), l) x -> Ty ((a, l), k) x
@@ -276,7 +322,7 @@
 >     (Times,  n',          TyInt 1)     -> n'
 >     (Times,  n',          TyInt (-1))  -> negate n'
 >     (Times,  n',          m')          -> n' * m'
->     (Minus,  n',          m')          -> n' - m'
+>     (o,      n',          m')          -> TyApp (TyApp (BinOp o) n') m'
 > simplifyNum t = t
 
 
@@ -305,7 +351,7 @@
 > elemTy a (TyVar b)       = a =?= b
 > elemTy a (TyApp f s)     = elemTy a f || elemTy a s
 > elemTy a (Bind b x k t)  = elemTy (wkVar a) t
-> elemTy a (Qual (P _ m n) t) = elemTy a m || elemTy a n || elemTy a t 
+> elemTy a (Qual p t)      = elemPred a p || elemTy a t 
 > elemTy a _               = False
 
 > elemTarget :: Var a k -> Ty a l -> Bool
@@ -315,7 +361,7 @@
 > elemTarget a t                         = elemTy a t
 
 > elemPred :: Var a k -> Pred (Ty a KNum) -> Bool
-> elemPred a (P c m n) = elemTy a m || elemTy a n
+> elemPred a = M.getAny . foldMap (M.Any . elemTy a)
 
 
 
@@ -325,35 +371,38 @@
 > reifyPred :: Pred (NormNum (NVar a)) -> Pred (Ty a KNum)
 > reifyPred = fmap reifyNum
 
-> normaliseNum :: Ord a => Ty a KNum -> Maybe (NormNum (NVar a))
-> normaliseNum (TyInt i)     = return $ mkConstant i
-> normaliseNum (TyVar a)     = return $ mkVar a
-> normaliseNum (TyApp (TyApp (BinOp o) m) n) = do
->     m <- normaliseNum m
->     n <- normaliseNum n
->     case o of
->         Plus   -> return $ m +~ n
->         Minus  -> return $ m -~ n
->         Times  -> case (getConstant m, getConstant n) of
->             (Just i, Just j) -> return $ mkConstant (i * j)
->             (Just i,   Nothing)  -> return $ i *~ n
->             (Nothing,  Just j)   -> return $ j *~ m
->             (Nothing,  Nothing)  -> Nothing
-> normaliseNum t = Nothing
+> normaliseNum ::  (Ord a, Monad m) => (Ty a KNum -> m (NVar a)) ->
+>                      Ty a KNum -> m (NormNum (NVar a))
+> normaliseNum mf (TyInt i)     = return $ mkConstant i
+> normaliseNum mf (TyVar a)     = return $ mkVar a
+> normaliseNum mf t@(TyApp (TyApp (BinOp o) m) n) = do
+>     m' <- normaliseNum mf m
+>     n' <- normaliseNum mf n
+>     case (o, getConstant m', getConstant n') of
+>         (o,      Just i,   Just j)   -> return $ mkConstant (binOpFun o i j)
+>         (Plus,   _,        _)        -> return $ m' +~ n'
+>         (Minus,  _,        _)        -> return $ m' -~ n'
+>         (Times,  Just i,   Nothing)  -> return $ i *~ n'
+>         (Times,  Nothing,  Just j)   -> return $ j *~ m'
+>         _                            -> return . mkVar =<< mf t
+> normaliseNum mf t = return . mkVar =<< mf t
 
-> normalisePred ::  Ord a => Pred (Ty a KNum) -> Maybe (Pred (NormNum (NVar a)))
-> normalisePred = traverse normaliseNum 
+> normaliseNumMaybe :: Ord a => Ty a KNum -> Maybe (NormNum (NVar a))
+> normaliseNumMaybe = normaliseNum (\ _ -> Nothing)
 
+> normalisePred ::  (Ord a, Applicative m, Monad m) =>
+>                       (Ty a KNum -> m (NVar a)) ->
+>                       Pred (Ty a KNum) -> m (Pred (NormNum (NVar a)))
+> normalisePred mf = traverse (normaliseNum mf)
+
+> normalisePredMaybe :: Ord a => Pred (Ty a KNum) -> Maybe (Pred (NormNum (NVar a)))
+> normalisePredMaybe = normalisePred (\ _ -> Nothing)
 
 > trivialPred :: Ord a => Pred (Ty a KNum) -> Maybe Bool
-> trivialPred (P c m n) = comp c <$> (getConstant =<< normaliseNum (m - n))
->   where
->     comp EL = (== 0)
->     comp LE = (<= 0)
->     comp LS = (< 0)
->     comp GE = (>= 0)
->     comp GR = (> 0)
-
+> trivialPred (P c m n)     = compFun c 0 <$> (getConstant =<< normaliseNumMaybe (n - m))
+> trivialPred (Op o m n t)  = (== 0) <$> (getConstant =<< normaliseNumMaybe (binOp o m n - t))
 
 > instance FV ty => FV (Pred ty) where
->     a <? (P _ m n) = a <? m || a <? n
+>     a <? P _ m n     = a <? m || a <? n
+>     a <? Op o m n t  = a <? m || a <? n || a <? t
+        

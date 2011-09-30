@@ -15,6 +15,7 @@
 > import Text.PrettyPrint.HughesPJ
 
 > import qualified Data.Integer.Presburger as P
+> import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)))
 
 > import BwdFwd
 > import Kind 
@@ -128,7 +129,7 @@ status.
 
 >     solveFor :: Var () KNum -> [Predicate] -> Maybe NormalNum
 >     solveFor a = getFirst . foldMap (First . solveForVar a) . mapMaybe f
->       where  f (P EL m n)  = normaliseNum (m - n)
+>       where  f (P EL m n)  = normaliseNumMaybe (m - n)
 >              f _           = Nothing
 
 
@@ -206,7 +207,7 @@ status.
 >                                 >> want ps
 >
 >     nonsense :: Predicate -> Bool
->     nonsense (P c m n) = maybe False (nonc c) (getConstant =<< normaliseNum (m - n))
+>     nonsense (P c m n) = maybe False (nonc c) (getConstant =<< normaliseNumMaybe (m - n))
 >     
 >     nonc EL = (/= 0)
 >     nonc LE = (> 0)
@@ -222,32 +223,38 @@ status.
 >     let hs'  = map (expandPred g) hs
 >         p'   = expandPred g p
 >     case trivialPred p' of
->         Just True   -> return P.TRUE
->         Just False  -> return P.FALSE
+>         Just True   -> return TRUE
+>         Just False  -> return FALSE
 >         Nothing     -> do
 >             let f = convert (expandContext g) [] hs' p'
->             -- mtrace $ "toFormula [" ++ intercalate "," (map (renderMe . fogNormPred) hs) ++ "] => (" ++ renderMe (fogNormPred p) ++ ")"
+>             -- mtrace $ "toFormula [" ++ intercalate "," (map (renderMe . fogPred) hs) ++ "] => (" ++ renderMe (fogPred p) ++ ")"
 >             -- mtrace (show f)
 >             return f
 >   where
 >     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
 >                    Predicate -> P.Formula
 >     convert B0 axs hs p =
->         foldr (P.:/\:) P.TRUE (map (predToFormula axs) hs)
->             P.:=>: predToFormula axs p
->     convert (g :< A (a@(FVar _ KNum) := _)) axs hs p | any (elemPred a) (p:hs) = 
+>         foldr (:/\:) TRUE (map (predToFormula True axs) hs)
+>             :=>: predToFormula False axs p
+>     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (elemPred a) (p:hs) = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
                 
->     predToFormula :: [(Var () KNum, P.Term)] -> Predicate -> P.Formula
->     predToFormula xs (P c m n) = compToFormula c (numToTerm xs m) (numToTerm xs n)
+>     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> Predicate -> P.Formula
+>     predToFormula hyp xs (P c m n) = compToFormula c (numToTerm xs m) (numToTerm xs n)
+>     predToFormula hyp xs (Op Max m n t) = ((m' :=: t') :/\: (m' :>=: n'))
+>                                           :\/: ((n' :=: t') :/\: (n' :>=: m'))
+>       where m' = numToTerm xs m
+>             n' = numToTerm xs n
+>             t' = numToTerm xs t
+>     predToFormula hyp xs (Op _ _ _ _) = if hyp then TRUE else FALSE
 
 >     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
->     compToFormula EL  = (P.:=:)
->     compToFormula LE  = (P.:<=:)
->     compToFormula LS  = (P.:<:)
->     compToFormula GE  = (P.:>=:)
->     compToFormula GR  = (P.:>:)
+>     compToFormula EL  = (:=:)
+>     compToFormula LE  = (:<=:)
+>     compToFormula LS  = (:<:)
+>     compToFormula GE  = (:>=:)
+>     compToFormula GR  = (:>:)
 
 >     opToTerm :: BinOp -> P.Term -> P.Term -> P.Term
 >     opToTerm Plus   = (+)

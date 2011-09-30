@@ -101,7 +101,9 @@ Types
 >     ]
 >     tyAtom
 
-> tyAtom     =    tyVar
+> tyAtom     =    reserved "min" *> (sbinOp Min <$> tyAtom <*> tyAtom)
+>            <|>  reserved "max" *> (sbinOp Max <$> tyAtom <*> tyAtom)
+>            <|>  tyVar
 >            <|>  tyCon
 >            <|>  STyInt <$> try integer
 >            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp)

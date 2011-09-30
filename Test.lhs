@@ -359,6 +359,11 @@
 >   ("noo x = case x of\n  True -> False\n  False -> 3", False) :
 >   (vecDecl ++ "f x = case x of\n  Nil -> Nil\n  Cons x xs -> Cons x xs", False) :
 >   ("f :: forall (t :: Num -> *)(m n :: Num) . t (m * n) -> t (m * n)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *) . f (min 2 3) -> f (min 3 2)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *) . f (min 2 3) -> f (min 1 2)\nf x = x", False) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (max a 3) -> f (max a 3)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (max a 3) -> f (max 3 a)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (max a 3) -> f (max 2 a)\nf x = x", False) :
 >   []
 
 
