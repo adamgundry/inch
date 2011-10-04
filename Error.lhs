@@ -30,7 +30,7 @@
 >     NonNumericVar      :: Ex (Var ()) -> Err
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
->     UnifyNumFixed      :: NVar () -> Ty () KNum -> Err
+>     UnifyNumFixed      :: Var () KNum -> Ty () KNum -> Err
 >     CannotDeduce       :: [Predicate] -> [Predicate] -> Err
 >     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Alternative ()] -> Err
 >     ImpossiblePred     :: Predicate -> Err
@@ -60,13 +60,13 @@
 >     pretty (UnifyFixed (Ex a) (Ex t))  _ = text "Cannot unify fixed variable" <+> prettySysVar a <+> text "with" <+> prettyHigh (fogSysTy t)
 >     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTy n) <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred qs)
 >                                                 ,  text "in empty context"
 >                                                 ]
 >     pretty (CannotDeduce hs qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred qs)
 >                                                 ,  text "from hypotheses"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub hs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred hs)
 >                                                 ]
 >     pretty (BadExistential (Ex a) (Ex t) as)  _ = sep  [  text "Illegal existential"
 >                                                        <+> prettySysVar a

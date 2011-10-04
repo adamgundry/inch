@@ -199,23 +199,26 @@
 > wkClosedVar (FVar a k) = FVar a k
 
 > class FV t where
->     (<?) :: Var () k -> t -> Bool
+>     (<<?) :: [Var () k] -> t -> Bool
+
+> (<?) :: FV t => Var () k -> t -> Bool
+> a <? t = [a] <<? t
 
 > instance FV (Var () l) where
->     (<?) = (=?=)
+>     xs <<? v = any (v =?=) xs
 
 > instance FV a => FV [a] where
->     a <? as = any (a <?) as
+>     xs <<? as = any (xs <<?) as
 
 > instance FV a => FV (Fwd a) where
->     a <? t = any (a <?) t
+>     xs <<? t = any (xs <<?) t
 
 > instance FV a => FV (Bwd a) where
->     a <? t = any (a <?) t
+>     xs <<? t = any (xs <<?) t
 
 > instance (FV a, FV b) => FV (Either a b) where
->     alpha <? Left x = alpha <? x
->     alpha <? Right y = alpha <? y
+>     xs <<? Left x   = xs <<? x
+>     xs <<? Right y  = xs <<? y
 
 
 

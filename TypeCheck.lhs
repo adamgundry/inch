@@ -20,7 +20,7 @@
 > import BwdFwd
 > import Kind 
 > import Type
-> import Num
+> import TyNum
 > import Syntax
 > import Context
 > import Unify
@@ -128,8 +128,8 @@ status.
 >         help g (replaceTy a d t, map (replaceTypes a d) ps) hs'
 
 >     solveFor :: Var () KNum -> [Predicate] -> Maybe NormalNum
->     solveFor a = getFirst . foldMap (First . solveForVar a) . mapMaybe f
->       where  f (P EL m n)  = normaliseNumMaybe (m - n)
+>     solveFor a = getFirst . foldMap (First . maybeSolveFor a) . mapMaybe f
+>       where  f (P EL m n)  = Just (normaliseNum (m - n))
 >              f _           = Nothing
 
 
@@ -207,7 +207,7 @@ status.
 >                                 >> want ps
 >
 >     nonsense :: Predicate -> Bool
->     nonsense (P c m n) = maybe False (nonc c) (getConstant =<< normaliseNumMaybe (m - n))
+>     nonsense (P c m n) = maybe False (nonc c) (getConstant (normaliseNum (m - n)))
 >     
 >     nonc EL = (/= 0)
 >     nonc LE = (> 0)
@@ -233,21 +233,24 @@ status.
 >   where
 >     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
 >                    Predicate -> P.Formula
->     convert B0 axs hs p =
->         foldr (:/\:) TRUE (map (predToFormula True axs) hs)
->             :=>: predToFormula False axs p
+>     convert B0 axs hs p = maybe FALSE id $ do
+>         hs  <- traverse (predToFormula True axs) hs
+>         p   <- predToFormula False axs p
+>         return $ foldr (:/\:) TRUE hs :=>: p
 >     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (elemPred a) (p:hs) = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
                 
->     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> Predicate -> P.Formula
->     predToFormula hyp xs (P c m n) = compToFormula c (numToTerm xs m) (numToTerm xs n)
->     predToFormula hyp xs (Op Max m n t) = ((m' :=: t') :/\: (m' :>=: n'))
->                                           :\/: ((n' :=: t') :/\: (n' :>=: m'))
->       where m' = numToTerm xs m
->             n' = numToTerm xs n
->             t' = numToTerm xs t
->     predToFormula hyp xs (Op _ _ _ _) = if hyp then TRUE else FALSE
+>     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> Predicate -> Maybe P.Formula
+>     predToFormula hyp xs (P c m n) =
+>         compToFormula c <$> numToTerm xs m <*> numToTerm xs n
+>     predToFormula hyp xs (Op Max m n t) = do
+>         m' <- numToTerm xs m
+>         n' <- numToTerm xs n
+>         t' <- numToTerm xs t
+>         return $ ((m' :=: t') :/\: (m' :>=: n'))
+>                    :\/: ((n' :=: t') :/\: (n' :>=: m'))
+>     predToFormula hyp xs (Op _ _ _ _) = return $ if hyp then TRUE else FALSE
 
 >     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
 >     compToFormula EL  = (:=:)
@@ -256,16 +259,18 @@ status.
 >     compToFormula GE  = (:>=:)
 >     compToFormula GR  = (:>:)
 
->     opToTerm :: BinOp -> P.Term -> P.Term -> P.Term
->     opToTerm Plus   = (+)
->     opToTerm Minus  = (-)
->     opToTerm Times  = (*)
+>     opToTerm :: BinOp -> Maybe (P.Term -> P.Term -> P.Term)
+>     opToTerm Plus   = Just (+)
+>     opToTerm Minus  = Just (-)
+>     opToTerm Times  = Just (*)
+>     opToTerm _      = Nothing
 
->     numToTerm :: [(Var () KNum, P.Term)] -> Type KNum -> P.Term
->     numToTerm xs (TyInt i)  = fromInteger i
->     numToTerm xs (TyVar t)  = fromJust (lookup t xs)
->     numToTerm xs (TyApp (TyApp (BinOp o) m) n) = opToTerm o (numToTerm xs m) (numToTerm xs n)
->     numToTerm xs t = error $ "numToTerm: bad " ++ show t
+>     numToTerm :: [(Var () KNum, P.Term)] -> Type KNum -> Maybe P.Term
+>     numToTerm xs (TyInt i)  = return $ fromInteger i
+>     numToTerm xs (TyVar t)  = lookup t xs
+>     numToTerm xs (TyApp (TyApp (BinOp o) m) n) =
+>         opToTerm o <*> numToTerm xs m <*> numToTerm xs n
+>     numToTerm xs t = Nothing
 
 
 

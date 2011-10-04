@@ -15,9 +15,9 @@
 > import BwdFwd
 > import Kind
 > import Type
+> import TyNum
 > import Syntax
 > import Context
-> import Num
 > import Kit
 > import Error
 > import PrettyPrinter
@@ -142,14 +142,14 @@
 > makeFlex :: [Var () KNum] -> Type KNum ->
 >                 Contextual t (Type KNum, Fwd FlexConstraint)
 > makeFlex as n = do
->     n' <- normaliseNumCx n
->     let (l, r) = partitionNExp as n'
+>     let n' = normaliseNum n
+>     let (l, r) = partitionNum as n'
 >     if isZero r
 >         then return (n, F0)
 >         else do
 >             v <- freshVar SysVar "_i" KNum
 >             -- traceContext $ "mF\nas = " ++ show as ++ "\nn = " ++ show n ++ "\nl' = " ++ show l' ++ "\nr' = " ++ show r'
->             return (reifyNum (mkVar v +~ l), (v, TyVar v, reifyNum r) :> F0)
+>             return (reifyNum (mkVar v + l), (v, TyVar v, reifyNum r) :> F0)
 
 
 
@@ -224,44 +224,39 @@ This is wrong, I think:
 
 
 > unifyNum :: TypeNum -> TypeNum -> Contextual t ()
-> unifyNum (TyInt 0)  n = unifyZero F0 =<< normaliseNumCx n
-> unifyNum m          n = unifyZero F0 =<< normaliseNumCx (m - n)
+> unifyNum (TyInt 0)  n = unifyZero F0 (normaliseNum n)
+> unifyNum m          n = unifyZero F0 (normaliseNum (m - n))
 
 > constrainZero :: NormalNum -> Contextual t ()
 > constrainZero e = modifyContext (:< Constraint Wanted (reifyNum e %==% 0))
 
 > unifyZero :: Suffix -> NormalNum -> Contextual t ()
-> unifyZero _Psi e
->   | isZero e      = return ()
->   | isConstant e  = errCannotUnify (fogTy (reifyNum e)) (STyInt 0)
->   | otherwise     = onTopNum (reifyNum e %==% TyInt 0, modifyContext (<>< _Psi)) $
->     \ (alpha := d) ->
->     case lookupVariable alpha e of
->       Nothing -> unifyZero _Psi e >> restore
->       Just n -> case d of
->         Some x -> do
->             modifyContext (<>< _Psi)
->             x' <- normaliseNumCx x
->             unifyZero F0 (substNum alpha x' e)
->             restore
->         Hole  | n `dividesCoeffs` e -> do
->                   modifyContext (<>< _Psi)
->                   replace $ TE (alpha := Some (reifyNum (pivot (alpha, n) e))) :> F0
->               | (alpha, n) `notMaxCoeff` e -> do
->                   modifyContext (<>< _Psi)
->                   error "this really ought to be tested"
->                   (p, beta) <- insertFreshVar $ pivot (alpha, n) e
->                   unifyZero (TE (beta := Hole) :> F0) $ substNExp (alpha, n) p e
->                   replace $ TE (alpha := Some (reifyNum p)) :> F0
+> unifyZero _Psi e = case getConstant e of
+>   Just k  | k == 0     -> return ()
+>           | otherwise  -> errCannotUnify (fogTy (reifyNum e)) (STyInt 0)
+>   Nothing              -> onTopNum (reifyNum e %==% 0, modifyContext (<>< _Psi)) $
+>     \ (a := d) ->
+>       case (d, solveFor a e) of
+>         (Some t,  _)           -> do  modifyContext (<>< _Psi)
+>                                       unifyZero F0 (substNum a t e)
+>                                       restore
+>         (_,       Absent)      -> do  unifyZero _Psi e
+>                                       restore
+>         (Hole,    Solve n)     -> do  modifyContext (<>< _Psi)
+>                                       replace $ TE (a := Some (reifyNum n)) :> F0
+>         (Hole,    Simplify n)  -> do  modifyContext (<>< _Psi)
+>                                       (p, b) <- insertFreshVar n
+>                                       let p' = reifyNum p
+>                                       unifyZero (TE (b := Hole) :> F0) $ substNum a p' e
+>                                       replace $ TE (a := Some p') :> F0
 >         _  | numVariables e > fwdLength _Psi + 1 -> do
->                          unifyZero (TE (alpha := d) :> _Psi) e
+>                          unifyZero (TE (a := d) :> _Psi) e
 >                          replace F0
 >            | otherwise -> do
->                modifyContext (:< A (alpha := d))
+>                modifyContext (:< A (a := d))
 >                modifyContext (<>< _Psi)
 >                constrainZero e
 >                replace F0
-
 
 
 We can insert a fresh variable into a unit thus:
@@ -269,7 +264,7 @@ We can insert a fresh variable into a unit thus:
 > insertFreshVar :: NormalNum -> Contextual t (NormalNum, Var () KNum)
 > insertFreshVar d = do
 >     v <- freshVar SysVar "_beta" KNum
->     return (d +~ mkVar v, v)
+>     return (d + mkVar v, v)
 
 
 

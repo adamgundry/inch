@@ -6,24 +6,16 @@
 > module Type where
 
 > import Control.Applicative
-> import Data.Foldable hiding (notElem)
+> import Data.Foldable hiding (notElem, any)
 > import Data.Maybe
 > import qualified Data.Monoid as M
 > import Data.Traversable
+> import Data.List
 
 > import Kit
 > import Kind
-> import Num
-
-
-> type NVar a     = Var a KNum
-> type NormNum a  = NExp a
-> type NormalNum        = NormNum (NVar ())
-> type SNormalNum       = NormNum String
 
 > type Predicate        = Pred TypeNum
-> type NormalPredicate  = Pred NormalNum
-
 > type SPredicate       = Pred SType
 
 > type TyNum a  = Ty a KNum
@@ -110,9 +102,6 @@
 
 > deriving instance Show (Ty a k)
 
-> instance FV (Ty a k) where
->     a <? t = elemTy (wkClosedVar a) t
-
 > instance HetEq (Ty a) where
 >     hetEq (TyVar a)       (TyVar b)           yes no = hetEq a b yes no
 >     hetEq (TyCon c k)     (TyCon c' k')       yes no | c == c'    = hetEq k k' yes no
@@ -186,15 +175,6 @@
 > fogPred' :: (forall l. Var a l -> String) -> [String] -> Pred (Ty a KNum) -> SPredicate
 > fogPred' g xs = fmap (fogTy' g xs)
 
-
-> fogNormNum :: NormalNum -> SNormalNum
-> fogNormNum = fogNormNum' fogVar
-
-> fogSysNormNum :: NormalNum -> SNormalNum
-> fogSysNormNum = fogNormNum' fogSysVar
-
-> fogNormNum' :: (NVar a -> String) -> NormNum (NVar a) -> SNormalNum
-> fogNormNum' = fmap
 
 
 
@@ -295,7 +275,7 @@
 >   where
 >     simplifyTy' :: Ord a => [Pred (Ty a KNum)] -> Ty a KSet -> Ty a KSet
 >     simplifyTy' ps (Qual p t)      = simplifyTy' (simplifyPred p:ps) t
->     simplifyTy' ps t               = {-nub-} ps /=> t
+>     simplifyTy' ps t               = nub ps /=> t
 
 > simplifyPred :: Pred (Ty a KNum) -> Pred (Ty a KNum)
 > simplifyPred (P c m n) = case (simplifyNum m, simplifyNum n) of
@@ -347,12 +327,15 @@
 > targets _                         _ = False
 
 
+> elemsTy :: [Var a k] -> Ty a l -> Bool
+> elemsTy as (TyVar b)       = any (b =?=) as
+> elemsTy as (TyApp f s)     = elemsTy as f || elemsTy as s
+> elemsTy as (Bind b x k t)  = elemsTy (map wkVar as) t
+> elemsTy as (Qual p t)      = elemsPred as p || elemsTy as t 
+> elemsTy as _               = False
+
 > elemTy :: Var a k -> Ty a l -> Bool
-> elemTy a (TyVar b)       = a =?= b
-> elemTy a (TyApp f s)     = elemTy a f || elemTy a s
-> elemTy a (Bind b x k t)  = elemTy (wkVar a) t
-> elemTy a (Qual p t)      = elemPred a p || elemTy a t 
-> elemTy a _               = False
+> elemTy a t = elemsTy [a] t
 
 > elemTarget :: Var a k -> Ty a l -> Bool
 > elemTarget a (TyApp (TyApp Arr _) ty)  = elemTarget a ty
@@ -360,49 +343,14 @@
 > elemTarget a (Bind Pi x k ty)          = elemTarget (wkVar a) ty
 > elemTarget a t                         = elemTy a t
 
+> elemsPred :: [Var a k] -> Pred (Ty a KNum) -> Bool
+> elemsPred as = M.getAny . foldMap (M.Any . elemsTy as)
+
 > elemPred :: Var a k -> Pred (Ty a KNum) -> Bool
-> elemPred a = M.getAny . foldMap (M.Any . elemTy a)
-
-
-
-> reifyNum :: NormNum (NVar a) -> Ty a KNum
-> reifyNum = simplifyNum . foldNExp (\ k n m -> TyInt k * TyVar n + m) TyInt
-
-> reifyPred :: Pred (NormNum (NVar a)) -> Pred (Ty a KNum)
-> reifyPred = fmap reifyNum
-
-> normaliseNum ::  (Ord a, Monad m) => (Ty a KNum -> m (NVar a)) ->
->                      Ty a KNum -> m (NormNum (NVar a))
-> normaliseNum mf (TyInt i)     = return $ mkConstant i
-> normaliseNum mf (TyVar a)     = return $ mkVar a
-> normaliseNum mf t@(TyApp (TyApp (BinOp o) m) n) = do
->     m' <- normaliseNum mf m
->     n' <- normaliseNum mf n
->     case (o, getConstant m', getConstant n') of
->         (o,      Just i,   Just j)   -> return $ mkConstant (binOpFun o i j)
->         (Plus,   _,        _)        -> return $ m' +~ n'
->         (Minus,  _,        _)        -> return $ m' -~ n'
->         (Times,  Just i,   Nothing)  -> return $ i *~ n'
->         (Times,  Nothing,  Just j)   -> return $ j *~ m'
->         _                            -> return . mkVar =<< mf t
-> normaliseNum mf t = return . mkVar =<< mf t
-
-> normaliseNumMaybe :: Ord a => Ty a KNum -> Maybe (NormNum (NVar a))
-> normaliseNumMaybe = normaliseNum (\ _ -> Nothing)
-
-> normalisePred ::  (Ord a, Applicative m, Monad m) =>
->                       (Ty a KNum -> m (NVar a)) ->
->                       Pred (Ty a KNum) -> m (Pred (NormNum (NVar a)))
-> normalisePred mf = traverse (normaliseNum mf)
-
-> normalisePredMaybe :: Ord a => Pred (Ty a KNum) -> Maybe (Pred (NormNum (NVar a)))
-> normalisePredMaybe = normalisePred (\ _ -> Nothing)
-
-> trivialPred :: Ord a => Pred (Ty a KNum) -> Maybe Bool
-> trivialPred (P c m n)     = compFun c 0 <$> (getConstant =<< normaliseNumMaybe (n - m))
-> trivialPred (Op o m n t)  = (== 0) <$> (getConstant =<< normaliseNumMaybe (binOp o m n - t))
+> elemPred a p = elemsPred [a] p
 
 > instance FV ty => FV (Pred ty) where
->     a <? P _ m n     = a <? m || a <? n
->     a <? Op o m n t  = a <? m || a <? n || a <? t
+>     (<<?) as = M.getAny . foldMap (M.Any . (as <<?))
         
+> instance FV (Ty a k) where
+>     xs <<? t = elemsTy (map wkClosedVar xs) t

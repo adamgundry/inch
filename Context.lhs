@@ -14,6 +14,7 @@
 > import BwdFwd
 > import Kind
 > import Type
+> import TyNum
 > import Syntax hiding (Alternative)
 > import Kit
 > import Error
@@ -49,14 +50,14 @@
 >   deriving Show
 
 > instance FV (TyDef k) where
->     a <? Some t = a <? t
->     a <? _      = False
+>     as <<? Some t = as <<? t
+>     as <<? _      = False
 
 
 > type TyEntry k = Var () k := TyDef k
 
 > instance FV (TyEntry k) where
->     a <? (b := d) = a <? b || a <? d
+>     as <<? (b := d) = as <<? b || as <<? d
 
 
 > data AnyTyEntry where
@@ -66,7 +67,7 @@
 >     show (TE t) = show t
 
 > instance FV AnyTyEntry where
->     a <? TE t = a <? t
+>     as <<? TE t = as <<? t
 
 
 
@@ -368,17 +369,3 @@ Bindings
 >     lookIn [] = Nothing
 >     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
 >                               | otherwise  = lookIn bs
-
-
-
-
-> normaliseNumCx :: Type KNum -> Contextual t NormalNum
-> normaliseNumCx = normaliseNum $ \ t -> case t of
->     TyApp (TyApp (BinOp o) m) n -> do
->         a <- fresh SysVar "_nunc" KNum Hole
->         modifyContext (:< Constraint Wanted (Op o m n (TyVar a)))
->         return a
->     _ -> erk $ "normaliseNumCx: cannot normalise " ++ renderMe (fogSysTy t)
-
-> normalisePredCx ::  Predicate -> Contextual t NormalPredicate
-> normalisePredCx = traverse normaliseNumCx

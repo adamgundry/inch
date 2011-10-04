@@ -78,8 +78,11 @@
 > replaceTypes :: TravTypes t => Var () k -> Type k -> t OK a -> t OK a
 > replaceTypes a t = mapTypes (replaceTy (wkClosedVar a) (wkClosedTy t))
 
+> elemsTypes :: TravTypes t => [Var () k] -> t OK a -> Bool
+> elemsTypes as t = getAny $ getConst $ travTypes (Const . Any . (as <<?)) t
+
 > elemTypes :: TravTypes t => Var () k -> t OK a -> Bool
-> elemTypes a t = getAny $ getConst $ travTypes (Const . Any . (a <?)) t
+> elemTypes a t = elemsTypes [a] t
 
 > bindTm v = renameTypes (bindVar v)
 > unbindTm v = renameTypes (unbindVar v)
@@ -248,7 +251,7 @@
 >             (renameTypes (extRenaming ex ex' g) t)
 
 > instance FV (Alt OK a) where
->     (<?) = elemTypes
+>     (<<?) = elemsTypes
 
 > isVarAlt :: Alt s a -> Bool
 > isVarAlt (Alt P0 Nothing _)  = True
@@ -283,7 +286,7 @@
 >             (renameTypes (extRenaming ex ex' g) t)
 
 > instance FV (CaseAlt OK a) where
->     (<?) = elemTypes
+>     (<<?) = elemsTypes
 
 
 
