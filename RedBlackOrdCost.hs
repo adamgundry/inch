@@ -64,6 +64,36 @@ data RBT :: Num -> Num -> * where
 empty = RBT E
 
 
+
+
+
+data T where
+  T :: forall (n :: Nat)(lo hi :: Num) . Tree lo hi 0 n -> T
+
+emptyT = T E
+
+rbtToT :: forall (lo hi :: Num) . RBT lo hi -> T
+rbtToT (RBT t) = T t
+
+insertT :: pi (x :: Num) . T -> T
+insertT {x} (T t) = rbtToT (insert {x} (RBT (weakling {x} t)))
+
+deleteT :: pi (x :: Num) . T -> T
+deleteT {x} (T t) = rbtToT (delete {x} (RBT (weakling {x} t)))
+
+weakling :: forall (lo hi c n :: Num) . pi (x :: Num) . Tree lo hi c n ->
+              Tree (min lo (x-1)) (max hi (x+1)) c n
+weakling {x} t = wkTree2 t
+
+wkTree2 :: forall (lo lo' hi hi' c n :: Num) . lo' <= lo, hi <= hi' =>
+               Tree lo hi c n -> Tree lo' hi' c n
+wkTree2 E            = E
+wkTree2 (TR {x} l r) = TR {x} (wkTree2 l) (wkTree2 r)
+wkTree2 (TB {x} l r) = TB {x} (wkTree2 l) (wkTree2 r)
+
+
+
+
 data TreeZip :: Num -> Num -> Num -> Num -> Num -> Num -> Num -> Num -> Num -> * where
   Root  :: forall (lo hi c :: Num)(n :: Nat) . TreeZip lo hi c n lo hi c n 0
   ZRL   :: forall (rlo rhi lo hi rc :: Num)(rn n d :: Nat) . pi (x :: Num) .
