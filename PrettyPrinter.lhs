@@ -145,6 +145,8 @@
 >     pretty (Case t as)  = wrapDoc maxBound $ text "case" <+> prettyHigh t <+> text "of" <++> vcatPretty as
 >     pretty (t :? ty)    = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
+>     pretty (TmUnOp o)   = pretty o
+>     pretty (TmBinOp o)  = pretty o
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t

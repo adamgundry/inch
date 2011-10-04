@@ -108,6 +108,8 @@
 >     Let      :: [Decl s a] -> Tm s a      -> Tm s a
 >     Case     :: Tm s a -> [CaseAlt s a]   -> Tm s a
 >     (:?)     :: Tm s a -> ATy s a KSet    -> Tm s a
+>     TmUnOp   :: UnOp                      -> Tm s a
+>     TmBinOp  :: BinOp                     -> Tm s a
 
 > deriving instance Eq (Tm RAW a)
 
@@ -133,6 +135,8 @@
 >                                    (fogTypes g t)
 >     fogTypes g (Case t as)   = Case (fogTypes g t) (map (fogTypes g) as)
 >     fogTypes g (t :? ty)     = fogTypes g t :? fogTy' g [] ty
+>     fogTypes g (TmUnOp o)    = TmUnOp o
+>     fogTypes g (TmBinOp o)   = TmBinOp o
 
 >     renameTypes g (TmVar x)     = TmVar x
 >     renameTypes g (TmCon c)     = TmCon c
@@ -145,6 +149,8 @@
 >                                    (renameTypes g t)
 >     renameTypes g (Case t as)   = Case (renameTypes g t) (map (renameTypes g) as)
 >     renameTypes g (t :? ty)     = renameTypes g t :? renameTy g ty
+>     renameTypes g (TmUnOp o)    = TmUnOp o
+>     renameTypes g (TmBinOp o)   = TmBinOp o
 
 
 > data Decl s a where
