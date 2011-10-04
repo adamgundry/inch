@@ -19,6 +19,9 @@
 > type NormPred a       = Pred (NormNum a)
 > type NormalPredicate  = Pred NormalNum
 
+> instance FV NormalNum where
+>     as <<? NN _ bs us = as <<? map fst bs || as <<? map fst us
+
 > instance Num (NormNum a) where
 >     fromInteger i             = NN i [] []
 >
@@ -157,17 +160,6 @@
 >     t        -~ TyInt 0   = t
 >     t        -~ t'        = t - t'
 
-> {-
-> reifyNum (NN i as ts) = TyInt i +++ foldr (\ (a, k) t -> (k *** TyVar a) +++ t) 0 as +++ foldr (\ (t, k) t' -> (k *** t) +++ t') 0 ts
->   where
->     TyInt 0  +++ t        = t
->     t        +++ TyInt 0  = t
->     t        +++ t'       = t + t'
-
->     0        *** t        = TyInt 0
->     1        *** t        = t
->     k        *** t        = TyInt k * t
-> -}
 
 > reifyPred :: Pred (NormNum a) -> Pred (Ty a KNum)
 > reifyPred = fmap reifyNum
@@ -190,6 +182,9 @@
 > normalisePred = fmap normaliseNum
 
 
-> trivialPred :: Ord a => Pred (Ty a KNum) -> Maybe Bool
-> trivialPred (P c m n)     = compFun c 0 <$> (getConstant (normaliseNum (n - m)))
-> trivialPred (Op o m n t)  = (== 0) <$> (getConstant (normaliseNum (binOp o m n - t)))
+> trivialPred :: Ord a => NormPred a -> Maybe Bool
+> trivialPred (P c m n)     = compFun c 0 <$> (getConstant (n - m))
+> trivialPred (Op o m n t)  = (== 0) <$> (getConstant (nbinOp o m n - t))
+
+> nbinOp :: BinOp -> NormNum a -> NormNum a -> NormNum a
+> nbinOp o m n = NN 0 [] [(binOp o (reifyNum m) (reifyNum n), 1)]

@@ -220,8 +220,8 @@ status.
 >                  Contextual t P.Formula
 > toFormula hs p = do
 >     g <- getContext
->     let hs'  = map (expandPred g) hs
->         p'   = expandPred g p
+>     let hs'  = map (normalisePred . expandPred g) hs
+>         p'   = normalisePred $ expandPred g p
 >     case trivialPred p' of
 >         Just True   -> return TRUE
 >         Just False  -> return FALSE
@@ -231,26 +231,52 @@ status.
 >             -- mtrace (show f)
 >             return f
 >   where
->     convert :: Context -> [(Var () KNum, P.Term)] -> [Predicate] ->
->                    Predicate -> P.Formula
->     convert B0 axs hs p = maybe FALSE id $ do
->         hs  <- traverse (predToFormula True axs) hs
->         p   <- predToFormula False axs p
->         return $ foldr (:/\:) TRUE hs :=>: p
->     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (elemPred a) (p:hs) = 
+>     convert :: Context -> [(Var () KNum, P.Term)] -> [NormalPredicate] ->
+>                    NormalPredicate -> P.Formula
+>     convert B0 axs hs p =
+>         let hs'  = map (predToFormula True axs) hs
+>             p'   = predToFormula False axs p
+>         in foldr (:/\:) TRUE hs' :=>: p'
+>     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (a <?) (p:hs) = 
 >         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
 >     convert (g :< _) axs hs p = convert g axs hs p
                 
->     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> Predicate -> Maybe P.Formula
->     predToFormula hyp xs (P c m n) =
->         compToFormula c <$> numToTerm xs m <*> numToTerm xs n
->     predToFormula hyp xs (Op Max m n t) = do
->         m' <- numToTerm xs m
->         n' <- numToTerm xs n
->         t' <- numToTerm xs t
->         return $ ((m' :=: t') :/\: (m' :>=: n'))
+>     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate -> P.Formula
+>     predToFormula hyp axs (P c m n) = linearise axs m $ \ m' ->
+>                                       linearise axs n $ \ n' ->
+>                                           compToFormula c m' n'
+
+> {-
+>     predToFormula hyp xs (Op Max m n t) =
+>         let m'  = numToTerm xs m
+>             n'  = numToTerm xs n
+>             t'  = numToTerm xs t
+>         in ((m' :=: t') :/\: (m' :>=: n'))
 >                    :\/: ((n' :=: t') :/\: (n' :>=: m'))
->     predToFormula hyp xs (Op _ _ _ _) = return $ if hyp then TRUE else FALSE
+>     predToFormula hyp _ (Op _ _ _ _) = if hyp then TRUE else FALSE
+> -}
+
+>     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
+>                     (P.Term -> P.Formula) -> P.Formula
+>     linearise axs (NN i bs ts) f = help x ts
+>       where
+>         x = fromInteger i + foldr (\ (b, k) t -> fromJust (lookup b axs) * fromInteger k + t) 0 bs
+>
+>         help :: P.Term -> [(Type KNum, Integer)] -> P.Formula
+>         help t []      = f t
+>         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linOp o =
+>             linearise axs (normaliseNum m) $ \ m' ->
+>             linearise axs (normaliseNum n) $ \ n' ->
+>                 P.Exists $ \ y ->
+>                     lo m' n' y :/\: help (t + fromInteger k * y) ks
+>         help t ((_, k):ks)  = P.Forall (\ y -> help (t + fromInteger k * y) ks)
+
+>     linOp :: BinOp -> Maybe (P.Term -> P.Term -> P.Term -> P.Formula)
+>     linOp Max = Just $ \ m n y -> ((m :=: y) :/\: (m :>=: n))
+>                                       :\/: ((n :=: y) :/\: (n :>=: m))
+>     linOp Min = Just $ \ m n y -> ((m :=: y) :/\: (m :<=: n))
+>                                       :\/: ((n :=: y) :/\: (n :<=: m))
+>     linOp _ = Nothing
 
 >     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
 >     compToFormula EL  = (:=:)
@@ -264,14 +290,6 @@ status.
 >     opToTerm Minus  = Just (-)
 >     opToTerm Times  = Just (*)
 >     opToTerm _      = Nothing
-
->     numToTerm :: [(Var () KNum, P.Term)] -> Type KNum -> Maybe P.Term
->     numToTerm xs (TyInt i)  = return $ fromInteger i
->     numToTerm xs (TyVar t)  = lookup t xs
->     numToTerm xs (TyApp (TyApp (BinOp o) m) n) =
->         opToTerm o <*> numToTerm xs m <*> numToTerm xs n
->     numToTerm xs t = Nothing
-
 
 
 
