@@ -264,19 +264,30 @@ status.
 >
 >         help :: P.Term -> [(Type KNum, Integer)] -> P.Formula
 >         help t []      = f t
->         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linOp o =
+>         help t ((TyApp (UnOp o) m, k):ks) | Just lo <- linUnOp o =
+>             linearise axs (normaliseNum m) $ \ m' ->
+>                 P.Exists $ \ y ->
+>                     lo m' y :/\: help (t + fromInteger k * y) ks
+>         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linBinOp o =
 >             linearise axs (normaliseNum m) $ \ m' ->
 >             linearise axs (normaliseNum n) $ \ n' ->
 >                 P.Exists $ \ y ->
 >                     lo m' n' y :/\: help (t + fromInteger k * y) ks
 >         help t ((_, k):ks)  = P.Forall (\ y -> help (t + fromInteger k * y) ks)
 
->     linOp :: BinOp -> Maybe (P.Term -> P.Term -> P.Term -> P.Formula)
->     linOp Max = Just $ \ m n y -> ((m :=: y) :/\: (m :>=: n))
+>     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
+>     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))
+>                                       :\/: ((m :=: -y) :/\: (m :<: 0))
+>     linUnOp Signum = Just $ \ m y -> ((y :=: 1) :/\: (m :>: 0))
+>                                       :\/: ((y :=: -1) :/\: (m :<: 0))
+>                                       :\/: ((y :=: 0) :/\: (m :=: 0))
+
+>     linBinOp :: BinOp -> Maybe (P.Term -> P.Term -> P.Term -> P.Formula)
+>     linBinOp Max = Just $ \ m n y -> ((m :=: y) :/\: (m :>=: n))
 >                                       :\/: ((n :=: y) :/\: (n :>=: m))
->     linOp Min = Just $ \ m n y -> ((m :=: y) :/\: (m :<=: n))
+>     linBinOp Min = Just $ \ m n y -> ((m :=: y) :/\: (m :<=: n))
 >                                       :\/: ((n :=: y) :/\: (n :<=: m))
->     linOp _ = Nothing
+>     linBinOp _ = Nothing
 
 >     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
 >     compToFormula EL  = (:=:)
@@ -284,12 +295,6 @@ status.
 >     compToFormula LS  = (:<:)
 >     compToFormula GE  = (:>=:)
 >     compToFormula GR  = (:>:)
-
->     opToTerm :: BinOp -> Maybe (P.Term -> P.Term -> P.Term)
->     opToTerm Plus   = Just (+)
->     opToTerm Minus  = Just (-)
->     opToTerm Times  = Just (*)
->     opToTerm _      = Nothing
 
 
 

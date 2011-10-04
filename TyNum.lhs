@@ -167,6 +167,10 @@
 > normaliseNum :: Ty a KNum -> NormNum a
 > normaliseNum (TyInt i)     = fromInteger i
 > normaliseNum (TyVar a)     = mkVar a
+> normaliseNum t@(TyApp (UnOp o) m) = 
+>     case getConstant (normaliseNum m) of
+>         Just i   -> fromInteger (unOpFun o i)
+>         Nothing  -> NN 0 [] [(t, 1)]
 > normaliseNum t@(TyApp (TyApp (BinOp o) m) n) =
 >     let m' = normaliseNum m
 >         n' = normaliseNum n

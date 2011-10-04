@@ -124,6 +124,8 @@
 >   "x = case f 1 3 of\n     Baz boo | womble -> boo boo" :
 >   "x = case f 1 3 of\n     Baz boo | {2 ~ 3} -> boo boo" :
 >   "x = case a of\n  Wim -> Wam\n          Wom " :
+>   "f :: g (abs (-6))\nf = f" :
+>   "f :: g (signum (a + b))\nf = f" :
 >   []
 
 
@@ -369,6 +371,9 @@
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (min a b) -> f (min b a)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *)(a b c :: Num) . a <= b, b <= c => f (min a b) -> f (min c a)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *)(a b c :: Num) . a >= b, b <= c => f (min a b) -> f (min c a)\nf x = x", False) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . a > 99 => f a -> f (abs a)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *) . f (signum (-6)) -> f (abs (-1) - 2)\nf x = x", True) :
+>   ("f :: pi (m :: Num) . Integer\nf {m} = f {abs m}", True) :
 >   []
 
 

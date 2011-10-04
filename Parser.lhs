@@ -101,14 +101,19 @@ Types
 >     ]
 >     tyAtom
 
-> tyAtom     =    reserved "min" *> (sbinOp Min <$> tyAtom <*> tyAtom)
->            <|>  reserved "max" *> (sbinOp Max <$> tyAtom <*> tyAtom)
+> tyAtom     =    prefixBinOp <*> tyAtom <*> tyAtom
+>            <|>  prefixUnOp <*> tyAtom
 >            <|>  tyVar
 >            <|>  tyCon
 >            <|>  STyInt <$> try integer
 >            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp)
 >                        <|> tyExp)
 
+> prefixBinOp  =    reserved "min" *> pure (sbinOp Min)
+>              <|>  reserved "max" *> pure (sbinOp Max)
+
+> prefixUnOp   =    reserved "abs" *> pure (sunOp Abs)
+>              <|>  reserved "signum" *> pure (sunOp Signum)
 
 > binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
 > sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc

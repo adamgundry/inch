@@ -33,6 +33,7 @@
 >         _ -> errKindNotArrow (fogKind k)
 > inferKind b g SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
 > inferKind b g (STyInt i)   = return $ TK (TyInt i) KNum
+> inferKind b g (SUnOp o)    = return $ TK (UnOp o) (KNum :-> KNum)
 > inferKind b g (SBinOp o)   = return $ TK (BinOp o) (KNum :-> KNum :-> KNum)
 > inferKind b g (SBind c a SKNat t)  = do
 >     v <- freshVar (UserVar All) a KNum

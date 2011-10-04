@@ -51,13 +51,23 @@
 > (%>%)   = P GR
 
 
-> data BinOp = Plus | Minus | Times | Min | Max | Mod
+> data UnOp = Abs | Signum
+>   deriving (Eq, Show)
+
+> unOpFun :: UnOp -> Integer -> Integer
+> unOpFun Abs     = abs
+> unOpFun Signum  = signum
+
+> unOpString :: UnOp -> String
+> unOpString Abs     = "abs"
+> unOpString Signum  = "signum"
+
+
+> data BinOp = Plus | Minus | Times | Min | Max
 >   deriving (Eq, Show)
 
 > {-
->     Pow    :: NumOp (KNum :-> KNum :-> KNum)
->     Abs    :: NumOp (KNum :-> KNum)
->     Sig    :: NumOp (KNum :-> KNum)
+>     Mod | Pow
 > -}
 
 > binOpFun :: BinOp -> Integer -> Integer -> Integer
@@ -66,7 +76,6 @@
 > binOpFun Times  = (*)
 > binOpFun Min    = min
 > binOpFun Max    = max
-> binOpFun Mod    = mod
 
 > binOpString :: BinOp -> String
 > binOpString Plus   = "+"
@@ -74,7 +83,6 @@
 > binOpString Times  = "*"
 > binOpString Min    = "min"
 > binOpString Max    = "max"
-> binOpString Mod    = "mod"
 
 > binOpInfix :: BinOp -> Bool
 > binOpInfix Plus   = True
@@ -82,7 +90,6 @@
 > binOpInfix Times  = True
 > binOpInfix Min    = False
 > binOpInfix Max    = False
-> binOpInfix Mod    = False
 
 
 
@@ -98,6 +105,7 @@
 >     Qual   :: Pred (Ty a KNum) -> Ty a KSet                 -> Ty a KSet
 >     Arr    :: Ty a (KSet :-> KSet :-> KSet)
 >     TyInt  :: Integer                                       -> Ty a KNum
+>     UnOp   :: UnOp                                          -> Ty a (KNum :-> KNum)
 >     BinOp  :: BinOp                                         -> Ty a (KNum :-> KNum :-> KNum)
 
 > deriving instance Show (Ty a k)
@@ -110,6 +118,7 @@
 >     hetEq (Qual p t)      (Qual p' t')        yes no | p == p'    = hetEq t t' yes no
 >     hetEq Arr             Arr                 yes _  = yes
 >     hetEq (TyInt i)       (TyInt j)           yes no  | i == j     = yes
+>     hetEq (UnOp o)        (UnOp o')           yes no  | o == o'    = yes
 >     hetEq (BinOp o)       (BinOp o')          yes no  | o == o'    = yes
 >     hetEq _               _                   _   no = no
 
@@ -118,9 +127,11 @@
 
 > instance Num (Ty a KNum) where
 >     fromInteger  = TyInt
->     (+)          = TyApp . TyApp (BinOp Plus)
->     (*)          = TyApp . TyApp (BinOp Times)
->     (-)          = TyApp . TyApp (BinOp Minus)
+>     (+)          = binOp Plus
+>     (*)          = binOp Times
+>     (-)          = binOp Minus
+>     abs          = unOp Abs
+>     signum       = unOp Signum
 
 
 > data SType where
@@ -131,14 +142,17 @@
 >     SQual   :: Pred SType -> SType                 ->  SType
 >     SArr    ::                                         SType
 >     STyInt  :: Integer                             ->  SType
+>     SUnOp   :: UnOp                                ->  SType
 >     SBinOp  :: BinOp                               ->  SType
 >   deriving (Eq, Show)
 
 > instance Num SType where
 >     fromInteger  = STyInt
->     (+)          = STyApp . STyApp (SBinOp Plus)
->     (*)          = STyApp . STyApp (SBinOp Times)
->     (-)          = STyApp . STyApp (SBinOp Minus)
+>     (+)          = sbinOp Plus
+>     (*)          = sbinOp Times
+>     (-)          = sbinOp Minus
+>     abs          = sunOp Abs
+>     signum       = sunOp Signum
 
 
 
@@ -155,6 +169,7 @@
 > fogTy' g xs  (Qual p t)      = SQual (fmap (fogTy' g xs) p) (fogTy' g xs t)
 > fogTy' _ _   Arr             = SArr
 > fogTy' _ _   (TyInt i)       = STyInt i
+> fogTy' _ _   (UnOp o)        = SUnOp o
 > fogTy' _ _   (BinOp o)       = SBinOp o
 > fogTy' g xs  (Bind b x k t)  =
 >     SBind b y (fogKind k) (fogTy' (wkn g) (y:xs) t)
@@ -187,6 +202,7 @@
 > getTyKind (TyCon c k)      = k
 > getTyKind (TyApp f s)      = case getTyKind f of _ :-> k -> k
 > getTyKind (TyInt _)        = KNum
+> getTyKind (UnOp _)         = KNum :-> KNum
 > getTyKind (BinOp _)        = KNum :-> KNum :-> KNum
 > getTyKind (Qual _ _)       = KSet
 > getTyKind (Bind _ _ __ _)  = KSet
@@ -208,11 +224,17 @@
 > (/=>) :: Foldable f => f (Pred (Ty a KNum)) -> Ty a KSet -> Ty a KSet
 > ps /=> t = Data.Foldable.foldr Qual t ps
 
+> unOp :: UnOp -> Ty a KNum -> Ty a KNum
+> unOp o = TyApp (UnOp o)
+
 > binOp :: BinOp -> Ty a KNum -> Ty a KNum -> Ty a KNum
-> binOp o m n = TyApp (TyApp (BinOp o) m) n
+> binOp o = TyApp . TyApp (BinOp o)
+
+> sunOp :: UnOp -> SType -> SType
+> sunOp o = STyApp (SUnOp o)
 
 > sbinOp :: BinOp -> SType -> SType -> SType
-> sbinOp o m n = STyApp (STyApp (SBinOp o) m) n
+> sbinOp o = STyApp . STyApp (SBinOp o)
 
 
 
@@ -232,6 +254,7 @@
 > renameTy g (Qual p t)      = Qual (fmap (renameTy g) p) (renameTy g t)
 > renameTy g Arr             = Arr
 > renameTy g (TyInt i)       = TyInt i
+> renameTy g (UnOp o)        = UnOp o
 > renameTy g (BinOp o)       = BinOp o
 
 > bindTy :: Var a k -> Ty a l -> Ty (a, k) l
@@ -259,6 +282,7 @@
 > substTy g (Qual p t)      = Qual (fmap (substTy g) p) (substTy g t)
 > substTy g Arr             = Arr
 > substTy g (TyInt i)       = TyInt i
+> substTy g (UnOp o)        = UnOp o
 > substTy g (BinOp o)       = BinOp o
 
 > replaceTy :: forall a k l. Var a k -> Ty a k -> Ty a l -> Ty a l

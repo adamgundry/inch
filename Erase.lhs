@@ -95,6 +95,7 @@ This is a bit of a hack; we really ought to extend the syntax of terms:
 > numToTm :: Type KNum -> Term ()
 > numToTm (TyVar x)  = TmCon . fogVar $ x
 > numToTm (TyInt i)  = TmInt i
+> numToTm (TyApp (UnOp o) m) = TmApp (TmCon (renderMe o)) (numToTm m)
 > numToTm (TyApp (TyApp (BinOp o) m) n) = TmApp (TmApp (TmCon (renderMe o)) (numToTm m)) (numToTm n)
 
 

@@ -82,6 +82,9 @@
 >     pretty GE _ = text ">="
 >     pretty EL _ = text "~"
 
+> instance Pretty UnOp where
+>     pretty o _ = text $ unOpString o
+
 > instance Pretty BinOp where
 >     pretty o _ | binOpInfix o  = text $ "(" ++ binOpString o ++ ")"
 >                | otherwise     = text $ binOpString o
@@ -98,6 +101,7 @@
 >     pretty SArr             = const $ text "(->)"
 >     pretty (STyInt k)       = const $ integer k
 >     pretty (SBinOp o)       = pretty o
+>     pretty (SUnOp o)        = pretty o
  
 > infixName :: SType -> Maybe String
 > infixName SArr                       = Just "->"
