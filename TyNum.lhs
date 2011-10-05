@@ -179,6 +179,9 @@
 >         (Plus,   _,        _)       -> m' + n'
 >         (Minus,  _,        _)       -> m' - n'
 >         (Times,  _,        _)       -> m' * n'
+>         (Pow,    _,        Just j)  -> m' ^ j
+>         (Pow,    Just 1,   _)       -> 1
+>         (Pow,    Just 0,   _)       -> 0
 >         _                           -> NN 0 [] [(t, 1)]
 > normaliseNum t = NN 0 [] [(t, 1)]
 

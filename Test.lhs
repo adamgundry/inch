@@ -126,6 +126,7 @@
 >   "x = case a of\n  Wim -> Wam\n          Wom " :
 >   "f :: g (abs (-6))\nf = f" :
 >   "f :: g (signum (a + b))\nf = f" :
+>   "f :: g (a ^ b + 3 ^ 2)\nf = f" :
 >   []
 
 
@@ -374,6 +375,13 @@
 >   ("f :: forall (f :: Num -> *)(a :: Num) . a > 99 => f a -> f (abs a)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *) . f (signum (-6)) -> f (abs (-1) - 2)\nf x = x", True) :
 >   ("f :: pi (m :: Num) . Integer\nf {m} = f {abs m}", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (2 ^ a) -> f (2 ^ a)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (a ^ 2) -> f (a ^ 3)\nf x = x", False) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (3 ^ 2) -> f 9\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . a ~ b => f (a ^ 1) -> f b\nf x = x", True) :
+>   ("f :: pi (m :: Num) . Integer\nf {m} = f {6 ^ 2 + m}", True) :
+>   (vec2Decl ++ "append :: forall a (m n :: Num) . Vec a m -> Vec a n -> Vec a (m+n)\nappend = append\nflat :: forall a (m n :: Num). Vec (Vec a m) n -> Vec a (m*n)\nflat Nil = Nil\nflat (Cons xs xss) = append xs (flat xss)", True) :
+
 >   []
 
 

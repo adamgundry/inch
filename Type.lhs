@@ -63,7 +63,7 @@
 > unOpString Signum  = "signum"
 
 
-> data BinOp = Plus | Minus | Times | Min | Max
+> data BinOp = Plus | Minus | Times | Pow | Min | Max
 >   deriving (Eq, Show)
 
 > {-
@@ -74,6 +74,7 @@
 > binOpFun Plus   = (+)
 > binOpFun Minus  = (-)
 > binOpFun Times  = (*)
+> binOpFun Pow    = (^)
 > binOpFun Min    = min
 > binOpFun Max    = max
 
@@ -81,6 +82,7 @@
 > binOpString Plus   = "+"
 > binOpString Minus  = "-"
 > binOpString Times  = "*"
+> binOpString Pow    = "^"
 > binOpString Min    = "min"
 > binOpString Max    = "max"
 
@@ -88,6 +90,7 @@
 > binOpInfix Plus   = True
 > binOpInfix Minus  = True
 > binOpInfix Times  = True
+> binOpInfix Pow    = True
 > binOpInfix Min    = False
 > binOpInfix Max    = False
 

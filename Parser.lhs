@@ -96,6 +96,7 @@ Types
 > tyBob = buildExpressionParser
 >     [
 >         [prefix "-" negate],
+>         [binary "^" (sbinOp Pow) AssocLeft],
 >         [binary "*" (*) AssocLeft],    
 >         [binary "+" (+) AssocLeft, sbinary "-" (-) AssocLeft]
 >     ]
