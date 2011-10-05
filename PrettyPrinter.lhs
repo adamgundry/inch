@@ -134,8 +134,10 @@
 > instance Pretty (STerm a) where
 >     pretty (TmVar x)    = const $ text x
 >     pretty (TmCon s)    = const $ text s
->     pretty (TmInt k)    = wrapDoc (if k < 0 then ArrSize else AppSize) $
+>     pretty (TmInt k)    = wrapDoc (if k < 0 then ArrSize else minBound) $
 >                               integer k
+>     pretty (TmApp (TmApp (TmBinOp o) m) n) | binOpInfix o =
+>         wrapDoc AppSize $ pretty m ArgSize <+> text (binOpString o) <+> pretty n ArgSize
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
