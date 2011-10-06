@@ -22,8 +22,8 @@
 
 > data Extension = Restore | Replace Suffix
 
-> onTop ::  (forall k. TyEntry k -> Contextual t Extension)
->             -> Contextual t ()
+> onTop ::  (forall k. TyEntry k -> Contextual Extension)
+>             -> Contextual ()
 > onTop f = do
 >     c <- getContext
 >     case c of
@@ -36,9 +36,9 @@
 >             modifyContext (:< xD)
 >         B0 -> erk $ "onTop: ran out of context"
 
-> onTopNum ::  (Predicate, Contextual t ()) ->
->                  (TyEntry KNum -> Contextual t Extension) ->
->                  Contextual t ()
+> onTopNum ::  (Predicate, Contextual ()) ->
+>                  (TyEntry KNum -> Contextual Extension) ->
+>                  Contextual ()
 > onTopNum (p, m) f = do
 >   g <- getContext
 >   case g of
@@ -54,13 +54,13 @@
 >     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred p)) $
 >               erk $ "onTopNum: ran out of context"
 
-> restore :: Contextual t Extension
+> restore :: Contextual Extension
 > restore = return Restore
 
-> replace :: Suffix -> Contextual t Extension
+> replace :: Suffix -> Contextual Extension
 > replace = return . Replace
 
-> ext :: Entry -> Extension -> Contextual t ()
+> ext :: Entry -> Extension -> Contextual ()
 > ext xD (Replace _Xi)  = modifyContext (<>< _Xi)
 > ext xD Restore        = modifyContext (:< xD)
 
@@ -68,18 +68,18 @@
 > var k a = TyVar (FVar a k)
 
 
-> unifyList :: KindI k => [Type k] -> Contextual () (Type k)
+> unifyList :: KindI k => [Type k] -> Contextual (Type k)
 > unifyList []      = unknownTyVar "_ul" kind
 > unifyList (t:ts)  = mapM_ (unify t) ts >> return t
 
 
-> unify :: Type k -> Type k -> Contextual () ()
+> unify :: Type k -> Type k -> Contextual ()
 > unify t u = unifyTypes t u `inLoc` (do
 >                 return $ sep [text "when unifying", nest 4 (prettyHigh $ fogSysTy t),
 >                              text "and", nest 4 (prettyHigh $ fogSysTy u)])
 >                     -- ++ "\n    in context " ++ render g)
 
-> unifyTypes :: Type k -> Type k -> Contextual t ()
+> unifyTypes :: Type k -> Type k -> Contextual ()
 > -- unifyTypes s t | s == t = return ()
 > unifyTypes Arr Arr  = return ()
 > unifyTypes s t | KNum <- getTyKind s = unifyNum s t
@@ -123,7 +123,7 @@
 
 
 
-> startSolve :: Var () k -> Type k -> Contextual t ()
+> startSolve :: Var () k -> Type k -> Contextual ()
 > startSolve alpha tau = do
 >     (rho, xs) <- rigidHull [] tau
 >     -- traceContext $ "sS\nalpha = " ++ show alpha ++ "\ntau = " ++ show tau ++ "\nrho = " ++ show rho ++ "\nxs = " ++ show xs
@@ -134,7 +134,7 @@
 > type FlexConstraint = (Var () KNum, TypeNum, TypeNum)
 
 > makeFlex :: [Var () KNum] -> Type KNum ->
->                 Contextual t (Type KNum, Fwd FlexConstraint)
+>                 Contextual (Type KNum, Fwd FlexConstraint)
 > makeFlex as n = do
 >     let n' = normaliseNum n
 >     let (l, r) = partitionNum as n'
@@ -148,7 +148,7 @@
 
 
 > rigidHull :: [Var () KNum] -> Type k ->
->                  Contextual t (Type k, Fwd FlexConstraint)
+>                  Contextual (Type k, Fwd FlexConstraint)
 
 > rigidHull as t | KNum <- getTyKind t = makeFlex as t
 
@@ -183,12 +183,12 @@ This is wrong, I think:
 > pairsToSuffix = fmap (TE . (:= Hole) . fst3)
 >   where fst3 (a, _, _) = a
 
-> unifyPairs :: Fwd FlexConstraint -> Contextual t ()
+> unifyPairs :: Fwd FlexConstraint -> Contextual ()
 > unifyPairs = mapM_ (uncurry unifyNum . snd3)
 >   where snd3 (_, b, c) = (b, c)
 
 
-> solve :: Var () k -> Suffix -> Type k -> Contextual t ()
+> solve :: Var () k -> Suffix -> Type k -> Contextual ()
 > solve alpha _Xi tau = onTop $
 >   \ (gamma := d) -> let occurs = gamma <? tau || gamma <? _Xi in
 >     hetEq gamma alpha
@@ -217,14 +217,14 @@ This is wrong, I think:
 
 
 
-> unifyNum :: TypeNum -> TypeNum -> Contextual t ()
+> unifyNum :: TypeNum -> TypeNum -> Contextual ()
 > unifyNum (TyInt 0)  n = unifyZero F0 (normaliseNum n)
 > unifyNum m          n = unifyZero F0 (normaliseNum (m - n))
 
-> constrainZero :: NormalNum -> Contextual t ()
+> constrainZero :: NormalNum -> Contextual ()
 > constrainZero e = modifyContext (:< Constraint Wanted (reifyNum e %==% 0))
 
-> unifyZero :: Suffix -> NormalNum -> Contextual t ()
+> unifyZero :: Suffix -> NormalNum -> Contextual ()
 > unifyZero _Psi e = case getConstant e of
 >   Just k  | k == 0     -> return ()
 >           | otherwise  -> errCannotUnify (fogTy (reifyNum e)) (STyInt 0)
@@ -255,14 +255,14 @@ This is wrong, I think:
 
 We can insert a fresh variable into a unit thus:
 
-> insertFreshVar :: NormalNum -> Contextual t (NormalNum, Var () KNum)
+> insertFreshVar :: NormalNum -> Contextual (NormalNum, Var () KNum)
 > insertFreshVar d = do
 >     v <- freshVar SysVar "_beta" KNum
 >     return (d + mkVar v, v)
 
 
 
-> unifyFun :: Rho -> Contextual () (Sigma, Rho)
+> unifyFun :: Rho -> Contextual (Sigma, Rho)
 > unifyFun (TyApp (TyApp Arr s) t) = return (s, t)
 > unifyFun ty = do
 >     s <- unknownTyVar "_s" KSet

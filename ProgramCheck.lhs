@@ -21,7 +21,7 @@
 > import TypeCheck
 
 
-> assertContextEmpty :: Contextual () ()
+> assertContextEmpty :: Contextual ()
 > assertContextEmpty = do
 >     g <- getContext
 >     case g of
@@ -30,13 +30,13 @@
 
 > runCheckProg p = runStateT (checkProg p) initialState
 
-> checkProg :: SProgram -> Contextual () Program
+> checkProg :: SProgram -> Contextual Program
 > checkProg ds = do
 >     traverse makeTyCon ds
 >     traverse makeBinding ds
 >     concat <$> traverse checkDecl ds
 >   where
->     makeTyCon :: SDeclaration () -> Contextual () ()
+>     makeTyCon :: SDeclaration () -> Contextual ()
 >     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
@@ -44,14 +44,14 @@
 >             insertTyCon t (Ex k')
 >     makeTyCon _ = return ()
 
-> checkDecl :: SDeclaration () -> Contextual () [Declaration ()]
+> checkDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ 
 >   unEx (kindKind k) $ \ k -> do
 >     cs    <- traverse (checkConstructor t) cs
 >     return [DataDecl t k cs]
 > checkDecl d = assertContextEmpty >> checkInferFunDecl d
 
-> checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
+> checkConstructor :: TyConName -> SConstructor -> Contextual Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
 >     TK ty' k <- inferKind All B0 ty
 >     case k of
@@ -64,7 +64,7 @@
 
 
 
-> goGadtMangle :: Type KSet -> Contextual () (Type KSet)
+> goGadtMangle :: Type KSet -> Contextual (Type KSet)
 > goGadtMangle ty = do
 >     (ty', vts) <- runWriterT $ makeEqGadtMangle [] ty
 >     return $ foldr bindVar ty' (map fst vts)
@@ -73,7 +73,7 @@
 >     bindVar a = Bind All (fogVar a) KNum . bindTy a
 
 > makeEqGadtMangle :: [Ex (Var ())] -> Type KSet ->
->     ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type KSet)
+>     ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type KSet)
 > makeEqGadtMangle as ty = do
 >     (ty', vts) <- lift $ runWriterT $ gadtMangle as ty
 >     tell $ map (\ (a, _) -> (a, Nothing)) vts
@@ -84,7 +84,7 @@
 >     makeEq (a, Nothing)  = id
 
 > gadtMangle :: [Ex (Var ())] -> Type k ->
->     ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type k)
+>     ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type k)
 > gadtMangle as (Qual p t) = Qual p <$> gadtMangle as t
 > gadtMangle as (Bind b x k t) = do
 >     a <- freshVar SysVar x k
@@ -106,14 +106,14 @@
 >     isAllBound _  _          = Left "_ga"
 
 >     help :: [Ex (Var ())] -> Type k ->
->                 ContextualWriter [(Var () KNum, Maybe TypeNum)] () (Type k)
+>                 ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type k)
 >     help as (TyCon c k) = pure $ TyCon c k
 >     help as (TyApp f s) = do
 >         (s', as') <- warp as s
 >         TyApp <$> help as' f <*> pure s'
 
 >     warp :: [Ex (Var ())] -> Type k ->
->                 ContextualWriter [(Var () KNum, Maybe TypeNum)] ()
+>                 ContextualWriter [(Var () KNum, Maybe TypeNum)]
 >                     (Type k, [Ex (Var ())])
 >     warp as t = case (isAllBound as t, getTyKind t) of
 >         (Right as', _) -> pure (t, as')

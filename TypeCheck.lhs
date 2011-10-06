@@ -29,7 +29,7 @@
 
 
 
-> withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual () t -> Contextual () (t, a)
+> withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual t -> Contextual (t, a)
 > withLayerExtract l f m = do
 >     modifyContext (:< Layer l)
 >     t <- m
@@ -43,7 +43,7 @@
 >     extract (g :< e)                           = (g' :< e, a) where (g', a) = extract g
 >     extract B0 = error $ "withLayerExtract: ran out of context"
 
-> withLayer :: TmLayer -> Contextual () t -> Contextual () t
+> withLayer :: TmLayer -> Contextual t -> Contextual t
 > withLayer l m = fst <$> withLayerExtract l (const ()) m
 
 
@@ -56,7 +56,7 @@ forall-binders with fresh variables to produce a rho-type, and writes
 a list of predicates found.
 
 > inst :: VarState -> (forall k. TyDef k) -> Type l ->
->             ContextualWriter [Predicate] t (Type l)
+>             ContextualWriter [Predicate] (Type l)
 > inst vs d (TyApp (TyApp Arr a) t) =
 >     TyApp (TyApp Arr a) <$> inst vs d t
 > inst vs d (Bind All x k t) = do
@@ -73,20 +73,20 @@ status, and stores the predicates in the context with the given
 status.
 
 > instS :: VarState -> CStatus -> (forall k. TyDef k) -> Type l ->
->              Contextual t (Type l)
+>              Contextual (Type l)
 > instS vs s d t = do
 >     (ty, cs) <- runWriterT $ inst vs d t
 >     modifyContext (<><< map (Constraint s) cs)
 >     return ty
 
-> specialise :: Type l -> Contextual t (Type l)
+> specialise :: Type l -> Contextual (Type l)
 > specialise = instS (UserVar All) Given Fixed
 
-> instantiate :: Type l -> Contextual t (Type l)
+> instantiate :: Type l -> Contextual (Type l)
 > instantiate = instS SysVar Wanted Hole
 
 
-> existentialise :: (MonadState (ZipState t) m, FV (Type k)) =>
+> existentialise :: (MonadState ZipState m, FV (Type k)) =>
 >                       m (Type k) -> m (Type k)
 > existentialise m = do
 >     modifyContext (:< Layer FunTop) -- hackish
@@ -102,7 +102,7 @@ status.
 >     help isHole (g :< e)             = help isHole g :< e
 
 
-> generalise :: (FV (t OK ()), TravTypes t) => Type KSet -> [t OK ()] -> Contextual a (Type KSet, [t OK ()])
+> generalise :: (FV (t OK ()), TravTypes t) => Type KSet -> [t OK ()] -> Contextual (Type KSet, [t OK ()])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps) []
@@ -110,7 +110,7 @@ status.
 >     return tps
 >   where
 >     help :: (FV (t OK ()), TravTypes t) =>  Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
->                 Contextual a (Context, (Type KSet, [t OK ()]))
+>                 Contextual (Context, (Type KSet, [t OK ()]))
 >     help (g :< Layer l) tps hs  | layerStops l  = return (g :< Layer l, tps)
 >                                 | otherwise     = (<:< Layer l) <$> help g tps hs 
 
@@ -140,7 +140,7 @@ status.
 
 
 >     replaceHelp :: (FV (t OK ()), TravTypes t) => Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
->         Var () l -> Type l -> Contextual a (Context, (Type KSet, [t OK ()]))
+>         Var () l -> Type l -> Contextual (Context, (Type KSet, [t OK ()]))
 >     replaceHelp g (t, ps) hs a d = do
 >         let hs' = case a of
 >                    FVar _ KNum -> map (fmap (replaceTy a d)) hs
@@ -153,7 +153,7 @@ status.
 >              f _           = Nothing
 
 
-> subsCheck :: Sigma -> Sigma -> Contextual () ()
+> subsCheck :: Sigma -> Sigma -> Contextual ()
 > subsCheck s t = do
 >     t  <- specialise t
 >     s  <- instantiate s
@@ -174,19 +174,19 @@ status.
 >         _ -> unify s t
 
 
-> instSigma :: Sigma -> Maybe Rho -> Contextual () Rho
+> instSigma :: Sigma -> Maybe Rho -> Contextual Rho
 > instSigma s Nothing   = instantiate s
 > instSigma s (Just r)  = subsCheck s r >> return r
 
 
 
 
-> inferRho :: STerm () -> Contextual () (Term () ::: Rho)
+> inferRho :: STerm () -> Contextual (Term () ::: Rho)
 > inferRho t =
 >   inLocation (text "in inferred expression" <++> prettyHigh t) $
 >     checkInfer Nothing t
 
-> checkRho :: Rho -> STerm () -> Contextual () (Term ())
+> checkRho :: Rho -> STerm () -> Contextual (Term ())
 > checkRho ty t =
 >   inLocation (text "in checked expression" <++> prettyHigh t) $
 >     tmOf <$> checkInfer (Just ty) t
@@ -194,7 +194,7 @@ status.
 
 
 
-> checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
+> checkSigma :: Sigma -> STerm () -> Contextual (Term ())
 > checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e),
 >                                   text "has type", nest 2 (prettyHigh (fogTy s))]) $ do
 >     unifySolveConstraints
@@ -214,7 +214,7 @@ status.
 >     getNames (g :< e) = getNames g
 
 >     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry Predicate] ->
->                 Contextual () Context
+>                 Contextual Context
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
 >     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish "
 >                                         ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
@@ -244,7 +244,7 @@ status.
 >     rep a t (Right p) = Right p
 
 
-> checkInfer :: Maybe Rho -> STerm () -> Contextual () (Term () ::: Rho)
+> checkInfer :: Maybe Rho -> STerm () -> Contextual (Term () ::: Rho)
 
 > checkInfer mty (TmVar x) = do
 >     sc  <- tyOf <$> lookupTmVar x
@@ -332,7 +332,7 @@ status.
 
 -- This is horrible, please improve it
 
-> checkCaseAlt :: Rho -> Rho -> SCaseAlternative () -> Contextual () (CaseAlternative ())
+> checkCaseAlt :: Rho -> Rho -> SCaseAlternative () -> Contextual (CaseAlternative ())
 > checkCaseAlt sty resty c@(CaseAlt p gt) =
 >   inLocation (text "in case alternative" <++> prettyHigh c) $
 >   withLayer CaseTop $ do
@@ -343,7 +343,7 @@ status.
 >     solveConstraints
 >     return ca
 
-> inferCaseAlt :: Rho -> SCaseAlternative () -> Contextual () (CaseAlternative () ::: Rho)
+> inferCaseAlt :: Rho -> SCaseAlternative () -> Contextual (CaseAlternative () ::: Rho)
 > inferCaseAlt sty c@(CaseAlt p gt) = do
 >   resty <- unknownTyVar "_r" KSet
 >   inLocation (text "in case alternative" <++> prettyHigh c) $
@@ -354,13 +354,13 @@ status.
 >     return $ ca ::: resty
 
 
-> checkLocalDecls :: [SDeclaration ()] -> Contextual () ([Declaration ()], Bindings)
+> checkLocalDecls :: [SDeclaration ()] -> Contextual ([Declaration ()], Bindings)
 > checkLocalDecls ds =
 >     withLayerExtract (LetBindings Map.empty) letBindings $ do
 >         traverse makeBinding ds
 >         Data.List.concat <$> traverse checkInferFunDecl ds  
 
-> makeBinding :: SDeclaration () -> Contextual () ()
+> makeBinding :: SDeclaration () -> Contextual ()
 > makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
 >     TK ty' k <- inferKind All B0 ty
 >     case k of
@@ -369,7 +369,7 @@ status.
 > makeBinding (FunDecl x _)     = return ()
 > makeBinding (DataDecl _ _ _)  = return ()
 
-> checkInferFunDecl :: SDeclaration () -> Contextual () [Declaration ()]
+> checkInferFunDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkInferFunDecl (FunDecl s []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
 > checkInferFunDecl fd@(FunDecl s (p:ps)) = do
@@ -407,7 +407,7 @@ status.
 
 
 
-> checkAlt :: String ::: Sigma -> SAlternative () -> Contextual () (Alternative ())
+> checkAlt :: String ::: Sigma -> SAlternative () -> Contextual (Alternative ())
 > checkAlt (s ::: sc) (Alt xs gt) =
 >   inLocation (text "in alternative" <++> (text s <+> prettyHigh (Alt xs gt))) $
 >   withLayer (PatternTop (s ::: sc)) $ do
@@ -418,7 +418,7 @@ status.
 
 
 > inferAlt :: String ::: Sigma -> SAlternative () ->
->                 Contextual () (Alternative () ::: Rho)
+>                 Contextual (Alternative () ::: Rho)
 > inferAlt (s ::: sc) (Alt xs gt) =
 >   inLocation (text "in alternative" <++> (text s <+> prettyHigh (Alt xs gt))) $
 >   withLayer (PatternTop (s ::: sc)) $
@@ -428,7 +428,7 @@ status.
 >       return $ Alt xs (renameTypes (renameVS vs) gt) ::: ty
 
 
-> checkGuardTerms :: Rho -> SGuardTerms () -> Contextual () (GuardTerms ())
+> checkGuardTerms :: Rho -> SGuardTerms () -> Contextual (GuardTerms ())
 > checkGuardTerms rho (Unguarded t)  = do
 >     t <- checkRho rho t
 >     unifySolveConstraints
@@ -444,7 +444,7 @@ status.
 >         return $ g :*: t
 
 
-> inferGuardTerms :: SGuardTerms () -> Contextual () (GuardTerms () ::: Rho)
+> inferGuardTerms :: SGuardTerms () -> Contextual (GuardTerms () ::: Rho)
 > inferGuardTerms (Unguarded e) = do
 >     e ::: r <- inferRho e
 >     return $ Unguarded e ::: r
@@ -458,7 +458,7 @@ status.
 >     return $ Guarded gts ::: head tys
 
 
-> checkGuard :: SGuard () -> Contextual () (Guard ())
+> checkGuard :: SGuard () -> Contextual (Guard ())
 > checkGuard (NumGuard ps)  = NumGuard <$> traverse learnPred ps
 >   where
 >     learnPred p = do
@@ -471,8 +471,8 @@ status.
 
 
 > checkPat :: Bool -> Rho -> SPatternList o a ->
->               (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Rho) -> Contextual () p) ->
->                 Contextual () p
+>               (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Rho) -> Contextual p) ->
+>                 Contextual p
 
 > checkPat top ty P0 q = q (P0, E0, VS0, ty)
 
@@ -545,8 +545,8 @@ status.
 
 
 > inferPat :: SGuardTerms () -> SPatternList o a ->
->     (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, GuardTerms () ::: Rho, Rho) -> Contextual () p) ->
->                 Contextual () p
+>     (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, GuardTerms () ::: Rho, Rho) -> Contextual p) ->
+>                 Contextual p
 
 > inferPat t P0 q = do
 >     t ::: r <- inferGuardTerms t

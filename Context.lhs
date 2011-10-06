@@ -111,13 +111,12 @@
 > _Gamma <>< (TE e :> _Xi)  = _Gamma :< A e <>< _Xi
 > infixl 8 <><
 
-> data ZipState t = St  {  nextFreshInt :: Int
->                       ,  tValue    :: t
->                       ,  context   :: Context
->                       ,  tyCons    :: Map.Map TyConName (Ex Kind)
->                       ,  tmCons    :: Map.Map TmConName Sigma
->                       ,  bindings  :: Bindings
->                       }
+> data ZipState = St  {  nextFreshInt :: Int
+>                     ,  context   :: Context
+>                     ,  tyCons    :: Map.Map TyConName (Ex Kind)
+>                     ,  tmCons    :: Map.Map TmConName Sigma
+>                     ,  bindings  :: Bindings
+>                     }
 
 
 Initial state
@@ -128,7 +127,7 @@ Initial state
 > tyMaybe     = TyApp (TyCon "Maybe" (KSet :-> KSet))
 > tyEither a b  = TyApp (TyApp (TyCon "Either" (KSet :-> KSet :-> KSet)) a) b
 
-> initialState = St 0 () B0 initTyCons initTmCons initBindings
+> initialState = St 0 B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
 >   ("Bool",     Ex KSet) :
 >   ("Integer",  Ex KSet) :
@@ -159,13 +158,13 @@ Initial state
 
 
 
-> type Contextual t a          = StateT (ZipState t) (Either ErrorData) a
-> type ContextualWriter w t a  = WriterT w (StateT (ZipState t) (Either ErrorData)) a
+> type Contextual a          = StateT ZipState (Either ErrorData) a
+> type ContextualWriter w a  = WriterT w (StateT ZipState (Either ErrorData)) a
 
 
 Fresh names
 
-> freshVar :: MonadState (ZipState t) m =>
+> freshVar :: MonadState ZipState m =>
 >                 VarState -> String -> Kind k -> m (Var () k)
 > freshVar vs s k = do
 >     st <- get
@@ -173,59 +172,40 @@ Fresh names
 >     put st{nextFreshInt = succ beta}
 >     return $ FVar (N s beta vs) k
 
-> fresh :: MonadState (ZipState t) m =>
+> fresh :: MonadState ZipState m =>
 >              VarState -> String -> Kind k -> TyDef k -> m (Var () k)
 > fresh vs s k d = do
 >     v <- freshVar vs s k
 >     modifyContext (:< A (v := d))
 >     return v
 
-> unknownTyVar :: (Functor m, MonadState (ZipState t) m) =>
+> unknownTyVar :: (Functor m, MonadState ZipState m) =>
 >                     String -> Kind k -> m (Type k)
 > unknownTyVar s k = TyVar <$> fresh SysVar s k Hole
 
 
-T values
-
-> getT :: MonadState (ZipState t) m => m t
-> getT = gets tValue
-
-> putT :: MonadState (ZipState t) m => t -> m ()
-> putT t = modify $ \ st -> st {tValue = t}
-
-> mapT :: (t -> s) -> (s -> t) -> Contextual s x -> Contextual t x
-> mapT f g m = do
->     st <- get
->     case runStateT m st{tValue = f (tValue st)} of
->         Right (x, st') -> put st'{tValue = g (tValue st')} >> return x
->         Left err -> lift $ Left err
-
-> withT :: t -> Contextual t x -> Contextual () x
-> withT t = mapT (\ _ -> t) (\ _ -> ())
-
-
 Context
 
-> getContext :: MonadState (ZipState t) m => m Context
+> getContext :: MonadState ZipState m => m Context
 > getContext = gets context
 >
-> putContext :: MonadState (ZipState t) m => Context -> m ()
+> putContext :: MonadState ZipState m => Context -> m ()
 > putContext _Gamma = modify $ \ st -> st{context = _Gamma}
 >
-> modifyContext :: MonadState (ZipState t) m => (Context -> Context) -> m ()
+> modifyContext :: MonadState ZipState m => (Context -> Context) -> m ()
 > modifyContext f = getContext >>= putContext . f
 
 
 Type constructors
 
-> insertTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> insertTyCon :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    TyConName -> Ex Kind -> m ()
 > insertTyCon x k = do
 >     st <- get
 >     when (Map.member x (tyCons st)) $ errDuplicateTyCon x
 >     put st{tyCons = Map.insert x k (tyCons st)}
 
-> lookupTyCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTyCon :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    TyConName -> m (Ex Kind)
 > lookupTyCon x = do
 >     tcs <- gets tyCons
@@ -236,14 +216,14 @@ Type constructors
 
 Data constructors
 
-> insertTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> insertTmCon :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    TmConName -> Sigma -> m ()
 > insertTmCon x ty = do
 >     st <- get
 >     when (Map.member x (tmCons st)) $ errDuplicateTmCon x
 >     put st{tmCons = Map.insert x ty (tmCons st)}
 
-> lookupTmCon :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTmCon :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                     TmConName -> m Sigma
 > lookupTmCon x = do
 >     tcs <- gets tmCons
@@ -266,21 +246,21 @@ Bindings
 >     when (Map.member x bs) $ errDuplicateTmVar x
 >     return $ Map.insert x ty bs
 
-> lookupTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTopBinding :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    TmName -> m (Term () ::: Sigma, Bool)
 > lookupTopBinding x = lookupBindingIn x =<< gets bindings 
 
-> modifyTopBindings :: MonadState (ZipState t) m => (Bindings -> m Bindings) -> m ()
+> modifyTopBindings :: MonadState ZipState m => (Bindings -> m Bindings) -> m ()
 > modifyTopBindings f = do
 >     st <- get
 >     bs <- f (bindings st)
 >     put st{bindings = bs}
 
-> insertTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> insertTopBinding :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                      TmName -> (Maybe Sigma, Bool) -> m ()
 > insertTopBinding x ty = modifyTopBindings $ insertBindingIn x ty
 
-> updateTopBinding :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> updateTopBinding :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                      TmName -> (Maybe Sigma, Bool) -> m ()
 > updateTopBinding x ty = modifyTopBindings (return . Map.insert x ty)
 
@@ -294,10 +274,10 @@ Bindings
 >     help (g :< Layer (LetBindings bs))  = lookupBindingIn x bs
 >     help (g :< _)                       = help g
 
-> modifyBindings :: (Bindings -> Contextual () Bindings) -> Contextual () ()
+> modifyBindings :: (Bindings -> Contextual Bindings) -> Contextual ()
 > modifyBindings f = flip help [] =<< getContext
 >   where
->     help :: Context -> [Entry] -> Contextual () ()
+>     help :: Context -> [Entry] -> Contextual ()
 >     help B0 _ = modifyTopBindings f
 >     help (g :< Layer (LetBindings bs)) h = do
 >         bs' <- f bs
@@ -342,16 +322,16 @@ Bindings
 > expandPred :: Context -> Predicate -> Predicate
 > expandPred g = fmap (expandType g)
 
-> niceType :: Type KSet -> Contextual t (Type KSet)
+> niceType :: Type KSet -> Contextual (Type KSet)
 > niceType t = (\ g -> simplifyTy (expandType g t)) <$> getContext
 
-> nicePred :: Predicate -> Contextual t Predicate
+> nicePred :: Predicate -> Contextual Predicate
 > nicePred p = (\ g -> simplifyPred (expandPred g p)) <$> getContext
 
 
 
 
-> lookupTyVar :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTyVar :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    Binder -> Bwd (Ex (Var ())) -> String -> m (Ex (Var ()))
 > lookupTyVar b (g :< Ex a) x
 >     | varNameEq a x  = checkBinder b a >> return (Ex a)
@@ -362,7 +342,7 @@ Bindings
 >     seek (g :< A (a := _)) | varNameEq a x = checkBinder b a >> return (Ex a)
 >     seek (g :< _) = seek g
 
-> checkBinder :: (MonadState (ZipState t) m, MonadError ErrorData m) =>
+> checkBinder :: (MonadState ZipState m, MonadError ErrorData m) =>
 >                    Binder -> Var () k -> m ()
 > checkBinder All  _  = return ()
 > checkBinder Pi   a  = case (varKind a, varBinder a) of
@@ -371,7 +351,7 @@ Bindings
 >                         _                -> errNonNumericVar a
 
 
-> lookupTmVar :: (Alternative m, MonadState (ZipState t) m, MonadError ErrorData m) =>
+> lookupTmVar :: (Alternative m, MonadState ZipState m, MonadError ErrorData m) =>
 >                    TmName -> m (Term () ::: Sigma)
 > lookupTmVar x = getContext >>= seek
 >   where

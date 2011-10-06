@@ -13,7 +13,7 @@
 > import Error
 
 
-> inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual t TyKind
+> inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind
 > inferKind b g (STyVar x)   = (\ (Ex v) -> TK (TyVar v) (varKind v)) <$> lookupTyVar b g x
 > inferKind b g (STyCon c)   = (\ (Ex k) -> TK (TyCon c k) k) <$> lookupTyCon c
 > inferKind b g (STyApp f s)  = do
@@ -48,14 +48,14 @@
 >     TK t' KSet <- inferKind b g t
 >     return $ TK (Qual p' t') KSet
 
-> checkNumKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual t (Type KNum)
+> checkNumKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual (Type KNum)
 > checkNumKind b g t = do
 >   TK t k <- inferKind b g t
 >   case k of
 >     KNum -> return t
 >     _ -> erk "checkNumKind: ill-kinded!"
 
-> checkPredKind :: Binder -> Bwd (Ex (Var ())) -> SPredicate -> Contextual t Predicate
+> checkPredKind :: Binder -> Bwd (Ex (Var ())) -> SPredicate -> Contextual Predicate
 > checkPredKind b g = traverse (checkNumKind b g)
 
 

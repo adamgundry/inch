@@ -22,7 +22,7 @@
 > import Error
 
 
-> unifySolveConstraints :: Contextual t ()
+> unifySolveConstraints :: Contextual ()
 > unifySolveConstraints = do
 >     (g, ns) <- runWriter . collectEqualities <$> getContext
 >     putContext g
@@ -38,7 +38,7 @@
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
 
 
-> trySolveConstraints :: Contextual t ([Predicate], [Predicate])
+> trySolveConstraints :: Contextual ([Predicate], [Predicate])
 > trySolveConstraints = do
 >     g <- getContext
 >     let (g', hs, ps) = collect g [] []
@@ -69,17 +69,17 @@
 >     subsPreds :: Var () KNum -> Type KNum -> [Predicate] -> [Predicate]
 >     subsPreds a n = map (fmap (replaceTy a n))
 
-> solveConstraints :: Contextual t ()
+> solveConstraints :: Contextual ()
 > solveConstraints = do
 >     (hs, qs) <- trySolveConstraints
 >     case qs of
 >         []  -> return ()
 >         _   -> errCannotDeduce hs qs
 
-> solveOrSuspend :: Contextual t ()
+> solveOrSuspend :: Contextual ()
 > solveOrSuspend = want . snd =<< trySolveConstraints
 >   where
->     want :: [Predicate] -> Contextual t ()
+>     want :: [Predicate] -> Contextual ()
 >     want [] = return ()
 >     want (p:ps)
 >         | nonsense p  = errImpossiblePred p
@@ -97,7 +97,7 @@
 
 
 > toFormula :: [Predicate] -> Predicate ->
->                  Contextual t P.Formula
+>                  Contextual P.Formula
 > toFormula hs p = do
 >     g <- getContext
 >     let hs'  = map (normalisePred . expandPred g) hs

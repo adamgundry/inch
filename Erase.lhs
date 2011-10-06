@@ -30,7 +30,7 @@
 > willErase KNum = True
 > willErase (k :-> l) = willErase l
 
-> eraseType :: Type k -> Contextual a (Ex Kind, TyKind)
+> eraseType :: Type k -> Contextual (Ex Kind, TyKind)
 > eraseType (TyVar (FVar a k))    = 
 >     case eraseKind k of
 >         Just (Ex l) -> return (Ex k, TK (TyVar (FVar a l)) l)
@@ -69,7 +69,7 @@
 >     return t
 
 
-> eraseTm :: Term () -> Contextual t (Term ())
+> eraseTm :: Term () -> Contextual (Term ())
 > eraseTm (TmVar x)    = pure $ TmVar x
 > eraseTm (TmCon c)    = pure $ TmCon c
 > eraseTm (TmInt k)    = pure $ TmInt k
@@ -93,16 +93,16 @@
 > numToTm (TyApp (TyApp (BinOp o) m) n) = TmApp (TmApp (TmBinOp o) (numToTm m)) (numToTm n)
 
 
-> eraseCon :: Constructor -> Contextual a Constructor
+> eraseCon :: Constructor -> Contextual Constructor
 > eraseCon (c ::: t) = (c :::) <$> eraseToSet t
 
-> eraseAlt :: Alternative () -> Contextual a (Alternative ())
+> eraseAlt :: Alternative () -> Contextual (Alternative ())
 > eraseAlt (Alt ps gt) = Alt (erasePatList ps) <$> eraseGuardTerms (unsafeCoerce gt)
 
-> eraseCaseAlt :: CaseAlternative () -> Contextual a (CaseAlternative ())
+> eraseCaseAlt :: CaseAlternative () -> Contextual (CaseAlternative ())
 > eraseCaseAlt (CaseAlt p gt) = CaseAlt (erasePat p) <$> eraseGuardTerms(unsafeCoerce gt)
 
-> eraseGuardTerms :: GuardTerms () -> Contextual a (GuardTerms ())
+> eraseGuardTerms :: GuardTerms () -> Contextual (GuardTerms ())
 > eraseGuardTerms (Unguarded e) = Unguarded <$> eraseTm e
 > eraseGuardTerms (Guarded gts) = Guarded <$> traverse er gts
 >   where er (g :*: t) = (eraseGuard g :*:) <$> eraseTm t
@@ -132,7 +132,7 @@
 > erasePatList P0 = P0
 > erasePatList (p :! ps) = erasePat p :! erasePatList ps
 
-> eraseDecl :: Declaration () -> Contextual a (Declaration ())
+> eraseDecl :: Declaration () -> Contextual (Declaration ())
 > eraseDecl (DataDecl s k cs) =
 >     case eraseKind k of
 >         Just (Ex k') -> do
@@ -142,5 +142,5 @@
 >     FunDecl x <$> traverse eraseAlt ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
 
-> eraseProg :: Program -> Contextual a Program
+> eraseProg :: Program -> Contextual Program
 > eraseProg = traverse eraseDecl
