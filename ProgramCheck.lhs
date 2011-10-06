@@ -7,24 +7,26 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import Data.List
-> import Data.Maybe
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
 > import BwdFwd
 > import Kind
 > import Type
-> import Num
 > import Syntax
 > import Context
-> import Unify
 > import Kit
 > import Error
-> import PrettyPrinter
-> import PrettyContext
 > import KindCheck
 > import TypeCheck
 
+
+> assertContextEmpty :: Contextual () ()
+> assertContextEmpty = do
+>     g <- getContext
+>     case g of
+>         B0  -> return ()
+>         _   -> error "context is not empty"
 
 > runCheckProg p = runStateT (checkProg p) initialState
 
@@ -47,7 +49,7 @@
 >   unEx (kindKind k) $ \ k -> do
 >     cs    <- traverse (checkConstructor t) cs
 >     return [DataDecl t k cs]
-> checkDecl d = checkInferFunDecl d
+> checkDecl d = assertContextEmpty >> checkInferFunDecl d
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual () Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do

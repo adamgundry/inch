@@ -62,6 +62,18 @@
 >     hetEq (k :-> k') (l :-> l') yes no = hetEq k l (hetEq k' l' yes no) no
 >     hetEq _ _ _ no = no
 
+> class KindI t where
+>     kind :: Kind t
+
+> instance KindI KSet where
+>     kind = KSet
+
+> instance KindI KNum where
+>     kind = KNum
+
+> instance (KindI k, KindI l) => KindI (k :-> l) where
+>     kind = kind :-> kind
+
 > data SKind where
 >     SKSet   :: SKind
 >     SKNum   :: SKind

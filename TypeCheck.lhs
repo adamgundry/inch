@@ -14,9 +14,6 @@
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
-> import qualified Data.Integer.Presburger as P
-> import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)))
-
 > import BwdFwd
 > import Kind 
 > import Type
@@ -27,8 +24,29 @@
 > import Kit
 > import Error
 > import PrettyPrinter
-> import PrettyContext
 > import KindCheck
+> import Solver
+
+
+
+> withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual () t -> Contextual () (t, a)
+> withLayerExtract l f m = do
+>     modifyContext (:< Layer l)
+>     t <- m
+>     (g, a) <- extract <$> getContext
+>     putContext g
+>     return (t, a)
+>   where
+>     extract (g :< Layer l') | matchLayer l l'  = (g, f l')
+>                             | otherwise        = error $ "withLayerExtract: wrong layer in " ++ renderMe (g :< Layer l') ++ " (looking for " ++ renderMe l ++ ")"
+>     extract (g :< Constraint Given _) | layerStops l = extract g
+>     extract (g :< e)                           = (g' :< e, a) where (g', a) = extract g
+>     extract B0 = error $ "withLayerExtract: ran out of context"
+
+> withLayer :: TmLayer -> Contextual () t -> Contextual () t
+> withLayer l m = fst <$> withLayerExtract l (const ()) m
+
+
 
 
 The |inst| function takes a name-mangling function (for modifying the
@@ -84,28 +102,26 @@ status.
 >     help isHole (g :< e)             = help isHole g :< e
 
 
-> generalise :: Type KSet -> [Alternative ()] -> Contextual t (Type KSet, [Alternative ()])
+> generalise :: (FV (t OK ()), TravTypes t) => Type KSet -> [t OK ()] -> Contextual a (Type KSet, [t OK ()])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps) []
 >     putContext g'
 >     return tps
 >   where
->     help :: Context -> (Type KSet, [Alternative ()]) -> [Predicate] ->
->                 Contextual t (Context, (Type KSet, [Alternative ()]))
->     help g@(_ :< Layer FunTop)                tps hs = return (g, tps)
->     help g@(_ :< Layer (PatternTop _ _ _ _))  tps hs = return (g, tps)
->     help (g :< Layer (LamBody _ _))           tps hs = help g tps hs
->     help (g :< Layer GenMark)                 tps hs = return (g, tps)
+>     help :: (FV (t OK ()), TravTypes t) =>  Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
+>                 Contextual a (Context, (Type KSet, [t OK ()]))
+>     help (g :< Layer l) tps hs  | layerStops l  = return (g :< Layer l, tps)
+>                                 | otherwise     = (<:< Layer l) <$> help g tps hs 
 
 >     help (g :< A (a@(FVar _ KNum) := Exists)) (t, ps) hs
 >       | a <? t || a <? ps || a <? hs = case solveFor a hs of
 >             Just n   -> replaceHelp g (t, ps) hs a (reifyNum n)
 >             Nothing  | a <? t -> traceContext "oh no" >>
->                                     errBadExistential a t ps
+>                                     errBadExistential a t
 >                      | otherwise -> help g (t, ps) (filter (not . (a <?)) hs)
 >     help (g :< A (a := Exists)) (t, ps) hs
->       | a <? t     = errBadExistential a t ps
+>       | a <? t     = errBadExistential a t
 >       | otherwise  = help g (t, ps) hs
 >     help (g :< A (a := Some d)) (t, ps) hs = replaceHelp g (t, ps) hs a d
 >     help (g :< A (a := d)) (t, ps) hs
@@ -118,9 +134,13 @@ status.
 
 >     help g tps hs = erk $ "generalise: can't help " ++ renderMe g
 
+            
+>     (<:<) :: (Context, t) -> Entry -> (Context, t)
+>     (g, x) <:< e = (g :< e, x)
 
->     replaceHelp :: Context -> (Type KSet, [Alternative ()]) -> [Predicate] ->
->         Var () l -> Type l -> Contextual t (Context, (Type KSet, [Alternative ()]))
+
+>     replaceHelp :: (FV (t OK ()), TravTypes t) => Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
+>         Var () l -> Type l -> Contextual a (Context, (Type KSet, [t OK ()]))
 >     replaceHelp g (t, ps) hs a d = do
 >         let hs' = case a of
 >                    FVar _ KNum -> map (fmap (replaceTy a d)) hs
@@ -131,172 +151,6 @@ status.
 >     solveFor a = getFirst . foldMap (First . maybeSolveFor a) . mapMaybe f
 >       where  f (P EL m n)  = Just (normaliseNum (m - n))
 >              f _           = Nothing
-
-
-> layerStops :: TmLayer -> Maybe (TmLayer, [Predicate], [Predicate])
-> layerStops FunTop                   = Just (FunTop, [], [])
-> layerStops GenMark                  = Just (GenMark, [], [])
-> layerStops (PatternTop s bs hs ps)  = Just (PatternTop s bs [] [], hs, ps)
-> layerStops _                        = Nothing
-
-
-> unifySolveConstraints :: Contextual t ()
-> unifySolveConstraints = do
->     (g, ns) <- runWriter . collectEqualities <$> getContext
->     putContext g
->     traverse (uncurry unifyNum) ns
->     return ()
->   where
->     collectEqualities :: Context -> Writer [(Type KNum, Type KNum)] Context
->     collectEqualities B0 = return B0
->     collectEqualities (g :< Layer l) = case layerStops l of
->         Just _   -> return $ g :< Layer l
->         Nothing  -> (:< Layer l) <$> collectEqualities g
->     collectEqualities (g :< Constraint Wanted (P EL m n)) = tell [(m, n)]
->         >> collectEqualities g
->     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
-
-
-> trySolveConstraints :: Contextual t ([Predicate], [Predicate])
-> trySolveConstraints = do
->     g <- getContext
->     let (g', hs, ps) = collect g [] []
->     putContext g'
->     qs <- filterM (formulaic hs) ps
->     return (hs, qs)
->   where
->     formulaic hs p = (not . P.check) <$> toFormula hs p
->
->     collect :: Context -> [Predicate] -> [Predicate] ->
->                    (Context, [Predicate], [Predicate])
->     collect B0 hs ps = (B0, hs, ps)
->     collect (g :< Constraint Wanted p)  hs ps = collect g hs (p:ps)
->     collect (g :< Constraint Given h)   hs ps =
->         collect g (h:hs) ps <:< Constraint Given h
->     collect (g :< A e@(a@(FVar _ KNum) := Some d)) hs ps =
->         collect g (subsPreds a d hs) (subsPreds a d ps) <:< A e
->     collect (g :< Layer l) hs ps = case layerStops l of
->         Nothing        -> collect g hs ps <:< Layer l
->         Just (l', ks, ws)  -> (g :< Layer l', collectHyps g (ks ++ hs), ws ++ ps)
->     collect (g :< e) hs ps = collect g hs ps <:< e
->
->     collectHyps B0 hs = hs
->     collectHyps (g :< Constraint Given h) hs = collectHyps g (h:hs)
->     collectHyps (g :< _) hs = collectHyps g hs
-
->     (g, a, b) <:< e = (g :< e, a, b)
-
->     subsPreds :: Var () KNum -> Type KNum -> [Predicate] -> [Predicate]
->     subsPreds a n = map (fmap (replaceTy a n))
-
-> solveConstraints :: Contextual t ()
-> solveConstraints = do
->     (hs, qs) <- trySolveConstraints
->     case qs of
->         []  -> return ()
->         _   -> errCannotDeduce hs qs
-
-> solveOrSuspend :: Contextual t ()
-> solveOrSuspend = want . snd =<< trySolveConstraints
->   where
->     want :: [Predicate] -> Contextual t ()
->     want [] = return ()
->     want (p:ps)
->         | nonsense p  = errImpossiblePred p
->         | otherwise   = modifyContext (:< Constraint Wanted p)
->                                 >> want ps
->
->     nonsense :: Predicate -> Bool
->     nonsense (P c m n) = maybe False (nonc c) (getConstant (normaliseNum (m - n)))
->     
->     nonc EL = (/= 0)
->     nonc LE = (> 0)
->     nonc LS = (>= 0)
->     nonc GE = (< 0)
->     nonc GR = (<= 0)
-
-
-> toFormula :: [Predicate] -> Predicate ->
->                  Contextual t P.Formula
-> toFormula hs p = do
->     g <- getContext
->     let hs'  = map (normalisePred . expandPred g) hs
->         p'   = normalisePred $ expandPred g p
->     case trivialPred p' of
->         Just True   -> return TRUE
->         Just False  -> return FALSE
->         Nothing     -> do
->             let f = convert (expandContext g) [] hs' p'
->             -- mtrace $ "toFormula [" ++ intercalate "," (map (renderMe . fogPred) hs) ++ "] => (" ++ renderMe (fogPred p) ++ ")"
->             -- mtrace (show f)
->             return f
->   where
->     convert :: Context -> [(Var () KNum, P.Term)] -> [NormalPredicate] ->
->                    NormalPredicate -> P.Formula
->     convert B0 axs hs p =
->         let hs'  = map (predToFormula True axs) hs
->             p'   = predToFormula False axs p
->         in foldr (:/\:) TRUE hs' :=>: p'
->     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (a <?) (p:hs) = 
->         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
->     convert (g :< _) axs hs p = convert g axs hs p
-                
->     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate -> P.Formula
->     predToFormula hyp axs (P c m n) = linearise axs m $ \ m' ->
->                                       linearise axs n $ \ n' ->
->                                           compToFormula c m' n'
-
-> {-
->     predToFormula hyp xs (Op Max m n t) =
->         let m'  = numToTerm xs m
->             n'  = numToTerm xs n
->             t'  = numToTerm xs t
->         in ((m' :=: t') :/\: (m' :>=: n'))
->                    :\/: ((n' :=: t') :/\: (n' :>=: m'))
->     predToFormula hyp _ (Op _ _ _ _) = if hyp then TRUE else FALSE
-> -}
-
->     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
->                     (P.Term -> P.Formula) -> P.Formula
->     linearise axs (NN i bs ts) f = help x ts
->       where
->         x = fromInteger i + foldr (\ (b, k) t -> fromJust (lookup b axs) * fromInteger k + t) 0 bs
->
->         help :: P.Term -> [(Type KNum, Integer)] -> P.Formula
->         help t []      = f t
->         help t ((TyApp (UnOp o) m, k):ks) | Just lo <- linUnOp o =
->             linearise axs (normaliseNum m) $ \ m' ->
->                 P.Exists $ \ y ->
->                     lo m' y :/\: help (t + fromInteger k * y) ks
->         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linBinOp o =
->             linearise axs (normaliseNum m) $ \ m' ->
->             linearise axs (normaliseNum n) $ \ n' ->
->                 P.Exists $ \ y ->
->                     lo m' n' y :/\: help (t + fromInteger k * y) ks
->         help t ((_, k):ks)  = P.Forall (\ y -> help (t + fromInteger k * y) ks)
-
->     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
->     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))
->                                       :\/: ((m :=: -y) :/\: (m :<: 0))
->     linUnOp Signum = Just $ \ m y -> ((y :=: 1) :/\: (m :>: 0))
->                                       :\/: ((y :=: -1) :/\: (m :<: 0))
->                                       :\/: ((y :=: 0) :/\: (m :=: 0))
-
->     linBinOp :: BinOp -> Maybe (P.Term -> P.Term -> P.Term -> P.Formula)
->     linBinOp Max = Just $ \ m n y -> ((m :=: y) :/\: (m :>=: n))
->                                       :\/: ((n :=: y) :/\: (n :>=: m))
->     linBinOp Min = Just $ \ m n y -> ((m :=: y) :/\: (m :<=: n))
->                                       :\/: ((n :=: y) :/\: (n :<=: m))
->     linBinOp _ = Nothing
-
->     compToFormula :: Comparator -> P.Term -> P.Term -> P.Formula
->     compToFormula EL  = (:=:)
->     compToFormula LE  = (:<=:)
->     compToFormula LS  = (:<:)
->     compToFormula GE  = (:>=:)
->     compToFormula GR  = (:>:)
-
-
 
 
 > subsCheck :: Sigma -> Sigma -> Contextual () ()
@@ -323,6 +177,22 @@ status.
 > instSigma :: Sigma -> Maybe Rho -> Contextual () Rho
 > instSigma s Nothing   = instantiate s
 > instSigma s (Just r)  = subsCheck s r >> return r
+
+
+
+
+> inferRho :: STerm () -> Contextual () (Term () ::: Rho)
+> inferRho t =
+>   inLocation (text "in inferred expression" <++> prettyHigh t) $
+>     checkInfer Nothing t
+
+> checkRho :: Rho -> STerm () -> Contextual () (Term ())
+> checkRho ty t =
+>   inLocation (text "in checked expression" <++> prettyHigh t) $
+>     tmOf <$> checkInfer (Just ty) t
+
+
+
 
 > checkSigma :: Sigma -> STerm () -> Contextual () (Term ())
 > checkSigma s e = inLocation (sep [text "when checking", nest 2 (prettyHigh e),
@@ -410,17 +280,17 @@ status.
 
 > checkInfer (Just r) (Lam x t) = do
 >     (dom, cod) <- unifyFun r
->     b <- withLayer (LamBody (x ::: dom) ()) $ checkRho cod t
+>     b <- withLayer (LamBody (x ::: dom)) $ checkRho cod t
 >     return $ Lam x b ::: r
 
 > checkInfer Nothing (Lam x t) = do
 >     a <- unknownTyVar x KSet
->     b ::: ty <- withLayer (LamBody (x ::: a) ()) $ inferRho t
+>     b ::: ty <- withLayer (LamBody (x ::: a)) $ inferRho t
 >     return $ Lam x b ::: a --> ty
 
 > checkInfer (Just r@(Bind Pi x KNum ty)) (NumLam n t) = do
 >     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
->     b <- withLayer (LamBody (n ::: tyInteger) ()) $
+>     b <- withLayer (LamBody (n ::: tyInteger)) $
 >              checkSigma (unbindTy a ty) (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: r
 
@@ -431,12 +301,12 @@ status.
 
 > checkInfer Nothing (NumLam n t) = do
 >     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
->     b ::: ty <- withLayer (LamBody (n ::: tyInteger) ()) $ inferRho (rawCoerce t)
+>     b ::: ty <- withLayer (LamBody (n ::: tyInteger)) $ inferRho (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: Bind Pi n KNum (bindTy a ty)
 
 > checkInfer mty (Let ds t) = do
 >     (ds, bs) <- checkLocalDecls ds
->     t ::: ty <- withLayer (LetBody bs ()) $
+>     t ::: ty <- withLayer (LetBody bs) $
 >                     checkInfer mty t
 >     return $ Let ds t ::: ty
 
@@ -452,11 +322,9 @@ status.
 >     return $ Case t as ::: r
 
 > checkInfer Nothing (Case t as) = do
->     t ::: ty <- inferRho t
->     atys  <- traverse (inferCaseAlt ty) as
->     r     <- unknownTyVar "_r" KSet
->     let as ::: tys = unzipAsc atys
->     traverse (unify r) tys
+>     t ::: ty    <- inferRho t
+>     as ::: tys  <- unzipAsc <$> traverse (inferCaseAlt ty) as
+>     r           <- unifyList tys
 >     return (Case t as ::: r)
 
 > checkInfer mty (TmBrace n) = erk "Braces aren't cool"
@@ -465,80 +333,30 @@ status.
 -- This is horrible, please improve it
 
 > checkCaseAlt :: Rho -> Rho -> SCaseAlternative () -> Contextual () (CaseAlternative ())
-> checkCaseAlt sty resty c@(CaseAlt p mg t) =
->   inLocation (text ("in case alternative") <++> prettyHigh c) $
->   withLayer (PatternTop ("case" ::: error "womble") [] [] []) $ do
->     checkPat True (sty --> resty) (p :! P0) $ \ (xs, ex, vs, rty) -> do
->       mg <- traverse (checkGuard . rawCoerce) mg
->       t  <- checkRho rty (rawCoerce t)
->       unifySolveConstraints
->       solveConstraints
->       let t'   = renameTypes (renameVS vs) t
->           mg'  = fmap (renameTypes (renameVS vs)) mg
->       (_, [Alt (p :! P0) mg t]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
->                   -- to fix up variables
->       return $ CaseAlt p mg t
+> checkCaseAlt sty resty c@(CaseAlt p gt) =
+>   inLocation (text "in case alternative" <++> prettyHigh c) $
+>   withLayer CaseTop $ do
+>     ca <- checkPat True (sty --> resty) (p :! P0) $ \ (p :! P0, ex, vs, rty) -> do
+>       gt <- checkGuardTerms sty (rawCoerce gt)
+>       return $ CaseAlt p (renameTypes (renameVS vs) gt)
+>     unifySolveConstraints
+>     solveConstraints
+>     return ca
 
 > inferCaseAlt :: Rho -> SCaseAlternative () -> Contextual () (CaseAlternative () ::: Rho)
-> inferCaseAlt sty c@(CaseAlt p mg t) = do
->   resty <- unknownTyVar "_res" KSet
->   inLocation (text ("in case alternative") <++> prettyHigh c) $
->    withLayer (PatternTop ("case" ::: error "womble") [] [] []) $
->     checkPat True (sty --> resty) (p :! P0) $ \ (xs, ex, vs, rty) -> do
->       mg <- traverse (checkGuard . rawCoerce) mg
->       t  <- checkRho rty (rawCoerce t)
->       unifySolveConstraints
->       solveConstraints
->       let t'   = renameTypes (renameVS vs) t
->           mg'  = fmap (renameTypes (renameVS vs)) mg
->       (_, [Alt (p :! P0) mg t]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
->                   -- to fix up variables
->       return $ CaseAlt p mg t ::: resty
-
-
-
-> declToBinding :: Declaration () -> [TmName ::: Sigma]
-> declToBinding (SigDecl x ty)  = [x ::: ty]
-> declToBinding _               = []
-
-> withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual () t -> Contextual () (t, a)
-> withLayerExtract l f m = do
->     modifyContext (:< Layer l)
->     t <- m
->     (g, a) <- extract <$> getContext
->     putContext g
->     return (t, a)
->   where
->     extract (g :< Layer l') | matchLayer l l'  = (g, f l')
->     extract (g :< e)                           = (g' :< e, a) where (g', a) = extract g
-
->     matchLayer (PatternTop (x ::: _) _ _ _)
->                (PatternTop (y ::: _) _ _ _) = x == y
->     matchLayer FunTop FunTop = True
->     matchLayer (LamBody (x ::: _) ()) (LamBody (y ::: _) ()) = x == y
->     matchLayer (LetBody _ _) (LetBody _ _) = True
->     matchLayer (LetBindings _) (LetBindings _) = True
->     matchLayer _ _ = False
-
-> withLayer :: TmLayer -> Contextual () t -> Contextual () t
-> withLayer l m = fst <$> withLayerExtract l (const ()) m
-
-> inferRho :: STerm () -> Contextual () (Term () ::: Rho)
-> inferRho t =
->   inLocation (text "in inferred expression" <++> prettyHigh t) $
->     checkInfer Nothing t
-
-> checkRho :: Rho -> STerm () -> Contextual () (Term ())
-> checkRho ty t =
->   inLocation (text "in checked expression" <++> prettyHigh t) $
->     tmOf <$> checkInfer (Just ty) t
-
-
+> inferCaseAlt sty c@(CaseAlt p gt) = do
+>   resty <- unknownTyVar "_r" KSet
+>   inLocation (text "in case alternative" <++> prettyHigh c) $
+>    withLayer CaseTop $ do
+>     ca <- checkPat True (sty --> resty) (p :! P0) $ \ (p :! P0, ex, vs, rty) -> do
+>       gt <- checkGuardTerms resty (rawCoerce gt)
+>       return $ CaseAlt p (renameTypes (renameVS vs) gt)
+>     return $ ca ::: resty
 
 
 > checkLocalDecls :: [SDeclaration ()] -> Contextual () ([Declaration ()], Bindings)
 > checkLocalDecls ds =
->     withLayerExtract (LetBindings Map.empty) (\ (LetBindings bs) -> bs) $ do
+>     withLayerExtract (LetBindings Map.empty) letBindings $ do
 >         traverse makeBinding ds
 >         Data.List.concat <$> traverse checkInferFunDecl ds  
 
@@ -568,6 +386,8 @@ status.
 >     _ ::: ty <- fst <$> lookupBinding x
 >     return [SigDecl x ty]
 
+
+
 > inferFunDecl (FunDecl s pats) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar "_x" KSet
@@ -580,6 +400,7 @@ status.
 > checkFunDecl sty (FunDecl s pats) =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >         ptms <- traverse (checkAlt (s ::: sty)) pats
+>         (_, ptms) <- generalise (TyCon "Fake" KSet) ptms
 >         return $ FunDecl s ptms
 
 
@@ -587,33 +408,54 @@ status.
 
 
 > checkAlt :: String ::: Sigma -> SAlternative () -> Contextual () (Alternative ())
-> checkAlt (s ::: sc) (Alt xs mg t) =
->   inLocation (text ("in alternative " ++ s) <++> prettyHigh (Alt xs mg t)) $
->   withLayer (PatternTop (s ::: sc) [] [] []) $ do
+> checkAlt (s ::: sc) (Alt xs gt) =
+>   inLocation (text "in alternative" <++> (text s <+> prettyHigh (Alt xs gt))) $
+>   withLayer (PatternTop (s ::: sc)) $ do
 >     sty <- specialise sc
 >     checkPat True sty xs $ \ (xs, ex, vs, rty) -> do
->       mg <- traverse (checkGuard . rawCoerce) mg
->       t  <- checkRho rty (rawCoerce t)
->       unifySolveConstraints
->       solveConstraints
->       let t'   = renameTypes (renameVS vs) t
->           mg'  = fmap (renameTypes (renameVS vs)) mg
->       (_, [p]) <- generalise (TyCon "Fake" KSet) [Alt xs mg' t'] 
->                   -- to fix up variables
->       return p
+>       gt <- checkGuardTerms rty (rawCoerce gt)
+>       return $ Alt xs (renameTypes (renameVS vs) gt)
+
 
 > inferAlt :: String ::: Sigma -> SAlternative () ->
 >                 Contextual () (Alternative () ::: Rho)
-> inferAlt (s ::: sc) (Alt xs mg t) =
->   inLocation (text ("in alternative " ++ s) <++> prettyHigh (Alt xs mg t)) $
->   withLayer (PatternTop (s ::: sc) [] [] []) $
->     inferPat (rawCoerce t) xs $ \ (xs, ex, vs, t ::: r, ty) -> do
->       mg <- traverse (checkGuard . rawCoerce) mg
+> inferAlt (s ::: sc) (Alt xs gt) =
+>   inLocation (text "in alternative" <++> (text s <+> prettyHigh (Alt xs gt))) $
+>   withLayer (PatternTop (s ::: sc)) $
+>     inferPat (rawCoerce gt) xs $ \ (xs, ex, vs, gt ::: r, ty) -> do
 >       unifySolveConstraints
 >       solveOrSuspend
->       let t'   = renameTypes (renameVS vs) t
->           mg'  = fmap (renameTypes (renameVS vs)) mg
->       return $ Alt xs mg' t' ::: ty
+>       return $ Alt xs (renameTypes (renameVS vs) gt) ::: ty
+
+
+> checkGuardTerms :: Rho -> SGuardTerms () -> Contextual () (GuardTerms ())
+> checkGuardTerms rho (Unguarded t)  = do
+>     t <- checkRho rho t
+>     unifySolveConstraints
+>     solveConstraints
+>     return $ Unguarded t
+> checkGuardTerms rho (Guarded gts)  = Guarded <$> traverse chk gts
+>   where
+>     chk (g :*: t) = withLayer GuardTop $ do
+>         g <- checkGuard g
+>         t <- checkRho rho t
+>         unifySolveConstraints
+>         solveConstraints
+>         return $ g :*: t
+
+
+> inferGuardTerms :: SGuardTerms () -> Contextual () (GuardTerms () ::: Rho)
+> inferGuardTerms (Unguarded e) = do
+>     e ::: r <- inferRho e
+>     return $ Unguarded e ::: r
+> inferGuardTerms (Guarded gts) = do
+>     xs <- traverse (\ (g :*: t) -> do
+>                           g <- checkGuard g 
+>                           t ::: r <- inferRho t
+>                           return $ (g :*: t) ::: r) gts
+>     let gts ::: tys = unzipAsc xs
+>     unifyList tys
+>     return $ Guarded gts ::: head tys
 
 
 > checkGuard :: SGuard () -> Contextual () (Guard ())
@@ -626,6 +468,8 @@ status.
 > checkGuard (ExpGuard t)   = ExpGuard <$> checkRho tyBool t
 
  
+
+
 > checkPat :: Bool -> Rho -> SPatternList o a ->
 >               (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Rho) -> Contextual () p) ->
 >                 Contextual () p
@@ -634,9 +478,9 @@ status.
 
 > checkPat top ty (PatVar v :! ps) q = do
 >     (dom, cod) <- unifyFun ty
->     modifyContext (:< Layer (LamBody (v ::: dom) ()))
->     checkPat top cod ps $ \ (xs, ex, vs, r) ->
->         q (PatVar v :! xs, ex, vs, r)
+>     withLayer (LamBody (v ::: dom)) $
+>         checkPat top cod ps $ \ (xs, ex, vs, r) ->
+>             q (PatVar v :! xs, ex, vs, r)
 
 > checkPat top ty (PatCon c as :! ps) q = do
 >     (cty, dom, cod) <- inLocation (text "in pattern" <++> prettyHigh (PatCon c as)) $ do
@@ -664,8 +508,8 @@ status.
 >     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
 >         q (PatBraceK k :! xs, ex, vs, r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) q = do
->     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
+> checkPat top (Bind Pi x KNum t) (PatBrace a 0 :! ps) q =
+>   withLayer (LamBody (a ::: tyInteger)) $ do
 >     b <- freshVar (UserVar Pi) a KNum
 >     let  t'  = unbindTy b t
 >          d   = if top || b `elemTarget` t'
@@ -678,8 +522,8 @@ status.
 >         extComp (EC E0) ex' $ \ ex'' ->
 >           q (PatBrace a 0 :! xs', ex'', vs', r)
 
-> checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) q = do
->     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
+> checkPat top (Bind Pi x KNum t) (PatBrace a k :! ps) q = 
+>   withLayer (LamBody (a ::: tyInteger)) $ do
 >     b <- freshVar SysVar ("_" ++ x ++ "_" ++ a ++ "_" ++ "oo") KNum
 >     let  t'  = unbindTy b t
 >          d   = if top || b `elemTarget` t'
@@ -700,19 +544,19 @@ status.
 
 
 
-> inferPat :: STerm () -> SPatternList o a ->
->     (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, Term () ::: Rho, Rho) -> Contextual () p) ->
+> inferPat :: SGuardTerms () -> SPatternList o a ->
+>     (forall b x . (PatternList () b, Ext () b x, VarSuffix () b, GuardTerms () ::: Rho, Rho) -> Contextual () p) ->
 >                 Contextual () p
 
 > inferPat t P0 q = do
->     t ::: r <- inferRho t
+>     t ::: r <- inferGuardTerms t
 >     q (P0, E0, VS0, t ::: r, r)
 
 > inferPat top (PatVar v :! ps) q = do
 >     a <- unknownTyVar "_a" KSet
->     modifyContext (:< Layer (LamBody (v ::: a) ()))
->     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> 
->         q (PatVar v :! xs, ex, vs, tr, a --> ty)
+>     withLayer (LamBody (v ::: a)) $
+>         inferPat top ps $ \ (xs, ex, vs, tr, ty) -> 
+>             q (PatVar v :! xs, ex, vs, tr, a --> ty)
 
 > inferPat top (PatCon c as :! ps) q = do
 >     cty <- inLocation (text "in pattern" <++> prettyHigh (PatCon c as)) $ do
@@ -734,10 +578,9 @@ status.
 
 > inferPat top (PatBrace a 0 :! ps) q = do
 >     n <- fresh (UserVar Pi) a KNum Exists
->     modifyContext (:< Layer GenMark)
->     modifyContext (:< Layer (LamBody (a ::: tyInteger) ()))
->     inferPat top ps $ \ (xs, ex, vs, tr, ty) -> do
->         (ty', _) <- generalise ty []
+>     withLayer GenMark $ withLayer (LamBody (a ::: tyInteger)) $
+>       inferPat top ps $ \ (xs, ex, vs, tr, ty) -> do
+>         (ty', _) <- generalise ty ([] :: [Alternative ()])
 >         bindUn n ex vs xs $ \ ex' vs' xs' ->
 >           extComp (EC E0) ex' $ \ ex'' ->
 >             q (PatBrace a 0 :! xs', ex'', vs', tr,

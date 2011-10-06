@@ -4,19 +4,15 @@
 > module Erase where
 
 > import Control.Applicative hiding (Alternative)
-> import Control.Monad
 > import Data.Traversable
 > import Unsafe.Coerce
 
-> import BwdFwd
 > import Error
 > import Kit
 > import Kind
 > import Type
 > import Syntax
 > import Context
-> import TypeCheck
-> import PrettyPrinter
 
 
 > eraseKind :: Kind k -> Maybe (Ex Kind)
@@ -101,10 +97,15 @@
 > eraseCon (c ::: t) = (c :::) <$> eraseToSet t
 
 > eraseAlt :: Alternative () -> Contextual a (Alternative ())
-> eraseAlt (Alt ps g t) = Alt (erasePatList ps) (eraseGuard <$> unsafeCoerce g) <$> eraseTm (unsafeCoerce t)
+> eraseAlt (Alt ps gt) = Alt (erasePatList ps) <$> eraseGuardTerms (unsafeCoerce gt)
 
 > eraseCaseAlt :: CaseAlternative () -> Contextual a (CaseAlternative ())
-> eraseCaseAlt (CaseAlt p g t) = CaseAlt (erasePat p) (eraseGuard <$> unsafeCoerce g) <$> eraseTm (unsafeCoerce t)
+> eraseCaseAlt (CaseAlt p gt) = CaseAlt (erasePat p) <$> eraseGuardTerms(unsafeCoerce gt)
+
+> eraseGuardTerms :: GuardTerms () -> Contextual a (GuardTerms ())
+> eraseGuardTerms (Unguarded e) = Unguarded <$> eraseTm e
+> eraseGuardTerms (Guarded gts) = Guarded <$> traverse er gts
+>   where er (g :*: t) = (eraseGuard g :*:) <$> eraseTm t
 
 > eraseGuard :: Guard () -> Guard ()
 > eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)

@@ -171,18 +171,16 @@
 
 
 > instance Pretty (SCaseAlternative a) where
->     pretty (CaseAlt v Nothing e) _ =
->         prettyHigh v <+> text "->" <++> prettyHigh e
->     pretty (CaseAlt v (Just g) e) _ =
->         prettyHigh v <+> text "|" <+> prettyHigh g
->                                     <+> text "->" <++> prettyHigh e
+>     pretty (CaseAlt v gt) _ = prettyHigh v <+> prettyGuardTerms (text "->") gt
 
 > instance Pretty (SAlternative a) where
->     pretty (Alt vs Nothing e) _ =
->         prettyLow vs <+> text "=" <++> prettyHigh e
->     pretty (Alt vs (Just g) e) _ =
->         prettyLow vs <+> text "|" <+> prettyHigh g
->                                     <+> text "=" <++> prettyHigh e
+>     pretty (Alt vs gt) _ = prettyLow vs <+> prettyGuardTerms (text "=") gt
+
+
+> prettyGuardTerms :: Doc -> SGuardTerms a -> Doc
+> prettyGuardTerms d (Unguarded e) = d <++> prettyHigh e
+> prettyGuardTerms d (Guarded gts) =
+>     vcat $ map (\ (g :*: e) -> text "|" <+> prettyLow g <+> d <++> prettyHigh e) gts
 
 
 

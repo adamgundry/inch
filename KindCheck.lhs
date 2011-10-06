@@ -3,19 +3,14 @@
 > module KindCheck where
 
 > import Control.Applicative
-> import Control.Monad
 > import Data.Traversable
 
 > import BwdFwd
 > import Kind
 > import Type
-> import Num
-> import Syntax
 > import Context
-> import Unify
 > import Kit
 > import Error
-> import PrettyPrinter
 
 
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual t TyKind

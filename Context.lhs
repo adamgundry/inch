@@ -7,40 +7,60 @@
 > import Control.Monad.Error
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
-> import Data.Foldable
 > import qualified Data.Map as Map
-> import Data.Traversable
 
 > import BwdFwd
 > import Kind
 > import Type
-> import TyNum
 > import Syntax hiding (Alternative)
 > import Kit
 > import Error
-> import PrettyPrinter
 
 > type Bindings = Map.Map TmName (Maybe Sigma, Bool)
 
-> data TmLayer  =  PatternTop  {  ptFun          :: TmName ::: Sigma
->                              ,  ptBinds        :: [TmName ::: Sigma]
->                              ,  ptPreds        :: [Predicate]
->                              ,  ptConstraints  :: [Predicate]
->                              }
->                   |  LamBody (TmName ::: Tau) ()
->                   |  LetBindings Bindings
->                   |  LetBody Bindings ()
->                   |  FunTop
->                   |  GenMark
+> data TmLayer  =  PatternTop  (TmName ::: Sigma)
+>               |  CaseTop
+>               |  FunTop
+>               |  GenMark
+>               |  GuardTop
+>               |  LamBody (TmName ::: Tau)
+>               |  LetBindings {letBindings :: Bindings}
+>               |  LetBody {letBindings :: Bindings}
+
+> instance Show TmLayer where
+>   show (PatternTop (x ::: _))  = "PatternTop " ++ x
+>   show CaseTop                 = "CaseTop"
+>   show FunTop                  = "FunTop"
+>   show GenMark                 = "GenMark"
+>   show GuardTop                = "GuardTop"
+>   show (LamBody (x ::: _))     = "LamBody " ++ x
+>   show (LetBindings _)         = "LetBindings"
+>   show (LetBody _)             = "LetBody"
+
+
+> layerStops :: TmLayer -> Bool
+> layerStops (PatternTop _)  = True
+> layerStops CaseTop         = True
+> layerStops FunTop          = True
+> layerStops GenMark         = True
+> layerStops GuardTop        = True
+> layerStops _               = False
+
+> matchLayer :: TmLayer -> TmLayer -> Bool
+> matchLayer (PatternTop (x ::: _))  (PatternTop (y ::: _))  = x == y
+> matchLayer CaseTop                 CaseTop                 = True
+> matchLayer FunTop                  FunTop                  = True
+> matchLayer GenMark                 GenMark                 = True
+> matchLayer GuardTop                GuardTop                = True
+> matchLayer (LamBody (x ::: _))     (LamBody (y ::: _))     = x == y
+> matchLayer (LetBindings _)         (LetBindings _)         = True
+> matchLayer (LetBody _)             (LetBody _)             = True
+> matchLayer _                       _                       = False
+
+
 
 > bindLayerTypes :: (forall k . Var () k -> Type k) -> TmLayer -> TmLayer
-> bindLayerTypes g (PatternTop (x ::: ty) bs ps cs) =
->     PatternTop (x ::: substTy g ty)
->                (map (\ (y ::: yty) -> y ::: substTy g yty) bs)
->                (map (fmap (error "bindNExp g")) ps)
->                (map (fmap (error "bindNExp g")) cs)
->                
-
+> bindLayerTypes g (PatternTop (x ::: ty)) = PatternTop (x ::: substTy g ty)
 
 > data CStatus = Given | Wanted
 >   deriving Show
@@ -134,6 +154,7 @@ Initial state
 >   ("id",         (Just (Bind All "a" KSet 
 >                           (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
 >   ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
+>   ("otherwise",  (Just tyBool, True)) :
 >   []
 
 
@@ -355,15 +376,13 @@ Bindings
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = fst <$> lookupTopBinding x
->     seek (g :< Layer (LamBody (y ::: ty) ()))
+>     seek (g :< Layer (LamBody (y ::: ty)))
 >         | x == y = return $ TmVar y ::: ty
->     seek (g :< Layer (LetBody bs ()))   = (fst <$> lookupBindingIn x bs) <|> seek g
+>     seek (g :< Layer (LetBody bs))   = (fst <$> lookupBindingIn x bs) <|> seek g
 >     seek (g :< Layer (LetBindings bs))  = (fst <$> lookupBindingIn x bs) <|> seek g
->     seek (g :< Layer (PatternTop (y ::: ty) bs ps cs))
->         | x == y = return $ TmVar y ::: ty
->         | otherwise = case lookIn bs of
->             Just tt  -> return tt
->             Nothing  -> seek g
+>     seek (g :< Layer (PatternTop (y ::: ty)))
+>         | x == y     = return $ TmVar y ::: ty
+>         | otherwise  = seek g
 >     seek (g :< _) = seek g
 >
 >     lookIn [] = Nothing

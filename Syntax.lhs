@@ -1,13 +1,11 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              GADTs, TypeOperators, FlexibleInstances,
 >              StandaloneDeriving, TypeFamilies, RankNTypes,
->              ImpredicativeTypes #-}
+>              ImpredicativeTypes, FlexibleContexts #-}
 
 > module Syntax where
 
 > import Control.Applicative
-> import Control.Monad
-> import Data.Foldable hiding (foldl1)
 > import Data.Traversable
 > import Data.Monoid
 > import Unsafe.Coerce
@@ -50,6 +48,7 @@
 > type Declaration      = Decl OK
 > type Program          = Prog OK
 > type Guard            = Grd OK
+> type GuardTerms       = GrdTms OK
 
 > type STerm             = Tm RAW
 > type SConstructor      = Con RAW
@@ -60,6 +59,7 @@
 > type SDeclaration      = Decl RAW
 > type SProgram          = Prog RAW
 > type SGuard            = Grd RAW
+> type SGuardTerms       = GrdTms RAW
 
 
 
@@ -95,6 +95,41 @@
 
 > fogSys2 :: TravTypes2 t => t OK () a -> t RAW () a
 > fogSys2 = fst . fogTypes2 fogSysVar
+
+
+
+> data (:*:) f g a b where
+>     (:*:) :: f a b -> g a b -> (:*:) f g a b 
+
+> instance (Eq (f RAW b), Eq (g RAW b)) => Eq ((f :*: g) RAW b) where
+>     x :*: y == x' :*: y'  =  x == x' && y == y'
+
+> instance (TravTypes f, TravTypes g) => TravTypes (f :*: g) where
+>     travTypes    g (x :*: y) = (:*:) <$> travTypes g x <*> travTypes g y
+>     fogTypes     g (x :*: y) = fogTypes g x     :*: fogTypes g y
+>     renameTypes  g (x :*: y) = renameTypes g x  :*: renameTypes g y
+
+> {-
+> data (:+:) f g a b where
+>     InL  :: f a b -> (f :+: g) a b 
+>     InR  :: g a b -> (f :+: g) a b 
+
+> instance (Eq (f RAW b), Eq (g RAW b)) => Eq ((f :+: g) RAW b) where
+>     InL x  == InL y  =  x == y
+>     InR x  == InR y  =  x == y
+>     _      == _      =  False
+
+> instance (TravTypes f, TravTypes g) => TravTypes (f :+: g) where
+>     travTypes    g (InL x) = InL <$> travTypes g x
+>     travTypes    g (InR x) = InR <$> travTypes g x
+>     fogTypes     g (InL x) = InL (fogTypes g x)
+>     fogTypes     g (InR x) = InR (fogTypes g x)
+>     renameTypes  g (InL x) = InL (renameTypes g x)
+>     renameTypes  g (InR x) = InR (renameTypes g x)
+> -}
+
+
+
 
 
 > data Tm s a where
@@ -230,66 +265,68 @@
 > extComp eab (EC ebc)  q = extComp eab ebc (q . EC)
 
 
+
+> data GrdTms s b where
+>     Guarded    :: [(Grd :*: Tm) s b] -> GrdTms s b
+>     Unguarded  :: Tm s b -> GrdTms s b
+
+> instance Eq (GrdTms RAW b) where
+>     Guarded xs   == Guarded xs'   = xs == xs'
+>     Unguarded t  == Unguarded t'  = t == t'
+>     _            == _             = False
+
+> instance TravTypes GrdTms where
+>     travTypes g (Guarded xs)      = Guarded <$> traverse (travTypes g) xs
+>     travTypes g (Unguarded t)     = Unguarded <$> travTypes g t
+>     fogTypes g (Guarded xs)       = Guarded (map (fogTypes g) xs)
+>     fogTypes g (Unguarded t)      = Unguarded (fogTypes g t)
+>     renameTypes g (Guarded xs)    = Guarded (map (renameTypes g) xs)
+>     renameTypes g (Unguarded t)   = Unguarded (renameTypes g t)
+
+
 > data Alt s a where
->     Alt :: PatList s a b -> Maybe (Grd s b) -> Tm s b -> Alt s a
+>     Alt :: PatList s a b -> GrdTms s b -> Alt s a
 
 > instance Eq (Alt RAW a) where
->    (Alt xs mg t) == (Alt xs' mg' t') =
->        hetEq xs xs' (mg == mg' && t == t') False
+>    (Alt xs gt) == (Alt xs' gt') =
+>        hetEq xs xs' (gt == gt') False
 
 > instance TravTypes Alt where
+>     travTypes g (Alt xs gt) = Alt xs <$> travTypes g gt
 
->     travTypes g (Alt xs ms t) = 
->         Alt xs
->             <$> traverse (travTypes g) ms
->             <*> travTypes g t
-
->     fogTypes g (Alt xs ms t) = 
->         Alt xs'
->             (fmap (fogTypes g') ms)
->             (fogTypes g' t)
+>     fogTypes g (Alt xs gt) = Alt xs' (fogTypes g' gt)
 >       where (xs', g') = fogTypes2 g xs
 
->     renameTypes g (Alt xs ms t) = extPatList xs $ \ ex -> 
+>     renameTypes g (Alt xs gt) = extPatList xs $ \ ex -> 
 >       renameTypes2 g ex xs $ \ ex' xs' ->
->         Alt xs'
->             (fmap (renameTypes (extRenaming ex ex' g)) ms)
->             (renameTypes (extRenaming ex ex' g) t)
+>         Alt xs' (renameTypes (extRenaming ex ex' g) gt)
 
 > instance FV (Alt OK a) where
 >     (<<?) = elemsTypes
 
 > isVarAlt :: Alt s a -> Bool
-> isVarAlt (Alt P0 Nothing _)  = True
-> isVarAlt _                   = False
+> isVarAlt (Alt P0 (Unguarded _))  = True
+> isVarAlt _                       = False
 
 
 
 > data CaseAlt s a where
->     CaseAlt :: Pat s a b -> Maybe (Grd s b) -> Tm s b -> CaseAlt s a
+>     CaseAlt :: Pat s a b -> GrdTms s b -> CaseAlt s a
 
 > instance Eq (CaseAlt RAW a) where
->    (CaseAlt x mg t) == (CaseAlt x' mg' t') =
->        hetEq x x' (mg == mg' && t == t') False
+>    (CaseAlt x gt) == (CaseAlt x' gt') =
+>        hetEq x x' (gt == gt') False
 
 > instance TravTypes CaseAlt where
 
->     travTypes g (CaseAlt x ms t) = 
->         CaseAlt x
->             <$> traverse (travTypes g) ms
->             <*> travTypes g t
+>     travTypes g (CaseAlt x gt) =  CaseAlt x <$> travTypes g gt
 
->     fogTypes g (CaseAlt x ms t) = 
->         CaseAlt x'
->             (fmap (fogTypes g') ms)
->             (fogTypes g' t)
->       where (x', g') = fogTypes2 g x
+>     fogTypes g (CaseAlt x gt) = CaseAlt x' (fogTypes g' gt)
+>         where (x', g') = fogTypes2 g x
 
->     renameTypes g (CaseAlt x ms t) = extPat x $ \ ex -> 
+>     renameTypes g (CaseAlt x gt) = extPat x $ \ ex -> 
 >       renameTypes2 g ex x $ \ ex' x' ->
->         CaseAlt x'
->             (fmap (renameTypes (extRenaming ex ex' g)) ms)
->             (renameTypes (extRenaming ex ex' g) t)
+>         CaseAlt x' (renameTypes (extRenaming ex ex' g) gt)
 
 > instance FV (CaseAlt OK a) where
 >     (<<?) = elemsTypes

@@ -7,8 +7,6 @@
 > import Control.Monad hiding (mapM_)
 > import Data.Foldable hiding (elem)
 > import Data.Maybe
-> import Data.Monoid hiding (All)
-> import Control.Monad.State (gets)
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
 
@@ -16,12 +14,11 @@
 > import Kind
 > import Type
 > import TyNum
-> import Syntax
 > import Context
 > import Kit
 > import Error
 > import PrettyPrinter
-> import PrettyContext
+> import PrettyContext ()
 
 > data Extension = Restore | Replace Suffix
 
@@ -49,18 +46,10 @@
 >       putContext _Gamma
 >       case xD of
 >         A (a@(FVar _ KNum) := d) -> ext xD =<< f (a := d)
->         Layer pt@(PatternTop _ _ _ cs) -> do
+>         Layer l | layerStops l -> do
 >             m
->             modifyContext (:< Layer (pt{ptConstraints = p : cs}))
->         Layer GenMark -> do
->             m
->             modifyContext (:< Layer GenMark)
+>             modifyContext (:< Layer l)
 >             modifyContext (:< Constraint Wanted p)
-> {-
->         Constraint Given _ -> do
->             m
->             modifyContext $ (:< xD) . (:< Constraint Wanted p)
-> -}
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
 >     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred p)) $
 >               erk $ "onTopNum: ran out of context"
@@ -77,6 +66,11 @@
 
 
 > var k a = TyVar (FVar a k)
+
+
+> unifyList :: KindI k => [Type k] -> Contextual () (Type k)
+> unifyList []      = unknownTyVar "_ul" kind
+> unifyList (t:ts)  = mapM_ (unify t) ts >> return t
 
 
 > unify :: Type k -> Type k -> Contextual () ()

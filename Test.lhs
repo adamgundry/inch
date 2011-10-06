@@ -4,29 +4,17 @@
 
 > import Parser
 > import PrettyPrinter
-> import Syntax
 > import ProgramCheck
 > import Erase
 
-> test :: (a -> Either String String)
+> test :: (a -> String) -> (a -> Either String String)
 >             -> [a] -> Int -> Int -> String
-> test f [] yes no = "Passed " ++ show yes ++ " tests, failed " ++ show no ++ " tests."
-> test f (x:xs) yes no = case f x of
->     Right s  -> "PASS:\n" ++ s ++ "\n" ++ test f xs (yes+1) no
->     Left s   -> "FAIL:\n" ++ s ++ "\n" ++ test f xs yes (no+1)
+> test g f [] yes no = "Passed " ++ show yes ++ " tests, failed " ++ show no ++ " tests."
+> test g f (x:xs) yes no = "TEST\n" ++ g x ++ "\n" ++ case f x of
+>     Right s  -> "PASS\n" ++ s ++ "\n" ++ test g f xs (yes+1) no
+>     Left s   -> "FAIL\n" ++ s ++ "\n" ++ test g f xs yes (no+1)
 
-> {-
-> test :: (a -> Either String String)
->             -> [a] -> Int -> Int -> String
-> test f xs yes no = let
->     (fails, passes) = partitionEithers (map f xs)
->     str a           = concatMap (\ s -> a ++ ": " ++ s ++ "\n")
->     in str "PASS" passes ++ "\n" ++ str "FAIL" fails ++
->      "\nPassed " ++ show (length passes) ++ " tests, failed "
->      ++ show (length fails) ++ " tests."
-> -}
-
-> runTest f xs yes no = putStrLn $ test f xs yes no
+> runTest g f xs yes no = putStrLn $ test g f xs yes no
 
 
 > roundTrip :: String -> Either String String
@@ -44,7 +32,7 @@
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> roundTripTest = runTest roundTrip roundTripTestData 0 0
+> roundTripTest = runTest id roundTrip roundTripTestData 0 0
 
 > roundTripTestData = 
 >   "f = x" :
@@ -148,7 +136,7 @@
 
 
 
-> parseCheckTest = runTest parseCheck parseCheckTestData 0 0
+> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
 
 > vecDecl = "data Vec :: Num -> * -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
@@ -220,7 +208,7 @@
 >   ("f :: forall a . a -> (pi (m :: Num) . a)\nf x {m} = x", True) :
 >   (vecDecl ++ "vec :: forall a . pi (m :: Num) . 0 <= m => a -> Vec m a\nvec {0} x = Nil\nvec {n+1} x = Cons x (vec {n} x)", True) :
 >   (natDecl ++ "nat :: pi (n :: Num) . 0 <= n => Nat\nnat {0} = Zero\nnat{m+1} = Suc (nat {m})", True) :
->   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf (C {i}) = C {i}", True) :
+>   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf (C {j}) = C {j}", True) :
 >   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
 >   ("data T :: Num -> * where C :: forall (m :: Num) . pi (n :: Num) . m ~ n => T m\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
 >   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
@@ -352,7 +340,7 @@
 >   ("f :: (pi (n :: Nat) . Integer) -> Integer\nf h = h {3}\ny :: pi (n :: Nat) . Integer\ny {n} = 3\ng = f (\\ {n} -> y {n})", True):
 >   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero Zero", False) :
 >   ("data D :: Num -> * where\n  Zero :: D 0\n  NonZero :: forall (n :: Num) . D n\nisZ :: forall a . pi (n :: Num) . (n ~ 0 => a) -> a -> a\nisZ = isZ\nx :: pi (n :: Num) . D n\nx {n} = isZ {n} Zero NonZero", True) :
->   ("f :: forall (n :: Num) . n <= 42 => Integer\nf = f", True) :
+>   -- ("f :: forall (n :: Num) . n <= 42 => Integer\nf = f", True) :
 >   ("f :: forall (t :: Num -> *)(n :: Num) . n <= 42 => t n -> Integer\nf = f\ng :: forall (s :: Num -> *) . (forall (n :: Num) . n <= 42 => s n -> Integer) -> Integer\ng = g\nh = g f", True) :
 >   ("a :: forall (x :: Num) . Integer\na =\n  let f :: forall (t :: Num -> *)(n :: Num) . n <= x => t n -> Integer\n      f = f\n      g :: forall (s :: Num -> *) . (forall (n :: Num) . n <= x => s n -> Integer) -> Integer\n      g = g\n  in g f", True) :
 >   ("noo :: Bool -> Bool\nnoo x = case x of\n  True -> False\n  False -> True", True) :
@@ -381,7 +369,14 @@
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . a ~ b => f (a ^ 1) -> f b\nf x = x", True) :
 >   ("f :: pi (m :: Num) . Integer\nf {m} = f {6 ^ 2 + m}", True) :
 >   (vec2Decl ++ "append :: forall a (m n :: Num) . Vec a m -> Vec a n -> Vec a (m+n)\nappend = append\nflat :: forall a (m n :: Num). Vec (Vec a m) n -> Vec a (m*n)\nflat Nil = Nil\nflat (Cons xs xss) = append xs (flat xss)", True) :
-
+>   ("f :: pi (x :: Num) . Bool\nf {x} | {x > 0} = True\n      | otherwise = False", True) :
+>   ("f {x} | {x > 0} = True\n      | otherwise = False", True) :
+>   ("needPos :: pi (x :: Num) . x > 0 => Integer\nneedPos = needPos\nf :: pi (x :: Num) . Integer\nf {x} | {x > 0} = needPos {x}\n      | otherwise = -1", True) :
+>   ("needPos :: pi (x :: Num) . x > 0 => Integer\nneedPos = needPos\nf :: pi (x :: Num) . Integer\nf {x} | {x > 0} = needPos {x}\n      | otherwise = needPos {x}", False) :
+>   ("needPos :: pi (x :: Num) . x > 0 => Integer\nneedPos = needPos\nf {x} | {x > 0} = needPos {x}\n      | otherwise = -1", True) :
+>   ("needPos :: pi (x :: Num) . x > 0 => Integer\nneedPos = needPos\nf {x} | {x > 0} = needPos {x}\n      | otherwise = needPos {x}", True) :
+>   ("f x | (case x of True -> False\n                 False -> True\n            ) = 1\n    | otherwise = 0", True) :
+>   ("f x | True = 1\n    | False = True", False) :
 >   []
 
 
@@ -397,17 +392,17 @@
 >                             ++ s ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
-> eraseCheckTest = runTest eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
+> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 
 > check fn = do
 >     s <- readFile fn
->     putStrLn $ test parseCheck [(s, True)] 0 0
+>     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
 
 > checkEx = check "Example.hs"
 
 > erase fn = do
 >     s <- readFile fn
->     putStrLn $ test eraseCheck [s] 0 0
+>     putStrLn $ test (const fn) eraseCheck [s] 0 0
 
 > eraseEx = erase "Example.hs"

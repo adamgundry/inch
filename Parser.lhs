@@ -15,7 +15,7 @@
 > import Type
 > import Syntax
 > import Kit
-> import Kind
+> import Kind hiding (kind)
 
 
 > parse = I.parse
@@ -191,9 +191,8 @@ Terms
 >     as <- I.block $ many caseAlternative
 >     return $ Case t as
 
-> caseAlternative = CaseAlt <$> casePattern <*> caseAltRest <*> I.lineFold expr
-> caseAltRest  =    reservedOp "->" *> pure Nothing
->              <|>  reservedOp "|" *> (Just <$> guarded) <* reservedOp "->"
+> caseAlternative = I.lineFold (CaseAlt <$> casePattern <*> altRest (reservedOp "->")
+>     <?> "case alternative")
 
 > casePattern  =    PatCon <$> dataConName <*> patList
 >              <|>  parens casePattern
@@ -285,7 +284,14 @@ Programs
 >     unless (s == x) $ fail $ "expected pattern for " ++ show s
 >     alternative
 
-> alternative = Alt <$> patList <*> altRest <*> expr
+> alternative = Alt <$> patList <*> altRest (reservedOp "=")
+
+> altRest p  =    Unguarded <$> (p *> expr)
+>            <|>  Guarded <$> (many1 (reservedOp "|" *> ((:*:) <$> guarded <* p <*> expr)))
+
+> guarded  =    NumGuard <$> braces predicates
+>          <|>  ExpGuard <$> expr
+
 
 > patList  =    (:!) <$> pattern <*> patList
 >          <|>  pure P0
@@ -307,12 +313,6 @@ Programs
 >     return $ case ma of
 >         Just a   -> rawCoerce2 $ PatBrace a k
 >         Nothing  -> PatBraceK k
-
-> altRest  =    reservedOp "=" *> pure Nothing
->          <|>  reservedOp "|" *> (Just <$> guarded) <* reservedOp "="
-
-> guarded  =    NumGuard <$> braces predicates
->          <|>  ExpGuard <$> expr
 
 
 > signature = I.lineFold $ do

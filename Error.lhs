@@ -32,7 +32,7 @@
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
 >     UnifyNumFixed      :: Var () KNum -> Ty () KNum -> Err
 >     CannotDeduce       :: [Predicate] -> [Predicate] -> Err
->     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> [Alternative ()] -> Err
+>     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> Err
 >     ImpossiblePred     :: Predicate -> Err
 >     BadBindingLevel    :: Var () KNum -> Err
 >     Fail               :: String -> Err
@@ -68,12 +68,10 @@
 >                                                 ,  text "from hypotheses"
 >                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred hs)
 >                                                 ]
->     pretty (BadExistential (Ex a) (Ex t) as)  _ = sep  [  text "Illegal existential"
+>     pretty (BadExistential (Ex a) (Ex t))  _ = sep  [  text "Illegal existential"
 >                                                        <+> prettySysVar a
 >                                                 ,  text "when generalising type"
 >                                                 ,  nest 2 (prettyHigh $ fogSysTy t)
->                                                 ,  text "and patterns"
->                                                 ,  nest 2 (vcatPretty $ fmap fogSys as)
 >                                                 ]
 >     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred p)
 >     pretty (BadBindingLevel a) _ = text "Forall-bound variable"
@@ -103,7 +101,7 @@
 > errUnifyFixed a t         = throw (UnifyFixed (Ex a) (Ex t))
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
 > errCannotDeduce hs qs     = throw (CannotDeduce hs qs)
-> errBadExistential a t ps  = throw (BadExistential (Ex a) (Ex t) ps)
+> errBadExistential a t     = throw (BadExistential (Ex a) (Ex t))
 > errImpossiblePred p       = throw (ImpossiblePred p)
 > errBadBindingLevel a      = throw (BadBindingLevel a)                            
 

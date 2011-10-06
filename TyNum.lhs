@@ -3,13 +3,11 @@
 > module TyNum where
 
 > import Control.Applicative
-> import Data.Traversable
 > import Data.List
-
-> import Debug.Trace
 
 > import Kind
 > import Type
+
 
 > data NormNum a where
 >     NN :: Integer -> [(Var a KNum, Integer)] -> [(Ty a KNum, Integer)] -> NormNum a
