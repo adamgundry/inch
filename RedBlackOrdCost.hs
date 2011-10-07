@@ -288,9 +288,7 @@ solveDel t (ZRL {x} z (TB {y} (TR {lx} ll lr) r)) = tick (fmp RBT (plug (TR {lx}
 solveDel t (ZRL {x} z (TB {y} l (TR {rx} rl rr))) = tick (fmp RBT (plug (TR {y} (TB {x} t l) (TB {rx} rl rr)) z))
 
 -- Arrgh: these are one line in Agda because we can pattern match on the colours being black
-solveDel t (ZRL {x} z (TB {y} E E))              = tick (fmp RBT (plugBR (TB {x} t (TR {y} E E)) z))
-solveDel t (ZRL {x} z (TB {y} (TB {lx} ll lr) E))  = tick (fmp RBT (plugBR (TB {x} t (TR {y} (TB {lx} ll lr) E)) z))
-solveDel t (ZRL {x} z (TB {y} E (TB {rx} rl rr)))  = tick (fmp RBT (plugBR (TB {x} t (TR {y} E (TB {rx} rl rr))) z))
+solveDel t (ZRL {x} z (TB {y} E E))                = tick (fmp RBT (plugBR (TB {x} t (TR {y} E E)) z))
 solveDel t (ZRL {x} z (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)))  = tick (fmp RBT (plugBR (TB {x} t (TR {y} (TB {lx} ll lr) (TB {rx} rl rr))) z))
 
 
@@ -299,8 +297,6 @@ solveDel t (ZRR {x} (TB {y} l (TR {rx} rl rr)) z)  = tick (fmp RBT (plug (TR {rx
 
 -- Arrgh
 solveDel t (ZRR {x} (TB {y} E E) z)              = tick (fmp RBT (plugBR (TB {y} E (TR {x} E t)) z))
-solveDel t (ZRR {x} (TB {y} (TB {lx} ll lr) E) z)  = tick (fmp RBT (plugBR (TB {y} (TB {lx} ll lr) (TR {x} E t)) z))
-solveDel t (ZRR {x} (TB {y} E (TB {rx} rl rr)) z)  = tick (fmp RBT (plugBR (TB {y} E (TR {x} (TB {rx} rl rr) t)) z))
 solveDel t (ZRR {x} (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)) z)  = tick (fmp RBT (plugBR (TB {y} (TB {lx} ll lr) (TR {x} (TB {rx} rl rr) t)) z))
 
 
