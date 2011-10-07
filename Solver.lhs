@@ -6,11 +6,12 @@
 > import Control.Applicative hiding (Alternative)
 > import Control.Monad
 > import Control.Monad.Writer hiding (All)
+> import Data.List
 > import Data.Maybe
 > import Data.Traversable
 
 > import qualified Data.Integer.Presburger as P
-> import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)))
+> import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)), (.*))
 
 > import BwdFwd
 > import Kind 
@@ -20,6 +21,9 @@
 > import Unify
 > import Kit
 > import Error
+
+> import Debug.Trace
+> import PrettyPrinter
 
 
 > unifySolveConstraints :: Contextual ()
@@ -41,30 +45,37 @@
 > trySolveConstraints :: Contextual ([Predicate], [Predicate])
 > trySolveConstraints = do
 >     g <- getContext
->     let (g', hs, ps) = collect g [] []
+>     let (g', vs, hs, ps) = collect g [] [] []
 >     putContext g'
->     qs <- filterM (formulaic hs) ps
+>     let qs = simplifyConstraints vs hs ps
 >     return (hs, qs)
 >   where
->     formulaic hs p = (not . P.check) <$> toFormula hs p
+>     collect :: Context -> [Var () KNum] -> [Predicate] -> [Predicate] ->
+>                    (Context, [Var () KNum], [Predicate], [Predicate])
+>     collect B0 vs hs ps = (B0, vs, hs, ps)
+>     collect (g :< Constraint Wanted p)  vs hs ps = collect g vs hs (p:ps)
+>     collect (g :< Constraint Given h)   vs hs ps =
+>         collect g vs (h:hs) ps <:< Constraint Given h
+>     collect (g :< A e@(a@(FVar _ KNum) := Some d)) vs hs ps =
+>         collect g vs (subsPreds a d hs) (subsPreds a d ps) <:< A e
+>     collect (g :< A e@(a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
+>         collect g (a:vs) hs ps <:< A e
+>     collect (g :< Layer l) vs hs ps  | layerStops l  = (g :< Layer l, vs', hs', ps')
+>                                      | otherwise     = collect g vs hs ps <:< Layer l
+>         where (vs', hs', ps') = collectHyps g vs hs ps
+>     collect (g :< e) vs hs ps = collect g vs hs ps <:< e
 >
->     collect :: Context -> [Predicate] -> [Predicate] ->
->                    (Context, [Predicate], [Predicate])
->     collect B0 hs ps = (B0, hs, ps)
->     collect (g :< Constraint Wanted p)  hs ps = collect g hs (p:ps)
->     collect (g :< Constraint Given h)   hs ps =
->         collect g (h:hs) ps <:< Constraint Given h
->     collect (g :< A e@(a@(FVar _ KNum) := Some d)) hs ps =
->         collect g (subsPreds a d hs) (subsPreds a d ps) <:< A e
->     collect (g :< Layer l) hs ps | layerStops l  = (g :< Layer l, collectHyps g hs, ps)
->                                  | otherwise     = collect g hs ps <:< Layer l
->     collect (g :< e) hs ps = collect g hs ps <:< e
->
->     collectHyps B0 hs = hs
->     collectHyps (g :< Constraint Given h) hs = collectHyps g (h:hs)
->     collectHyps (g :< _) hs = collectHyps g hs
+>     collectHyps ::  Context -> [Var () KNum] -> [Predicate] -> [Predicate] ->
+>                         ([Var () KNum], [Predicate], [Predicate])
+>     collectHyps B0 vs hs ps = (vs, hs, ps)
+>     collectHyps (g :< Constraint Given h) vs hs ps = collectHyps g vs (h:hs) ps
+>     collectHyps (g :< A e@(a@(FVar _ KNum) := Some d)) vs hs ps =
+>         collectHyps g vs (subsPreds a d hs) (subsPreds a d ps)
+>     collectHyps (g :< A e@(a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
+>         collectHyps g (a:vs) hs ps
+>     collectHyps (g :< _) vs hs ps = collectHyps g vs hs ps
 
->     (g, a, b) <:< e = (g :< e, a, b)
+>     (g, a, b, c) <:< e = (g :< e, a, b, c)
 
 >     subsPreds :: Var () KNum -> Type KNum -> [Predicate] -> [Predicate]
 >     subsPreds a n = map (fmap (replaceTy a n))
@@ -96,64 +107,73 @@
 >     nonc GR = (<= 0)
 
 
-> toFormula :: [Predicate] -> Predicate ->
->                  Contextual P.Formula
-> toFormula hs p = do
->     g <- getContext
->     let hs'  = map (normalisePred . expandPred g) hs
->         p'   = normalisePred $ expandPred g p
->     case trivialPred p' of
->         Just True   -> return TRUE
->         Just False  -> return FALSE
->         Nothing     -> do
->             let f = convert (expandContext g) [] hs' p'
->             -- mtrace $ "toFormula [" ++ intercalate "," (map (renderMe . fogPred) hs) ++ "] => (" ++ renderMe (fogPred p) ++ ")"
->             -- mtrace (show f)
->             return f
+> simplifyConstraints :: [Var () KNum] -> [Predicate] -> [Predicate] -> [Predicate]
+> simplifyConstraints vs hs ps = filter (not . checkPred) (nub ps)
 >   where
->     convert :: Context -> [(Var () KNum, P.Term)] -> [NormalPredicate] ->
->                    NormalPredicate -> P.Formula
->     convert B0 axs hs p =
+>     -- Compute the transitive dependency closure of the variables that occur in p.
+>     -- We have to keep iterating until we reach a fixed point. This
+>     -- will produce the minimum set of variables and hypotheses on
+>     -- which the solution of p can depend.
+>     iterDeps :: ([Var () KNum], [Predicate]) -> ([Var () KNum], [Predicate]) ->
+>                   ([Var () KNum], [Predicate]) -> ([Var () KNum], [Predicate])
+>     iterDeps old             ([], [])         _                = old
+>     iterDeps (oldVs, oldHs)  (newVs, newHs)  (poolVs, poolHs)  =
+>         iterDeps (oldVs ++ newVs, oldHs ++ newHs) (newVs', newHs') (poolVs', poolHs')
+>       where
+>         (newVs', poolVs') = partition (<? newHs) poolVs
+>         (newHs', poolHs') = partition (newVs <<?) poolHs
+>
+>     checkPred :: Predicate -> Bool
+>     checkPred p = P.check . toFormula xs (map normalisePred phs) . normalisePred $ p
+>    
+>       where
+>         (pvs, pool)  = partition (<? p) vs
+>         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, hs)
+
+
+> toFormula :: [Var () KNum] -> [NormalPredicate] -> NormalPredicate -> P.Formula
+> toFormula vs hs p = 
+
+<   trace (unlines ["toFormula", "[" ++ intercalate "," (map fogSysVar vs) ++ "]","[" ++ intercalate "," (map (renderMe . fogSysPred . reifyPred) hs) ++ "]","(" ++ renderMe (fogSysPred $ reifyPred p) ++ ")"]) $
+
+>   case trivialPred p of
+>     Just True   -> TRUE
+>     Just False  -> FALSE
+>     Nothing | null hs && isSimple p  -> FALSE
+>             | p `elem` hs            -> TRUE
+>     Nothing     -> convert vs []
+>                   
+>   where
+>     convert :: [Var () KNum] -> [(Var () KNum, P.Term)] -> P.Formula
+>     convert [] axs =
 >         let hs'  = map (predToFormula True axs) hs
 >             p'   = predToFormula False axs p
 >         in foldr (:/\:) TRUE hs' :=>: p'
->     convert (g :< A (a@(FVar _ KNum) := d)) axs hs p | any (a <?) (p:hs) = 
->         P.Forall (\ x -> convert g ((a, x) : axs) hs p)
->     convert (g :< _) axs hs p = convert g axs hs p
+>     convert (v:vs) axs = P.Forall (\ t -> convert vs ((v, t) : axs))
                 
 >     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate -> P.Formula
 >     predToFormula hyp axs (P c m n) = linearise axs m $ \ m' ->
 >                                       linearise axs n $ \ n' ->
 >                                           compToFormula c m' n'
 
-> {-
->     predToFormula hyp xs (Op Max m n t) =
->         let m'  = numToTerm xs m
->             n'  = numToTerm xs n
->             t'  = numToTerm xs t
->         in ((m' :=: t') :/\: (m' :>=: n'))
->                    :\/: ((n' :=: t') :/\: (n' :>=: m'))
->     predToFormula hyp _ (Op _ _ _ _) = if hyp then TRUE else FALSE
-> -}
-
 >     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
 >                     (P.Term -> P.Formula) -> P.Formula
 >     linearise axs (NN i bs ts) f = help x ts
 >       where
->         x = fromInteger i + foldr (\ (b, k) t -> fromJust (lookup b axs) * fromInteger k + t) 0 bs
+>         x = fromInteger i + foldr (\ (b, k) t -> k .* fromJust (lookup b axs) + t) 0 bs
 >
 >         help :: P.Term -> [(Type KNum, Integer)] -> P.Formula
 >         help t []      = f t
 >         help t ((TyApp (UnOp o) m, k):ks) | Just lo <- linUnOp o =
 >             linearise axs (normaliseNum m) $ \ m' ->
 >                 P.Exists $ \ y ->
->                     lo m' y :/\: help (t + fromInteger k * y) ks
+>                     lo m' y :/\: help (t + k .* y) ks
 >         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linBinOp o =
 >             linearise axs (normaliseNum m) $ \ m' ->
 >             linearise axs (normaliseNum n) $ \ n' ->
 >                 P.Exists $ \ y ->
->                     lo m' n' y :/\: help (t + fromInteger k * y) ks
->         help t ((_, k):ks)  = P.Forall (\ y -> help (t + fromInteger k * y) ks)
+>                     lo m' n' y :/\: help (t + k .* y) ks
+>         help t ((_, k):ks)  = P.Forall (\ y -> help (t + k .* y) ks)
 
 >     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
 >     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))

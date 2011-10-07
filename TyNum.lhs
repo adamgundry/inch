@@ -184,7 +184,7 @@
 > normaliseNum t = NN 0 [] [(t, 1)]
 
 > normalisePred :: Pred (Ty a KNum) -> NormPred a
-> normalisePred = fmap normaliseNum
+> normalisePred (P c m n) = P c 0 (normaliseNum (n - m))
 
 
 > trivialPred :: Ord a => NormPred a -> Maybe Bool
@@ -193,3 +193,7 @@
 
 > nbinOp :: BinOp -> NormNum a -> NormNum a -> NormNum a
 > nbinOp o m n = NN 0 [] [(binOp o (reifyNum m) (reifyNum n), 1)]
+
+> isSimple :: NormPred a -> Bool
+> isSimple (P _ (NN _ _ []) (NN _ _ [])) = True
+> isSimple _ = False

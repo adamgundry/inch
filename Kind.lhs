@@ -232,6 +232,8 @@
 >     xs <<? Left x   = xs <<? x
 >     xs <<? Right y  = xs <<? y
 
+> instance (FV a, FV b) => FV (a, b) where
+>     xs <<? (y, z) = xs <<? y || xs <<? z
 
 
 
