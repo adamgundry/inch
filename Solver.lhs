@@ -7,6 +7,8 @@
 > import Control.Monad
 > import Control.Monad.Writer hiding (All)
 > import Data.List
+> import Data.Map (Map)
+> import qualified Data.Map as Map
 > import Data.Maybe
 > import Data.Traversable
 
@@ -134,46 +136,54 @@
 > toFormula :: [Var () KNum] -> [NormalPredicate] -> NormalPredicate -> P.Formula
 > toFormula vs hs p = 
 
-<   trace (unlines ["toFormula", "[" ++ intercalate "," (map fogSysVar vs) ++ "]","[" ++ intercalate "," (map (renderMe . fogSysPred . reifyPred) hs) ++ "]","(" ++ renderMe (fogSysPred $ reifyPred p) ++ ")"]) $
+<  trace (unlines ["toFormula", "[" ++ intercalate "," (map fogSysVar vs) ++ "]","[" ++ intercalate "," (map (renderMe . fogSysPred . reifyPred) hs) ++ "]","(" ++ renderMe (fogSysPred $ reifyPred p) ++ ")"]) $
 
 >   case trivialPred p of
 >     Just True   -> TRUE
 >     Just False  -> FALSE
->     Nothing | null hs && isSimple p  -> FALSE
+>     Nothing -- | null hs && isSimple p  -> FALSE
 >             | p `elem` hs            -> TRUE
->     Nothing     -> convert vs []
+>     Nothing     -> let r = convert vs []
+>                    in {- trace ("result: " ++ show r) -} r
 >                   
 >   where
 >     convert :: [Var () KNum] -> [(Var () KNum, P.Term)] -> P.Formula
->     convert [] axs =
->         let hs'  = map (predToFormula True axs) hs
->             p'   = predToFormula False axs p
->         in foldr (:/\:) TRUE hs' :=>: p'
+>     convert [] axs = gogo axs hs $ \ hs' ->
+>                      predToFormula False axs p $ \ p' ->
+>                          hs' :=>: p'
 >     convert (v:vs) axs = P.Forall (\ t -> convert vs ((v, t) : axs))
                 
->     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate -> P.Formula
->     predToFormula hyp axs (P c m n) = linearise axs m $ \ m' ->
->                                       linearise axs n $ \ n' ->
->                                           compToFormula c m' n'
+>     gogo :: [(Var () KNum, P.Term)] -> [NormalPredicate] ->
+>                 (P.Formula -> P.Formula) -> P.Formula
+>     gogo axs []      f = f TRUE
+>     gogo axs (h:hs)  f = predToFormula True axs h $ \ h' ->
+>                              gogo axs hs (\ x -> f (h' :/\: x))
+
+>     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate ->
+>                          (P.Formula -> P.Formula) -> P.Formula
+>     predToFormula hyp axs (P c m n) f  = linearise axs m $ \ m' ->
+>                                              linearise axs n $ \ n' ->
+>                                                  f (compToFormula c m' n')
 
 >     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
 >                     (P.Term -> P.Formula) -> P.Formula
->     linearise axs (NN i bs ts) f = help x ts
+>     linearise axs n f = help 0 (Map.toList (elimNN n))
 >       where
->         x = fromInteger i + foldr (\ (b, k) t -> k .* fromJust (lookup b axs) + t) 0 bs
->
->         help :: P.Term -> [(Type KNum, Integer)] -> P.Formula
+>         help :: P.Term -> [(Monomial, Integer)] -> P.Formula
 >         help t []      = f t
->         help t ((TyApp (UnOp o) m, k):ks) | Just lo <- linUnOp o =
->             linearise axs (normaliseNum m) $ \ m' ->
->                 P.Exists $ \ y ->
->                     lo m' y :/\: help (t + k .* y) ks
->         help t ((TyApp (TyApp (BinOp o) m) n, k):ks) | Just lo <- linBinOp o =
->             linearise axs (normaliseNum m) $ \ m' ->
->             linearise axs (normaliseNum n) $ \ n' ->
->                 P.Exists $ \ y ->
->                     lo m' n' y :/\: help (t + k .* y) ks
->         help t ((_, k):ks)  = P.Forall (\ y -> help (t + k .* y) ks)
+>         help t ((ys, k):ks) = case getLinearMono ys of
+>             Just (Left ())           -> help (t + fromInteger k) ks
+>             Just (Right (VarFac a))  -> help (t + k .* fromJust (lookup a axs)) ks
+>             Just (Right (UnFac o `AppFac` m)) | Just lo <- linUnOp o ->
+>                 linearise axs m $ \ m' ->
+>                     P.Exists $ \ y ->
+>                         lo m' y :/\: help (t + k .* y) ks
+>             Just (Right (BinFac o `AppFac` m `AppFac` n)) | Just lo <- linBinOp o ->
+>                  linearise axs m $ \ m' ->
+>                      linearise axs n $ \ n' ->
+>                          P.Exists $ \ y ->
+>                              lo m' n' y :/\: help (t + k .* y) ks        
+>             _ ->  P.Forall (\ y -> help (t + k .* y) ks)
 
 >     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
 >     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))

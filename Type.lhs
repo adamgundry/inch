@@ -1,7 +1,8 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              GADTs, TypeOperators, TypeFamilies, RankNTypes,
 >              ScopedTypeVariables, FlexibleInstances,
->              StandaloneDeriving, TypeSynonymInstances #-}
+>              StandaloneDeriving, TypeSynonymInstances,
+>              MultiParamTypeClasses #-}
 
 > module Type where
 
@@ -11,12 +12,10 @@
 > import qualified Data.Monoid as M
 > import Data.Traversable
 > import Data.List
+> import Unsafe.Coerce
 
 > import Kit
 > import Kind
-
-> type Predicate        = Pred TypeNum
-> type SPredicate       = Pred SType
 
 > type TyNum a  = Ty a KNum
 > type TypeNum  = TyNum ()
@@ -26,6 +25,8 @@
 > type Sigma   = Type KSet
 > type Rho     = Type KSet
 
+> type Predicate   = Pred TypeNum
+> type SPredicate  = Pred SType
 
 
 > data Comparator = LE | LS | GE | GR | EL
@@ -52,7 +53,7 @@
 
 
 > data UnOp = Abs | Signum
->   deriving (Eq, Show)
+>   deriving (Eq, Ord, Show)
 
 > unOpFun :: UnOp -> Integer -> Integer
 > unOpFun Abs     = abs
@@ -64,7 +65,7 @@
 
 
 > data BinOp = Plus | Minus | Times | Pow | Min | Max
->   deriving (Eq, Show)
+>   deriving (Eq, Ord, Show)
 
 > {-
 >     Mod | Pow
@@ -127,6 +128,33 @@
 
 > instance Eq (Ty a k) where
 >     (==) = (=?=)
+
+> instance HetOrd (Ty a) where
+>     TyVar a    <?= TyVar b    = a <?= b
+>     TyVar _    <?= _          = True
+>     _          <?= TyVar _    = False
+>     TyCon c k  <?= TyCon d l  = c <= d && k <?= l
+>     TyCon _ _  <?= _          = True
+>     _          <?= TyCon _ _  = False
+>     TyApp f s  <?= TyApp g t  = f <?= g && s <?= t
+>     TyApp _ _  <?= _          = True
+>     _          <?= TyApp _ _  = False
+>     Bind b x k t  <?= Bind b' x' k' t'  = b <= b' && x <= x' && k <?= k' && t <?= unsafeCoerce t'
+>     Bind _ _ _ _  <?= _                 = True
+>     _             <?= Bind _ _ _ _      = False
+>     Arr           <?= _                 = True
+>     _             <?= Arr               = False
+>     TyInt i       <?= TyInt j           = i <= j
+>     TyInt _       <?= _                 = True
+>     _             <?= TyInt _           = False
+>     UnOp o        <?= UnOp p            = o <= p
+>     UnOp _        <?= _                 = True
+>     _             <?= UnOp _            = False
+>     BinOp o       <?= BinOp p           = o <= p
+
+> instance Ord (Ty a k) where
+>     (<=) = (<?=)
+
 
 > instance Num (Ty a KNum) where
 >     fromInteger  = TyInt

@@ -29,6 +29,12 @@
 >     Ex s == Ex t = s =?= t
 
 
+> hetElem :: HetEq t => t a -> [t b] -> Bool
+> hetElem x [] = False
+> hetElem x (y:ys) = x =?= y || hetElem x ys
+
+> class HetOrd t where
+>     (<?=) :: t a -> t b -> Bool
 
 > data S a where
 >     S :: a -> S a

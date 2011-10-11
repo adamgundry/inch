@@ -63,6 +63,13 @@
 >     hetEq (k :-> k') (l :-> l') yes no = hetEq k l (hetEq k' l' yes no) no
 >     hetEq _ _ _ no = no
 
+> instance HetOrd Kind where
+>     KSet  <?=  _               = True
+>     _     <?=  KSet            = False
+>     KNum  <?=  _               = True
+>     _     <?=  KNum            = False
+>     (k :-> k') <?= (l :-> l')  = k <?= k' && l <?= l'
+
 > class KindI t where
 >     kind :: Kind t
 
@@ -123,10 +130,14 @@
 > instance Eq (BVar a k) where
 >     (==) = (=?=)
 
+> instance HetOrd (BVar a) where
+>     Top    <?= _      = True
+>     Pop x  <?= Pop y  = x <?= y
+>     Pop _  <?= Top    = False
+
 > instance Ord (BVar a k) where
->     Top    <= _      = True
->     Pop x  <= Pop y  = x <= y
->     Pop _  <= Top    = False
+>     (<=) = (<?=)
+
 
 
 > bvarToInt :: BVar a k -> Int
@@ -152,11 +163,15 @@
 > instance Eq (Var a k) where
 >     (==) = (=?=)
 
+> instance HetOrd (Var a) where
+>     BVar x    <?= BVar y    = x <?= y
+>     FVar a _  <?= FVar b _  = a <= b
+>     BVar _    <?= FVar _ _  = True
+>     FVar _ _  <?= BVar _    = False
+
 > instance Ord (Var a k) where
->     BVar x    <= BVar y    = x <= y
->     FVar a _  <= FVar b _  = a <= b
->     BVar _    <= FVar _ _  = True
->     FVar _ _  <= BVar _    = False
+>     (<=) = (<?=)
+
 
 
 > varName :: Var () k -> TyName
