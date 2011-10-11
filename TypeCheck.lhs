@@ -86,7 +86,7 @@ status.
 > instantiate = instS SysVar Wanted Hole
 
 
-> existentialise :: (MonadState ZipState m, FV (Type k)) =>
+> existentialise :: (MonadState ZipState m, FV (Type k) ()) =>
 >                       m (Type k) -> m (Type k)
 > existentialise m = do
 >     modifyContext (:< Layer FunTop) -- hackish
@@ -102,30 +102,29 @@ status.
 >     help isHole (g :< e)             = help isHole g :< e
 
 
-> generalise :: (FV (t OK ()), TravTypes t) => Type KSet -> [t OK ()] -> Contextual (Type KSet, [t OK ()])
+> generalise :: (FV (t OK ()) (), TravTypes t) => Type KSet -> [t OK ()] -> Contextual (Type KSet, [t OK ()])
 > generalise t ps = do
 >     g <- getContext
 >     (g', tps) <- help g (t, ps) []
 >     putContext g'
 >     return tps
 >   where
->     help :: (FV (t OK ()), TravTypes t) =>  Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
+>     help :: (FV (t OK ()) (), TravTypes t) =>  Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
 >                 Contextual (Context, (Type KSet, [t OK ()]))
 >     help (g :< Layer l) tps hs  | layerStops l  = return (g :< Layer l, tps)
 >                                 | otherwise     = (<:< Layer l) <$> help g tps hs 
 
 >     help (g :< A (a@(FVar _ KNum) := Exists)) (t, ps) hs
->       | a <? t || a <? ps || a <? hs = case solveFor a hs of
+>       | a <? (t, ps, hs) = case solveFor a hs of
 >             Just n   -> replaceHelp g (t, ps) hs a (reifyNum n)
 >             Nothing  | a <? t -> traceContext "oh no" >>
 >                                     errBadExistential a t
 >                      | otherwise -> help g (t, ps) (filter (not . (a <?)) hs)
 >     help (g :< A (a := Exists)) (t, ps) hs
->       | a <? t     = errBadExistential a t
->       | otherwise  = help g (t, ps) hs
+>       | a <? (t, ps, hs)     = errBadExistential a t
 >     help (g :< A (a := Some d)) (t, ps) hs = replaceHelp g (t, ps) hs a d
 >     help (g :< A (a := d)) (t, ps) hs
->       | a <? t || a <? ps || a <? hs = help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps) hs
+>       | a <? (t, ps, hs) = help g (Bind All (fogVar a) (varKind a) (bindTy a t), ps) hs
 >     help (g :< A _)                  tps hs      = help g tps hs
 
 >     help (g :< Constraint Given h)   tps hs      = help g tps (h:hs)
@@ -139,13 +138,10 @@ status.
 >     (g, x) <:< e = (g :< e, x)
 
 
->     replaceHelp :: (FV (t OK ()), TravTypes t) => Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
+>     replaceHelp :: (FV (t OK ()) (), TravTypes t) => Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
 >         Var () l -> Type l -> Contextual (Context, (Type KSet, [t OK ()]))
->     replaceHelp g (t, ps) hs a d = do
->         let hs' = case a of
->                    FVar _ KNum -> map (fmap (replaceTy a d)) hs
->                    _           -> hs
->         help g (replaceTy a d t, map (replaceTypes a d) ps) hs'
+>     replaceHelp g (t, ps) hs a d =
+>         help g (replaceTy a d t, map (replaceTypes a d) ps) (map (fmap (replaceTy a d)) hs)
 
 >     solveFor :: Var () KNum -> [Predicate] -> Maybe NormalNum
 >     solveFor a = getFirst . foldMap (First . maybeSolveFor a) . mapMaybe f

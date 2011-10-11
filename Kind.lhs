@@ -1,10 +1,11 @@
 > {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes,
->              FlexibleInstances, StandaloneDeriving #-}
+>              FlexibleInstances, StandaloneDeriving, MultiParamTypeClasses #-}
 
 > module Kind where
 
 > import Data.Foldable
-> import Prelude hiding (any)
+> import Data.Monoid
+> import Prelude hiding (any, elem)
 
 > import BwdFwd
 > import Kit
@@ -210,31 +211,42 @@
 > wkClosedVar :: Var () k -> Var a k
 > wkClosedVar (FVar a k) = FVar a k
 
-> class FV t where
->     (<<?) :: [Var () k] -> t -> Bool
 
-> (<?) :: FV t => Var () k -> t -> Bool
+
+> class FV t a where
+>     fvFoldMap :: Monoid m => (forall k . Var a k -> m) -> t -> m
+
+> (<<?) :: FV t a => [Var a k] -> t -> Bool
+> as <<? t = getAny $ fvFoldMap (Any . (`hetElem` as)) t
+
+> (<?) :: FV t a => Var a k -> t -> Bool
 > a <? t = [a] <<? t
 
-> instance FV (Var () l) where
->     xs <<? v = any (v =?=) xs
+> vars :: FV t a => t -> [Ex (Var a)]
+> vars = fvFoldMap (\ x -> [Ex x])
 
-> instance FV a => FV [a] where
->     xs <<? as = any (xs <<?) as
 
-> instance FV a => FV (Fwd a) where
->     xs <<? t = any (xs <<?) t
+> instance FV (Var a l) a where
+>     fvFoldMap f a = f a
 
-> instance FV a => FV (Bwd a) where
->     xs <<? t = any (xs <<?) t
+> instance FV t a => FV [t] a where
+>     fvFoldMap f = foldMap (fvFoldMap f)
 
-> instance (FV a, FV b) => FV (Either a b) where
->     xs <<? Left x   = xs <<? x
->     xs <<? Right y  = xs <<? y
+> instance FV t a => FV (Fwd t) a where
+>     fvFoldMap f = foldMap (fvFoldMap f)
 
-> instance (FV a, FV b) => FV (a, b) where
->     xs <<? (y, z) = xs <<? y || xs <<? z
+> instance FV t a => FV (Bwd t) a where
+>     fvFoldMap f = foldMap (fvFoldMap f)
 
+> instance (FV t a, FV u a) => FV (Either t u) a where
+>     fvFoldMap f (Left x)   = fvFoldMap f x
+>     fvFoldMap f (Right x)  = fvFoldMap f x
+
+> instance (FV t a, FV u a) => FV (t, u) a where
+>     fvFoldMap f (x, y) = fvFoldMap f x <.> fvFoldMap f y
+
+> instance (FV s a, FV t a, FV u a) => FV (s, t, u) a where
+>     fvFoldMap f (x, y, z) = fvFoldMap f x <.> fvFoldMap f y <.> fvFoldMap f z
 
 
 > data VarSuffix a b where

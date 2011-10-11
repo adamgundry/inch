@@ -1,5 +1,6 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, TypeOperators, FlexibleContexts,
->              GADTs, RankNTypes, TypeSynonymInstances #-}
+>              GADTs, RankNTypes, TypeSynonymInstances,
+>              MultiParamTypeClasses, FlexibleInstances #-}
 
 > module Context where
 
@@ -8,6 +9,7 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import qualified Data.Map as Map
+> import Data.Monoid hiding (All)
 
 > import BwdFwd
 > import Kind
@@ -69,15 +71,15 @@
 > data TyDef k = Hole | Some (Type k) | Fixed | Exists
 >   deriving Show
 
-> instance FV (TyDef k) where
->     as <<? Some t = as <<? t
->     as <<? _      = False
+> instance FV (TyDef k) () where
+>     fvFoldMap f (Some t)  = fvFoldMap f t
+>     fvFoldMap f _         = mempty
 
 
 > type TyEntry k = Var () k := TyDef k
 
-> instance FV (TyEntry k) where
->     as <<? (b := d) = as <<? b || as <<? d
+> instance FV (TyEntry k) () where
+>     fvFoldMap f (b := d) = fvFoldMap f b <.> fvFoldMap f d
 
 
 > data AnyTyEntry where
@@ -86,8 +88,8 @@
 > instance Show AnyTyEntry where
 >     show (TE t) = show t
 
-> instance FV AnyTyEntry where
->     as <<? TE t = as <<? t
+> instance FV AnyTyEntry () where
+>     fvFoldMap f (TE t) = fvFoldMap f t
 
 
 

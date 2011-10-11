@@ -376,8 +376,16 @@
 > elemPred :: Var a k -> Pred (Ty a KNum) -> Bool
 > elemPred a p = elemsPred [a] p
 
-> instance FV ty => FV (Pred ty) where
->     (<<?) as = M.getAny . foldMap (M.Any . (as <<?))
+> instance FV t a => FV (Pred t) a where
+>     fvFoldMap f = foldMap (fvFoldMap f)
         
-> instance FV (Ty a k) where
->     xs <<? t = elemsTy (map wkClosedVar xs) t
+> instance a ~ b => FV (Ty a k) b where
+>     fvFoldMap f (TyVar a)       = f a
+>     fvFoldMap f (TyCon _ _)     = M.mempty
+>     fvFoldMap f (TyApp t u)     = fvFoldMap f t <.> fvFoldMap f u
+>     fvFoldMap f (Bind _ _ _ t)  = fvFoldMap (wkF f M.mempty) t
+>     fvFoldMap f (Qual p t)      = fvFoldMap f p <.> fvFoldMap f t
+>     fvFoldMap f Arr             = M.mempty
+>     fvFoldMap f (TyInt _)       = M.mempty
+>     fvFoldMap f (UnOp _)        = M.mempty
+>     fvFoldMap f (BinOp _)       = M.mempty

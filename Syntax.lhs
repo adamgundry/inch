@@ -1,7 +1,8 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              GADTs, TypeOperators, FlexibleInstances,
 >              StandaloneDeriving, TypeFamilies, RankNTypes,
->              ImpredicativeTypes, FlexibleContexts #-}
+>              ImpredicativeTypes, FlexibleContexts,
+>              MultiParamTypeClasses #-}
 
 > module Syntax where
 
@@ -78,11 +79,13 @@
 > replaceTypes :: TravTypes t => Var () k -> Type k -> t OK a -> t OK a
 > replaceTypes a t = mapTypes (replaceTy (wkClosedVar a) (wkClosedTy t))
 
+> {-
 > elemsTypes :: TravTypes t => [Var () k] -> t OK a -> Bool
 > elemsTypes as t = getAny $ getConst $ travTypes (Const . Any . (as <<?)) t
 
 > elemTypes :: TravTypes t => Var () k -> t OK a -> Bool
 > elemTypes a t = elemsTypes [a] t
+> -}
 
 > bindTm v = renameTypes (bindVar v)
 > unbindTm v = renameTypes (unbindVar v)
@@ -108,6 +111,9 @@
 >     travTypes    g (x :*: y) = (:*:) <$> travTypes g x <*> travTypes g y
 >     fogTypes     g (x :*: y) = fogTypes g x     :*: fogTypes g y
 >     renameTypes  g (x :*: y) = renameTypes g x  :*: renameTypes g y
+
+> instance (FV (f s a) a, FV (g s a) a) => FV ((f :*: g) s a) a where
+>     fvFoldMap f (x :*: y) = fvFoldMap f x <.> fvFoldMap f y
 
 > {-
 > data (:+:) f g a b where
@@ -187,6 +193,15 @@
 >     renameTypes g (TmUnOp o)    = TmUnOp o
 >     renameTypes g (TmBinOp o)   = TmBinOp o
 
+> instance a ~ b => FV (Tm OK a) b where
+>     fvFoldMap g (TmApp f s)   = fvFoldMap g f <.> fvFoldMap g s
+>     fvFoldMap g (TmBrace n)   = fvFoldMap g n
+>     fvFoldMap g (Lam x b)     = fvFoldMap g b
+>     fvFoldMap g (NumLam a b)  = fvFoldMap (wkF g mempty) b 
+>     fvFoldMap g (Let ds t)    = fvFoldMap g ds <.> fvFoldMap g t
+>     fvFoldMap g (t :? ty)     = fvFoldMap g t <.> fvFoldMap g ty
+>     fvFoldMap g _             = mempty
+
 
 > data Decl s a where
 >     DataDecl  :: TyConName -> AKind s k -> [TmConName ::: ATy s a KSet] ->
@@ -214,6 +229,10 @@
 >     renameTypes g (FunDecl x ps)  = FunDecl x (map (renameTypes g) ps)
 >     renameTypes g (SigDecl x ty)  = SigDecl x (renameTy g ty) 
 
+> instance a ~ b => FV (Decl OK a) b where
+>     fvFoldMap f (DataDecl _ _ cs)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
+>     fvFoldMap f (FunDecl _ as)     = fvFoldMap f as
+>     fvFoldMap f (SigDecl _ t)      = fvFoldMap f t
 
 
 > data Grd s a where
@@ -233,6 +252,9 @@
 >     renameTypes g (ExpGuard t)  = ExpGuard (renameTypes g t)
 >     renameTypes g (NumGuard ps) = NumGuard (map (fmap (renameTy g)) ps)
 
+> instance a ~ b => FV (Grd OK a) b where
+>     fvFoldMap f (ExpGuard t)   = fvFoldMap f t
+>     fvFoldMap f (NumGuard ps)  = fvFoldMap f ps
 
 
 
@@ -283,6 +305,9 @@
 >     renameTypes g (Guarded xs)    = Guarded (map (renameTypes g) xs)
 >     renameTypes g (Unguarded t)   = Unguarded (renameTypes g t)
 
+> instance FV (GrdTms OK b) b where
+>     fvFoldMap f (Guarded xs)   = fvFoldMap f xs
+>     fvFoldMap f (Unguarded t)  = fvFoldMap f t
 
 > data Alt s a where
 >     Alt :: PatList s a b -> GrdTms s b -> Alt s a
@@ -301,8 +326,9 @@
 >       renameTypes2 g ex xs $ \ ex' xs' ->
 >         Alt xs' (renameTypes (extRenaming ex ex' g) gt)
 
-> instance FV (Alt OK a) where
->     (<<?) = elemsTypes
+> instance a ~ b => FV (Alt OK a) b where
+>     fvFoldMap f (Alt xs gt) = let (m, f') = fvFoldMap2 f xs
+>                               in m <.> fvFoldMap f' gt
 
 > isVarAlt :: Alt s a -> Bool
 > isVarAlt (Alt P0 (Unguarded _))  = True
@@ -328,8 +354,9 @@
 >       renameTypes2 g ex x $ \ ex' x' ->
 >         CaseAlt x' (renameTypes (extRenaming ex ex' g) gt)
 
-> instance FV (CaseAlt OK a) where
->     (<<?) = elemsTypes
+> instance a ~ b => FV (CaseAlt OK a) b where
+>     fvFoldMap f (CaseAlt x gt) = let (m, f') = fvFoldMap2 f x
+>                                  in m <.> fvFoldMap f' gt
 
 
 
@@ -344,6 +371,9 @@
 >
 >     rawCoerce2 :: t RAW a b -> t RAW c d
 >     rawCoerce2 = unsafeCoerce
+
+> class FV2 t a where
+>     fvFoldMap2 :: Monoid m => (forall k . Var a k -> m) -> t OK a b -> (m, (forall k. Var b k -> m))
 
 
 > bindUn :: TravTypes2 t =>
@@ -379,6 +409,11 @@
 >                 extComp eab' ebc' $ \ eac' ->
 >                     q (unsafeCoerce eac') (p' :! ps')
 
+> instance FV2 PatList a where
+>     fvFoldMap2 f P0 = (mempty, f)
+>     fvFoldMap2 f (p :! ps) = let (m, f') = fvFoldMap2 f p
+>                                  (m', f'') = fvFoldMap2 f' ps
+>                              in (m <.> m', f'')
 
 > patLength :: PatList s a b -> Int
 > patLength P0 = 0
@@ -414,6 +449,13 @@
 >     renameTypes2 g E0       PatIgnore       q = q E0 PatIgnore
 >     renameTypes2 g (EC E0)  (PatBrace x k)  q = q (EC E0) (PatBrace x k)
 >     renameTypes2 g E0       (PatBraceK k)   q = q E0 (PatBraceK k)
+
+> instance FV2 Pat a where
+>     fvFoldMap2 f (PatVar _)      = (mempty, f)
+>     fvFoldMap2 f (PatCon _ ps)   = fvFoldMap2 f ps
+>     fvFoldMap2 f PatIgnore       = (mempty, f)
+>     fvFoldMap2 f (PatBrace _ _)  = (mempty, wkF f mempty)
+>     fvFoldMap2 f (PatBraceK _)   = (mempty, f)
 
 > extPat :: Pat s a b -> (forall x . Ext a b x -> p) -> p
 > extPat (PatVar _)      q = q E0

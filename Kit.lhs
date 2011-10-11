@@ -5,8 +5,13 @@
 
 > import Control.Applicative
 > import Data.Foldable
+> import Data.Monoid
 > import Data.Traversable
 > import Debug.Trace
+
+
+> (<.>) :: Monoid a => a -> a -> a
+> (<.>) = mappend
 
 
 > data Ex f where
