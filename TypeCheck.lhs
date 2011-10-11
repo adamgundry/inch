@@ -285,7 +285,7 @@ status.
 >     return $ Lam x b ::: a --> ty
 
 > checkInfer (Just r@(Bind Pi x KNum ty)) (NumLam n t) = do
->     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
+>     a <- fresh (UserVar Pi) n KNum Fixed -- should this be |Exists|?
 >     b <- withLayer (LamBody (n ::: tyInteger)) $
 >              checkSigma (unbindTy a ty) (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: r
@@ -296,7 +296,7 @@ status.
 >         renderMe (NumLam n t)
 
 > checkInfer Nothing (NumLam n t) = do
->     a <- fresh (UserVar Pi) n KNum Exists -- should this be |Fixed|?
+>     a <- fresh (UserVar Pi) n KNum Fixed -- should this be |Exists|?
 >     b ::: ty <- withLayer (LamBody (n ::: tyInteger)) $ inferRho (rawCoerce t)
 >     return $ NumLam n (bindTm a b) ::: Bind Pi n KNum (bindTy a ty)
 

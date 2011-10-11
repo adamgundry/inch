@@ -208,7 +208,7 @@
 >   ("f :: forall a . a -> (pi (m :: Num) . a)\nf x {m} = x", True) :
 >   (vecDecl ++ "vec :: forall a . pi (m :: Num) . 0 <= m => a -> Vec m a\nvec {0} x = Nil\nvec {n+1} x = Cons x (vec {n} x)", True) :
 >   (natDecl ++ "nat :: pi (n :: Num) . 0 <= n => Nat\nnat {0} = Zero\nnat{m+1} = Suc (nat {m})", True) :
->   ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf (C {j}) = C {j}", True) :
+>   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf (C {j}) = C {j}", True) :
 >   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
 >   ("data T :: Num -> * where C :: forall (m :: Num) . pi (n :: Num) . m ~ n => T m\nf :: forall (n :: Num) . T n -> T n\nf (C {i}) = C {i}", True) :
 >   -- ("data T :: Num -> * where C :: pi (n :: Num) . T n\nf :: forall (n :: Num) . T n -> T n\nf (C {0}) = C {0}\nf (C {n+1}) = C {n+1}", True) :
