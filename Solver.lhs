@@ -100,13 +100,7 @@
 >                                 >> want ps
 >
 >     nonsense :: Predicate -> Bool
->     nonsense (P c m n) = maybe False (nonc c) (getConstant (normaliseNum (m - n)))
->     
->     nonc EL = (/= 0)
->     nonc LE = (> 0)
->     nonc LS = (>= 0)
->     nonc GE = (< 0)
->     nonc GR = (<= 0)
+>     nonsense = maybe False not . trivialPred . normalisePred
 
 
 > simplifyConstraints :: [Var () KNum] -> [Predicate] -> [Predicate] -> [Predicate]
@@ -126,11 +120,25 @@
 >         (newHs', poolHs') = partition (newVs <<?) poolHs
 >
 >     checkPred :: Predicate -> Bool
->     checkPred p = P.check . toFormula xs (map normalisePred phs) . normalisePred $ p
->    
+>     checkPred p = P.check . toFormula xs' (map normalisePred phs') . normalisePred $ p'
 >       where
 >         (pvs, pool)  = partition (<? p) vs
 >         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, hs)
+>         (xs', phs', p')   = elimEquations xs phs p 
+
+>     elimEquations :: [Var () KNum] -> [Predicate] -> Predicate ->
+>                          ([Var () KNum], [Predicate], Predicate)
+>     elimEquations xs hs p = help xs [] hs p
+>       where
+>         help :: [Var () KNum] -> [Predicate] -> [Predicate] -> Predicate ->
+>                     ([Var () KNum], [Predicate], Predicate)
+>         help xs ohs []      p = (xs, ohs, p)
+>         help xs ohs (h@(P EL m n):hs) p = case solveForAny (normaliseNum (n - m)) of
+>             Just (a, t)  -> help xs [] (map (fmap (replaceTy a t')) (hs ++ ohs))
+>                                 (fmap (replaceTy a t') p)
+>               where t' = reifyNum t
+>             Nothing      -> help xs (h:ohs) hs p
+>         help xs ohs (h:hs) p = help xs (h:ohs) hs p
 
 
 > toFormula :: [Var () KNum] -> [NormalPredicate] -> NormalPredicate -> P.Formula

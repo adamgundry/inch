@@ -320,7 +320,7 @@
 > replaceTy a u = substTy f
 >   where
 >     f :: Var a k' -> Ty a k'
->     f b@(FVar (N _ _ (UserVar Pi)) KNum) = TyVar b -- This is a hack to avoid replacing pivars
+>     -- f b@(FVar (N _ _ (UserVar Pi)) KNum) = TyVar b -- This is a hack to avoid replacing pivars
 >     f b = hetEq a b u (TyVar b)
 
 

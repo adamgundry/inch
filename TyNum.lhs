@@ -19,6 +19,7 @@
 >     ,  getLinearMono
 >     ,  solveFor
 >     ,  maybeSolveFor
+>     ,  solveForAny
 >     ,  substNum
 >     ,  numVariables
 >     ,  elimNN
@@ -171,6 +172,8 @@
 >                         Solve t  -> Just t
 >                         _        -> Nothing
 
+> solveForAny :: NormalNum -> Maybe (Var () KNum, NormalNum)
+> solveForAny n = msum [(\ x -> (a, x)) <$> maybeSolveFor a n | a <- numvars n]
 
 > partitionNum :: [Var () KNum] -> NormalNum -> (NormalNum, NormalNum)
 > partitionNum vs (NN xs) = (NN ls, NN rs)

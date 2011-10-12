@@ -1,5 +1,6 @@
 > {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes,
->              FlexibleInstances, StandaloneDeriving, MultiParamTypeClasses #-}
+>              FlexibleInstances, StandaloneDeriving, MultiParamTypeClasses,
+>              FlexibleContexts #-}
 
 > module Kind where
 
@@ -239,6 +240,13 @@
 
 > vars :: FV t a => t -> [Ex (Var a)]
 > vars = fvFoldMap (\ x -> [Ex x])
+
+> numvars :: FV t () => t -> [Var () KNum]
+> numvars = fvFoldMap f
+>   where
+>     f :: Var () k -> [Var () KNum]
+>     f a@(FVar _ KNum)  = [a]
+>     f _                = []
 
 
 > instance FV (Var a l) a where
