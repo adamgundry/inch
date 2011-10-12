@@ -812,8 +812,8 @@ at (VCons x xs) {n+1}  = at xs {n}
 
 
 
--- multcomm :: forall a . pi (m n :: Num) . (m * n ~ n * m => a) -> a
--- multcomm = multcomm
+multcomm :: forall a . pi (m n :: Num) . (m * n ~ n * m => a) -> a
+multcomm {m} {n} x = x
 
 
 mkPair :: forall a b . a -> b -> (forall c. (a -> b -> c) -> c)
@@ -1098,3 +1098,20 @@ tri :: TriTrans (Vec' Integer) 3
 tri = TTSuc (VCons' 42 (VCons' 42 VNil'))
       (TTSuc (VCons' 42 VNil')
        (TTSuc VNil' TTZero))
+
+
+
+
+{-
+
+induction :: forall (f :: Num -> *) . pi (m :: Nat) . f 0 -> (forall (n :: Nat) . f n -> f (n+1)) -> f m
+induction {0} z s = z
+induction {m+1} z s = s (induction {m} z s)
+
+data Pos :: Num -> * where
+  Pos :: forall (m :: Num). 0 <= m => Pos m
+
+postimes :: pi (m n z :: Num) . Pos m -> Pos n -> EqNum (m * n) z -> Pos z
+postimes {m} {n} {z} posm posn eq = induction {z} undefined undefined 
+
+-}

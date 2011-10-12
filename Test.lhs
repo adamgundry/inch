@@ -377,6 +377,10 @@
 >   ("needPos :: pi (x :: Num) . x > 0 => Integer\nneedPos = needPos\nf {x} | {x > 0} = needPos {x}\n      | otherwise = needPos {x}", True) :
 >   ("f x | (case x of True -> False\n                 False -> True\n            ) = 1\n    | otherwise = 0", True) :
 >   ("f x | True = 1\n    | False = True", False) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . f ((a + 2) * b) -> f (b + b + b * a)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b + a => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b + 1 => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= b + 1 => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= a * b + a => f a -> f b\ng = f", True) :
 >   []
 
 

@@ -193,6 +193,28 @@ horizPad4 {w1} {d1} {w2} {d2} l1 l2 =
 -}
 
 
+-- Bona fide max
+
+horizPad5 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
+                 Layout s w1 d1 -> Layout s w2 d2 ->
+                     Layout s (w1 + w2) (max d1 d2)
+horizPad5 {w1} {d1} {w2} {d2} l1 l2 = 
+  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Layout s (w1 + w2) (max d1 d2)
+      horizA {d} = Horiz {w1} l1 (Vert {d2} l2 Empty)
+
+      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Layout s (w1 + w2) (max d1 d2)
+      horizC {d} = Horiz {w1} (Vert {d1} l1 Empty) l2
+  in trichotomy {d1} {d2} horizA (Horiz {w1} l1 l2) horizC
+
+
+horizPad6 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
+                 Layout s w1 d1 -> Layout s w2 d2 -> Layout s (w1 + w2) (max d1 d2)
+horizPad6 {w1} {d1} {w2} {d2} l1 l2
+    | {d1 > d2} = Horiz {w1} l1 (Vert {d2} l2 Empty)
+    | {d1 ~ d2} = Horiz {w1} l1 l2
+    | {d1 < d2} = Horiz {w1} (Vert {d1} l1 Empty) l2
+
+
 -- Find the stuff at given coordinates
 
 stuffAt :: forall a (w d :: Num) . pi (x y :: Nat) .
@@ -270,6 +292,15 @@ tile :: forall (s :: Num -> Num -> *) . pi (w d :: Num) . 1 <= w, 1 <= d =>
 tile {1}    {1}    l = l
 tile {w+2}  {1}    l = Horiz {1} l (tile {w+1} {1} l) 
 tile {w}    {d+2}  l = Vert {1} (tile {w} {1} l) (tile {w} {d+1} l)
+
+{-
+tilen :: forall (s :: Num -> Num -> *) . pi (w d x y :: Num) .
+             0 <= w, 0 <= d, 1 <= x, 1 <= y =>
+                 Layout s w d -> Layout s (w*x) (d*y)
+tilen {w} {d} {1}    {1}    l = l
+tilen {w} {d} {x+2}  {1}    l = Horiz {w} l (tilen {w} {d} {x+1} {1} l) 
+tilen {w} {d} {x}    {y+2}  l = Vert {d} (tilen {w} {d} {x} {1} l) (tilen {w} {d} {x} {y+1} l)
+-}
 
 
 -- Vectors and matrices

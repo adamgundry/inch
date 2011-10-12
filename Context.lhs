@@ -156,6 +156,7 @@ Initial state
 >                           (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
 >   ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
 >   ("otherwise",  (Just tyBool, True)) :
+>   ("not",        (Just (tyBool --> tyBool), True)) :
 >   []
 
 
