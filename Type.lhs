@@ -163,6 +163,9 @@
 >     (-)          = binOp Minus
 >     abs          = unOp Abs
 >     signum       = unOp Signum
+>
+>     negate (TyInt k)  = TyInt (- k)
+>     negate t          = 0 - t
 
 
 > data SType where
@@ -185,6 +188,8 @@
 >     abs          = sunOp Abs
 >     signum       = sunOp Signum
 
+>     negate (STyInt k)  = STyInt (- k)
+>     negate t           = 0 - t
 
 
 > fogTy :: Type k -> SType

@@ -129,9 +129,9 @@
 >                                     ++ show (prettyProgram p') ++ "\n"
 >         Left err
 >             | b      -> Left $ "Rejected good program:\n"
->                             ++ s ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
 >             | not b  -> Right $ "Rejected bad program:\n"
->                             ++ s ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
 

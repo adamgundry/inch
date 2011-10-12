@@ -32,7 +32,10 @@
 >   | otherwise        = d
 
 > prettyProgram :: Program -> Doc
-> prettyProgram = vcat . intersperse (text " ") . map (prettyHigh . fog)
+> prettyProgram = prettySProgram . map fog
+
+> prettySProgram :: SProgram -> Doc
+> prettySProgram = vcat . intersperse (text " ") . map prettyHigh
 
 > prettyVar :: Var () k -> Doc
 > prettyVar = prettyHigh . fogVar
