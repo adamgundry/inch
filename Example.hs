@@ -1099,19 +1099,3 @@ tri = TTSuc (VCons' 42 (VCons' 42 VNil'))
       (TTSuc (VCons' 42 VNil')
        (TTSuc VNil' TTZero))
 
-
-
-
-{-
-
-induction :: forall (f :: Num -> *) . pi (m :: Nat) . f 0 -> (forall (n :: Nat) . f n -> f (n+1)) -> f m
-induction {0} z s = z
-induction {m+1} z s = s (induction {m} z s)
-
-data Pos :: Num -> * where
-  Pos :: forall (m :: Num). 0 <= m => Pos m
-
-postimes :: pi (m n z :: Num) . Pos m -> Pos n -> EqNum (m * n) z -> Pos z
-postimes {m} {n} {z} posm posn eq = induction {z} undefined undefined 
-
--}
