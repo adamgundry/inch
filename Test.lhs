@@ -1,6 +1,9 @@
 > module Test where
 
+> import Control.Applicative
 > import Control.Monad.State
+> import Data.List
+> import System.Directory
 
 > import Parser
 > import PrettyPrinter
@@ -258,6 +261,7 @@
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf :: Higher -> (forall a. a) -> Integer\nf (Higher x) = x", True) :
 >   ("data Higher where Higher :: ((forall a. a) -> Integer) -> Higher\nf (Higher x) = x\nx = f (Higher (\\ zzz -> 0)) 0", False) :
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop (f {m} {n}) loop", True) :
+>   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = undefined\ntri2 :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri2 = tri", True) :
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop loop (f {m} {n})", False) :
 >   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid2 x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id2 (f {m} {n})", False) :
 >   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = Ex Refl", True) :
@@ -381,6 +385,9 @@
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b => f a -> f b\ng = f", True) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b + a => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b + 1 => f a -> f b\ng = f", True) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= b + 1 => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= a * b + a => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (a ^ (-1)) -> f (a ^ (-1))\nf x = x", False) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . f (a * a ^ (-1)) -> f 1\nf x = x", False) :
+>   ("data Fin :: Num -> * where\ndata Tm :: Num -> * where A :: forall (m :: Num) . 0 <= m => Tm m -> Tm m -> Tm m\nsubst :: forall (m n :: Num) . 0 <= n => (pi (w :: Num) . 0 <= w => Fin (w+m) -> Tm (w + n)) -> Tm m -> Tm n\nsubst s (A f a) = A (subst s f) (subst s a)", True) :
 >   []
 
 
@@ -404,6 +411,13 @@
 >     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
 
 > checkEx = check "Example.hs"
+
+> checks = do
+>     fns <- filter goodFile <$> getDirectoryContents "."
+>     fcs <- zip fns <$> mapM readFile fns
+>     putStrLn $ test fst (\ (n, c) -> parseCheck (c, True)) fcs 0 0
+>   where
+>     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)
 
 > erase fn = do
 >     s <- readFile fn
