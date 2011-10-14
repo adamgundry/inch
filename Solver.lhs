@@ -156,42 +156,48 @@
 >                   
 >   where
 >     convert :: [Var () KNum] -> [(Var () KNum, P.Term)] -> P.Formula
->     convert [] axs = gogo axs hs $ \ hs' ->
->                      predToFormula False axs p $ \ p' ->
->                          hs' :=>: p'
->     convert (v:vs) axs = P.Forall (\ t -> convert vs ((v, t) : axs))
+>     convert []      axs = gogo axs hs Map.empty $ \ hs' mts' ->
+>                              predToFormula False axs p mts' $ \ p' mts'' ->
+>                                  hs' :=>: p'
+>     convert (v:vs)  axs = P.Forall (\ t -> convert vs ((v, t) : axs))
                 
->     gogo :: [(Var () KNum, P.Term)] -> [NormalPredicate] ->
->                 (P.Formula -> P.Formula) -> P.Formula
->     gogo axs []      f = f TRUE
->     gogo axs (h:hs)  f = predToFormula True axs h $ \ h' ->
->                              gogo axs hs (\ x -> f (h' :/\: x))
+>     gogo :: [(Var () KNum, P.Term)] -> [NormalPredicate] -> Map Monomial P.Term ->
+>                 (P.Formula -> Map Monomial P.Term -> P.Formula) -> P.Formula
+>     gogo axs []      mts f = f TRUE mts
+>     gogo axs (h:hs)  mts f = predToFormula True axs h mts $ \ h' mts' ->
+>                                  gogo axs hs mts' (\ x -> f (h' :/\: x))
 
 >     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate ->
->                          (P.Formula -> P.Formula) -> P.Formula
->     predToFormula hyp axs (P c m n) f  = linearise axs m $ \ m' ->
->                                              linearise axs n $ \ n' ->
->                                                  f (compToFormula c m' n')
+>                          Map Monomial P.Term ->
+>                          (P.Formula -> Map Monomial P.Term -> P.Formula) -> P.Formula
+>     predToFormula hyp axs (P c m n) mts f  = linearise axs m mts $ \ m' mts' ->
+>                                                linearise axs n mts' $ \ n' mts'' ->
+>                                                  f (compToFormula c m' n') mts''
+>     predToFormula hyp axs (p :=> q) mts f  = predToFormula hyp axs q mts f
 
 >     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
->                     (P.Term -> P.Formula) -> P.Formula
->     linearise axs n f = help 0 (Map.toList (elimNN n))
+>                     Map Monomial P.Term ->
+>                     (P.Term -> Map Monomial P.Term -> P.Formula) -> P.Formula
+>     linearise axs n mts f = help 0 (Map.toList (elimNN n)) mts
 >       where
->         help :: P.Term -> [(Monomial, Integer)] -> P.Formula
->         help t []      = f t
->         help t ((ys, k):ks) = case getLinearMono ys of
->             Just (Left ())           -> help (t + fromInteger k) ks
->             Just (Right (VarFac a))  -> help (t + k .* fromJust (lookup a axs)) ks
+>         help :: P.Term -> [(Monomial, Integer)] ->
+>                     Map Monomial P.Term -> P.Formula
+>         help t []            mts = f t mts
+>         help t ((ys, k):ks)  mts = case getLinearMono ys of
+>             Just (Left ())           -> help (t + fromInteger k) ks mts
+>             Just (Right (VarFac a))  -> help (t + k .* fromJust (lookup a axs)) ks mts
 >             Just (Right (UnFac o `AppFac` m)) | Just lo <- linUnOp o ->
->                 linearise axs m $ \ m' ->
+>                 linearise axs m mts $ \ m' mts' ->
 >                     P.Exists $ \ y ->
->                         lo m' y :/\: help (t + k .* y) ks
+>                         lo m' y :/\: help (t + k .* y) ks mts'
 >             Just (Right (BinFac o `AppFac` m `AppFac` n)) | Just lo <- linBinOp o ->
->                  linearise axs m $ \ m' ->
->                      linearise axs n $ \ n' ->
+>                  linearise axs m mts $ \ m' mts' ->
+>                      linearise axs n mts' $ \ n' mts'' ->
 >                          P.Exists $ \ y ->
->                              lo m' n' y :/\: help (t + k .* y) ks        
->             _ ->  P.Forall (\ y -> help (t + k .* y) ks)
+>                              lo m' n' y :/\: help (t + k .* y) ks mts''        
+>             _ -> case Map.lookup ys mts of
+>                 Just n   -> help (t + k .* n) ks mts    
+>                 Nothing  -> P.Forall (\ y -> help (t + k .* y) ks (Map.insert ys y mts))
 
 >     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
 >     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))
