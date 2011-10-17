@@ -19,14 +19,16 @@
 > import Error
 > import KindCheck
 > import TypeCheck
-
+> import Check
+> import PrettyPrinter
+> import PrettyContext ()
 
 > assertContextEmpty :: Contextual ()
 > assertContextEmpty = do
 >     g <- getContext
 >     case g of
 >         B0  -> return ()
->         _   -> error "context is not empty"
+>         _   -> traceContext "assertContextEmpty" >> erk "context is not empty"
 
 > runCheckProg p = runStateT (checkProg p) initialState
 
@@ -49,7 +51,12 @@
 >   unEx (kindKind k) $ \ k -> do
 >     cs    <- traverse (checkConstructor t) cs
 >     return [DataDecl t k cs]
-> checkDecl d = assertContextEmpty >> checkInferFunDecl d
+> checkDecl d = do
+>   assertContextEmpty 
+>   ds <- checkInferFunDecl d
+>   assertContextEmpty
+>   unless (all (goodDecl B0) ds) $ erk $ unlines ("checkDecl: bad declaration" : map (renderMe . fog) ds)
+>   return ds
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do

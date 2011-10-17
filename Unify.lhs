@@ -6,6 +6,7 @@
 > import Control.Applicative
 > import Control.Monad hiding (mapM_)
 > import Data.Foldable hiding (elem)
+> import Data.List
 > import Data.Maybe
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
@@ -19,6 +20,7 @@
 > import Error
 > import PrettyPrinter
 > import PrettyContext ()
+> import Check
 
 > data Extension = Restore | Replace Suffix
 
@@ -74,7 +76,7 @@
 
 
 > unify :: Type k -> Type k -> Contextual ()
-> unify t u = unifyTypes t u `inLoc` (do
+> unify t u = verifyContext True "unify" >> unifyTypes t u `inLoc` (do
 >                 return $ sep [text "when unifying", nest 4 (prettyHigh $ fogSysTy t),
 >                              text "and", nest 4 (prettyHigh $ fogSysTy u)])
 >                     -- ++ "\n    in context " ++ render g)
@@ -269,9 +271,3 @@ We can insert a fresh variable into a unit thus:
 >     t <- unknownTyVar "_t" KSet
 >     unify (s --> t) ty
 >     return (s, t)
-
-
-
-
-
-> traceContext s = getContext >>= \ g -> mtrace (s ++ "\n" ++ renderMe g)
