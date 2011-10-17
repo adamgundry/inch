@@ -214,12 +214,13 @@ status.
 >     help [] (g :< Layer GenMark) h  = return $ g <><| h
 >     help as (g :< Layer GenMark) h  = erk $ "checkSigma help: failed to squish "
 >                                         ++ intercalate "," (map (\ e -> unEx e fogSysVar) as)
->     help as (g :< A (a := Fixed)) h
->         | a <? h     = erk $ "checkSigma help: fixed variable "
+>     help _  (g :< Layer l)       _  = error $ "checkSigma.help: hit bad layer " ++ show l
+>     help as (g :< A (a := Fixed)) h = case suppress a h of
+>         Just h'  -> help (delete (Ex a) as) g h'
+>         Nothing  -> traceContext "noooooooooo" >> (erk $ "checkSigma help: fixed variable "
 >                                 ++ renderMe (fogSysVar a)
 >                                 ++ " occurred illegally in "
->                                 ++ intercalate ", " (map (either show (renderMe . fogSysPred)) h)
->         | otherwise  = help (delete (Ex a) as) g h
+>                                 ++ intercalate ", " (map (either show (renderMe . fogSysPred)) h))
 >     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
 >     help as (g :< A a) h                   = help as g (Left (TE a) : h)
 >     help as (g :< Constraint Wanted p) h   = help as g (Right p : h) 
@@ -228,6 +229,18 @@ status.
 
 >     abstract p (Left x)   = Left x
 >     abstract p (Right q)  = Right (p :=> q)
+
+>     suppress :: Var () k -> [Either AnyTyEntry Predicate] -> Maybe [Either AnyTyEntry Predicate]
+>     suppress _ [] = return []
+>     suppress a (e:es) | not (a <? e) = (e :) <$> suppress a es
+>     suppress a@(FVar _ KNum) (Right p:es) = suppressPred a p >>= \ p' -> (Right p' :) <$> suppress a es
+>     suppress _ _ = Nothing
+
+>     suppressPred :: Var () KNum -> Predicate -> Maybe Predicate
+>     suppressPred a (p :=> q) | a <? p     = suppressPred a q
+>                              | otherwise  = (p :=>) <$> suppressPred a q
+>     suppressPred a p | a <? p     = Nothing
+>                      | otherwise  = Just p
 
 >     g <><| h = g <><< map toEnt h
 >     toEnt (Left (TE a)) = A a
