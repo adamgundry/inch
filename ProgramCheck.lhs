@@ -34,8 +34,8 @@
 
 > checkProg :: SProgram -> Contextual Program
 > checkProg ds = do
->     traverse makeTyCon ds
->     traverse makeBinding ds
+>     mapM_ makeTyCon ds
+>     mapM_ makeBinding ds
 >     concat <$> traverse checkDecl ds
 >   where
 >     makeTyCon :: SDeclaration () -> Contextual ()

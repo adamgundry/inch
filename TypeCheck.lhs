@@ -10,7 +10,7 @@
 > import Data.List
 > import Data.Maybe
 > import qualified Data.Map as Map
-> import Data.Foldable hiding (foldr, any)
+> import Data.Foldable hiding (foldr, any, mapM_)
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
@@ -100,6 +100,7 @@ status.
 >         | otherwise                  = help isHole g :< A (a := Exists)
 >     help isHole (g :< Layer FunTop)  = g
 >     help isHole (g :< e)             = help isHole g :< e
+>     help _      B0                   = error "existentialise: ran out of context"
 
 
 > generalise :: (FV (t OK ()) (), TravTypes t) => Type KSet -> [t OK ()] -> Contextual (Type KSet, [t OK ()])
@@ -203,9 +204,10 @@ status.
 >     return t
 >   where
 >     getNames :: Context -> [Ex (Var ())]
->     getNames (_ :< Layer GenMark) = []
->     getNames (g :< A (a := _)) = Ex a : getNames g
->     getNames (g :< e) = getNames g
+>     getNames (_ :< Layer GenMark)  = []
+>     getNames (g :< A (a := _))     = Ex a : getNames g
+>     getNames (g :< e)              = getNames g
+>     getNames B0                    = error "getNames: ran out of context"
 
 >     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry Predicate] ->
 >                 Contextual Context
@@ -254,8 +256,16 @@ status.
 >     return $ TmCon c ::: ty
 
 > checkInfer mty (TmInt k) = do
->     instSigma tyInteger mty
+>     _ <- instSigma tyInteger mty
 >     return $ TmInt k ::: tyInteger
+
+> checkInfer mty (TmUnOp o) = do
+>     _ <- instSigma (tyInteger --> tyInteger) mty
+>     return $ TmUnOp o ::: tyInteger --> tyInteger
+
+> checkInfer mty (TmBinOp o) = do
+>     _ <- instSigma (tyInteger --> tyInteger --> tyInteger) mty
+>     return $ TmBinOp o ::: tyInteger --> tyInteger --> tyInteger
 
 > checkInfer mty (TmApp f (TmBrace n)) = do
 >     f ::: fty  <- inferRho f   
@@ -272,7 +282,7 @@ status.
 >     f ::: fty   <- inferRho f
 >     (dom, cod)  <- unifyFun fty
 >     s           <- checkSigma dom s
->     instSigma cod mty
+>     _ <- instSigma cod mty
 >     return $ TmApp f s ::: cod
 
 > checkInfer (Just r) (Lam x t) = do
@@ -354,7 +364,7 @@ status.
 > checkLocalDecls :: [SDeclaration ()] -> Contextual ([Declaration ()], Bindings)
 > checkLocalDecls ds =
 >     withLayerExtract (LetBindings Map.empty) letBindings $ do
->         traverse makeBinding ds
+>         mapM_ makeBinding ds
 >         Data.List.concat <$> traverse checkInferFunDecl ds  
 
 > makeBinding :: SDeclaration () -> Contextual ()
@@ -369,32 +379,32 @@ status.
 > checkInferFunDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkInferFunDecl (FunDecl s []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
-> checkInferFunDecl fd@(FunDecl s (p:ps)) = do
+> checkInferFunDecl (FunDecl s (p:ps)) = do
 >     when (not (null ps) && isVarAlt p) $ errDuplicateTmVar s
 >     mty <- optional $ lookupBinding s
 >     case mty of
->         Just (_ ::: ty, False)  -> (\ x -> [x]) <$> checkFunDecl ty fd
+>         Just (_ ::: ty, False)  -> (\ x -> [x]) <$> checkFunDecl ty s (p:ps)
 >         Just (_, True) -> errDuplicateTmVar s
 >         Nothing          -> do
->             (fd, ty) <- inferFunDecl fd
+>             (fd, ty) <- inferFunDecl s (p:ps)
 >             updateBinding s (Just ty, True)
 >             return [SigDecl s ty, fd]
 > checkInferFunDecl (SigDecl x _) = do
 >     _ ::: ty <- fst <$> lookupBinding x
 >     return [SigDecl x ty]
+> checkInferFunDecl (DataDecl _ _ _) = error "checkInferFunDecl: that's a data declaration"
 
 
-
-> inferFunDecl (FunDecl s pats) =
+> inferFunDecl s pats =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >     sty     <- unknownTyVar "_x" KSet
 >     pattys  <- traverse (inferAlt (s ::: sty)) pats
 >     let ptms ::: ptys = unzipAsc pattys
->     traverse (unify sty) ptys
+>     mapM_ (unify sty) ptys
 >     (ty', ptms') <- generalise sty ptms
 >     return (FunDecl s ptms', simplifyTy ty')
 
-> checkFunDecl sty (FunDecl s pats) =
+> checkFunDecl sty s pats =
 >   inLocation (text $ "in declaration of " ++ s) $ withLayer FunTop $ do
 >         ptms <- traverse (checkAlt (s ::: sty)) pats
 >         (_, ptms) <- generalise (TyCon "Fake" KSet) ptms
@@ -451,8 +461,8 @@ status.
 >                           t ::: r <- inferRho t
 >                           return $ (g :*: t) ::: r) gts
 >     let gts ::: tys = unzipAsc xs
->     unifyList tys
->     return $ Guarded gts ::: head tys
+>     ty <- unifyList tys
+>     return $ Guarded gts ::: ty
 
 
 > checkGuard :: SGuard () -> Contextual (Guard ())

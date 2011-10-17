@@ -9,7 +9,6 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import qualified Data.Map as Map
-> import Data.Monoid hiding (All)
 
 > import BwdFwd
 > import Kind
@@ -59,10 +58,6 @@
 > matchLayer (LetBody _)             (LetBody _)             = True
 > matchLayer _                       _                       = False
 
-
-
-> bindLayerTypes :: (forall k . Var () k -> Type k) -> TmLayer -> TmLayer
-> bindLayerTypes g (PatternTop (x ::: ty)) = PatternTop (x ::: substTy g ty)
 
 > data CStatus = Given | Wanted
 >   deriving Show
@@ -300,6 +295,8 @@ Bindings
 > seekTy B0                       a           = error "seekTy: missing!"
 > -}
 
+> {-
+
 > expandContext :: Context -> Context
 > expandContext B0 = B0
 > expandContext (g :< A (a := Some t))  = expandContext g
@@ -331,6 +328,7 @@ Bindings
 > nicePred :: Predicate -> Contextual Predicate
 > nicePred p = (\ g -> simplifyPred (expandPred g p)) <$> getContext
 
+> -}
 
 
 

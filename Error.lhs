@@ -10,7 +10,6 @@
 > import Kind
 > import Type
 > import Kit
-> import Syntax
 > import PrettyPrinter
 
 > data Err where

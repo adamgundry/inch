@@ -199,7 +199,16 @@ Terms
 >              <|>  PatVar <$> patVarName
 >              <|>  reservedOp "_" *> pure PatIgnore
 
-> fexp = foldl1 TmApp <$> many1 aexp
+> fexp = pexp `chainl1` pure TmApp
+
+> pexp = buildExpressionParser
+>     [
+>         [prefix "-" (tmBinOp Minus (TmInt 0))],
+>         [binary "^" (tmBinOp Pow) AssocLeft],
+>         [binary "*" (tmBinOp Times) AssocLeft],    
+>         [binary "+" (tmBinOp Plus) AssocLeft, sbinary "-" (tmBinOp Minus) AssocLeft]
+>     ]
+>     aexp
 
 > aexp :: I.IndentCharParser st (STerm ())
 > aexp  =    TmVar <$> tmVarName

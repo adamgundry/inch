@@ -12,7 +12,8 @@
 
 > test :: (a -> String) -> (a -> Either String String)
 >             -> [a] -> Int -> Int -> String
-> test g f [] yes no = "Passed " ++ show yes ++ " tests, failed " ++ show no ++ " tests."
+> test _ _ [] yes no = "Passed " ++ show yes ++ " tests, failed "
+>                          ++ show no ++ " tests."
 > test g f (x:xs) yes no = "TEST\n" ++ g x ++ "\n" ++ case f x of
 >     Right s  -> "PASS\n" ++ s ++ "\n" ++ test g f xs (yes+1) no
 >     Left s   -> "FAIL\n" ++ s ++ "\n" ++ test g f xs yes (no+1)
@@ -118,6 +119,9 @@
 >   "f :: g (abs (-6))\nf = f" :
 >   "f :: g (signum (a + b))\nf = f" :
 >   "f :: g (a ^ b + 3 ^ 2)\nf = f" :
+>   "x = 2 + 3" :
+>   "x = 2 - 3" :
+>   "x = - 3" :
 >   []
 
 
@@ -388,6 +392,9 @@
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (a ^ (-1)) -> f (a ^ (-1))\nf x = x", False) :
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (a * a ^ (-1)) -> f 1\nf x = x", False) :
 >   ("data Fin :: Num -> * where\ndata Tm :: Num -> * where A :: forall (m :: Num) . 0 <= m => Tm m -> Tm m -> Tm m\nsubst :: forall (m n :: Num) . 0 <= n => (pi (w :: Num) . 0 <= w => Fin (w+m) -> Tm (w + n)) -> Tm m -> Tm n\nsubst s (A f a) = A (subst s f) (subst s a)", True) :
+>   ("x = 2 + 3", True) :
+>   ("x = 2 - 3", True) :
+>   ("x = - 3", True) :
 >   []
 
 

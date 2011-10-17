@@ -202,6 +202,8 @@
 >     fvFoldMap g (t :? ty)     = fvFoldMap g t <.> fvFoldMap g ty
 >     fvFoldMap g _             = mempty
 
+> tmBinOp t m n = TmBinOp t `TmApp` m `TmApp` n
+
 
 > data Decl s a where
 >     DataDecl  :: TyConName -> AKind s k -> [TmConName ::: ATy s a KSet] ->

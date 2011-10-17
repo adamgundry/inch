@@ -101,7 +101,8 @@
 >     pretty (SBind b a k t)  = prettyBind b (B0 :< (a, k)) t
 >     pretty (SQual p t)      = prettyQual (B0 :< p) t
 >     pretty SArr             = const $ text "(->)"
->     pretty (STyInt k)       = const $ integer k
+>     pretty (STyInt k)       = wrapDoc (if k < 0 then ArrSize else minBound) $
+>                                   integer k
 >     pretty (SBinOp o)       = pretty o
 >     pretty (SUnOp o)        = pretty o
  

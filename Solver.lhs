@@ -4,13 +4,11 @@
 > module Solver where
 
 > import Control.Applicative hiding (Alternative)
-> import Control.Monad
 > import Control.Monad.Writer hiding (All)
 > import Data.List
 > import Data.Map (Map)
 > import qualified Data.Map as Map
 > import Data.Maybe
-> import Data.Traversable
 
 > import qualified Data.Integer.Presburger as P
 > import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)), (.*))
@@ -24,15 +22,12 @@
 > import Kit
 > import Error
 
-> import Debug.Trace
-> import PrettyPrinter
-
 
 > unifySolveConstraints :: Contextual ()
 > unifySolveConstraints = do
 >     (g, ns) <- runWriter . collectEqualities <$> getContext
 >     putContext g
->     traverse (uncurry unifyNum) ns
+>     mapM_ (uncurry unifyNum) ns
 >     return ()
 >   where
 >     collectEqualities :: Context -> Writer [(Type KNum, Type KNum)] Context
