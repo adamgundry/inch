@@ -245,7 +245,7 @@ This is wrong, I think:
 >                                       let p' = reifyNum p
 >                                       unifyZero (TE (b := Hole) :> F0) $ substNum a p' e
 >                                       replace $ TE (a := Some p') :> F0
->         _  | numVariables e > fwdLength _Psi + 1 -> do
+>         _  | varsLeft -> do
 >                          unifyZero (TE (a := d) :> _Psi) e
 >                          replace F0
 >            | otherwise -> do
@@ -253,7 +253,7 @@ This is wrong, I think:
 >                modifyContext (<>< _Psi)
 >                constrainZero e
 >                replace F0
-
+>           where varsLeft = not . null $ vars e \\ vars _Psi
 
 We can insert a fresh variable into a unit thus:
 
