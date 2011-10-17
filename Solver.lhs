@@ -173,7 +173,8 @@
 >     predToFormula hyp axs (P c m n) mts f  = linearise axs m mts $ \ m' mts' ->
 >                                                linearise axs n mts' $ \ n' mts'' ->
 >                                                  f (compToFormula c m' n') mts''
->     predToFormula hyp axs (p :=> q) mts f  = predToFormula hyp axs q mts f
+>     predToFormula hyp axs (p :=> q) mts f  = predToFormula (error "xyzzy") axs p mts $ 
+>         \ p' mts' -> predToFormula hyp axs q mts' $ \ q' mts'' -> f (p' :=>: q') mts''
 
 >     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
 >                     Map Monomial P.Term ->

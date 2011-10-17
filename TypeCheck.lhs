@@ -26,7 +26,7 @@
 > import PrettyPrinter
 > import KindCheck
 > import Solver
-
+> import Check
 
 
 > withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual t -> Contextual (t, a)
@@ -162,11 +162,9 @@ status.
 >             (s1, s2) <- unifyFun s
 >             subsCheck t1 s1
 >             subsCheck s2 t2
->         (Bind b1 x1 k1 t1, Bind b2 x2 k2 t2) | b1 == b2 ->
->           hetEq k1 k2 (do
->             a <- fresh SysVar x1 k1 Fixed
+>         (Bind Pi x1 KNum t1, Bind Pi x2 KNum t2) -> do
+>             a <- fresh SysVar x1 KNum Fixed
 >             subsCheck (unbindTy a t1) (unbindTy a t2)
->            ) (fail "subsCheck: kind mismatch")
 >         _ -> unify s t
 
 
@@ -223,8 +221,11 @@ status.
 >     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
 >     help as (g :< A a) h                   = help as g (Left (TE a) : h)
 >     help as (g :< Constraint Wanted p) h   = help as g (Right p : h) 
->     help as (g :< Constraint Given p) h    = help as g h
+>     help as (g :< Constraint Given p) h    = help as g (map (abstract p) h)
 >     help as B0 h = error "checkSigma help: ran out of context"
+
+>     abstract p (Left x)   = Left x
+>     abstract p (Right q)  = Right (p :=> q)
 
 >     g <><| h = g <><< map toEnt h
 >     toEnt (Left (TE a)) = A a

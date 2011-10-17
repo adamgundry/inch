@@ -74,9 +74,8 @@
 > instance Pretty ty => Pretty (Pred ty) where
 >     pretty (P c n m) = wrapDoc AppSize $
 >         pretty n ArgSize <+> pretty c ArgSize <+> pretty m ArgSize
->     pretty (Op o m n t) = wrapDoc AppSize $ 
->         pretty o ArgSize <+> pretty m ArgSize <+> pretty n ArgSize
->         <+> pretty EL ArgSize <+> pretty t ArgSize
+>     pretty (p :=> q) = wrapDoc AppSize $ 
+>         pretty p ArgSize <+> text "=>" <++> pretty q ArgSize
 
 > instance Pretty Comparator where
 >     pretty LS _ = text "<"

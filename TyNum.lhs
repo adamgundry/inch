@@ -270,17 +270,23 @@
 
 > normalisePred :: Pred (Ty a KNum) -> NormPred a
 > normalisePred (P c m n) = P c 0 (normaliseNum (n - m))
+> normalisePred (p :=> q) = normalisePred p :=> normalisePred q
 
 > trivialPred :: Ord a => NormPred a -> Maybe Bool
 > trivialPred (P c m n)     = compFun c 0 <$> (getConstant (n - m))
+> trivialPred (p :=> q)     = case trivialPred p of
+>                                 Just False  -> Just True
+>                                 _           -> trivialPred q
 
 > nbinOp :: BinOp -> NormNum a -> NormNum a -> NormNum a
 > nbinOp o m n = case (o, getConstant m, getConstant n) of
+>         (Pow,    Just i,   Just j)  | j >= 0     -> fromInteger (i ^ j)
+>         (Pow,    _,        Just j)  | j >= 0     -> m ^ j
+>                                     | otherwise  -> singleFac (BinFac Pow `AppFac` m `AppFac` n)
 >         (o,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
 >         (Plus,   _,        _)       -> m + n
 >         (Minus,  _,        _)       -> m - n
 >         (Times,  _,        _)       -> m * n
->         (Pow,    _,        Just j)  -> m ^ j
 >         (Pow,    Just 1,   _)       -> 1
 >         (Pow,    Just 0,   _)       -> 0
 >         _                           -> singleFac (BinFac o `AppFac` m `AppFac` n)

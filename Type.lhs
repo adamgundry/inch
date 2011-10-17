@@ -40,8 +40,8 @@
 > compFun EL = (==)
 
 > data Pred ty where
->     P   :: Comparator -> ty -> ty -> Pred ty
->     Op  :: BinOp -> ty -> ty -> ty -> Pred ty
+>     P      :: Comparator -> ty -> ty -> Pred ty
+>     (:=>)  :: Pred ty -> Pred ty -> Pred ty
 >   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 > (%==%), (%<=%), (%<%), (%>=%), (%>%) :: forall ty. ty -> ty -> Pred ty
@@ -345,6 +345,7 @@
 >   where
 >     mkP LE m (TyApp (TyApp (BinOp Minus) m') (TyInt 1)) = P LS m n
 >     mkP c m n = P c m n
+> simplifyPred (p :=> q) = simplifyPred p :=> simplifyPred q
 
 > simplifyNum :: Ty a KNum -> Ty a KNum
 > simplifyNum (TyApp (TyApp (BinOp o) n) m) = case (o, simplifyNum n, simplifyNum m) of
