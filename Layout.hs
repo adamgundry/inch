@@ -12,11 +12,6 @@ data Pair :: * -> * -> * where
 fstP (Pair a _) = a
 sndP (Pair _ b) = b
 
-data Option :: * -> * where
-  Some :: forall a. a -> Option a
-  None :: forall a.      Option a
-
-fromSome (Some x) = x
 
 data Ex :: (Num -> *) -> * where
   Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
@@ -218,34 +213,34 @@ horizPad6 {w1} {d1} {w2} {d2} l1 l2
 -- Find the stuff at given coordinates
 
 stuffAt :: forall a (w d :: Num) . pi (x y :: Nat) .
-    x < w, y < d => Layout (K a) w d -> Option a
-stuffAt {x} {y} (Stuff (K i))       = Some i
-stuffAt {x} {y} Empty               = None
+    x < w, y < d => Layout (K a) w d -> Maybe a
+stuffAt {x} {y} (Stuff (K i))       = Just i
+stuffAt {x} {y} Empty               = Nothing
 stuffAt {x} {y} (Horiz {wx} l1 l2)  =
-    let fA :: pi (d :: Num) . 0 <= d, d ~ x - wx => Option a
+    let fA :: pi (d :: Num) . 0 <= d, d ~ x - wx => Maybe a
         fA {d} = stuffAt {d} {y} l2
 
-        fB :: x ~ wx => Option a
+        fB :: x ~ wx => Maybe a
         fB = fA {0}
 
-        fC :: pi (d :: Num) . 0 < d, d ~ wx - x => Option a
+        fC :: pi (d :: Num) . 0 < d, d ~ wx - x => Maybe a
         fC {d} = stuffAt {x} {y} l1
     in trichotomy {x} {wx} fA fB fC
 stuffAt {x} {y} (Vert {dy} l1 l2) =
-    let fA :: pi (d :: Num) . 0 <= d, d ~ y - dy => Option a
+    let fA :: pi (d :: Num) . 0 <= d, d ~ y - dy => Maybe a
         fA {d} = stuffAt {x} {d} l2
 
-        fB :: y ~ dy => Option a
+        fB :: y ~ dy => Maybe a
         fB = fA {0}
 
-        fC :: pi (d :: Num) . 0 < d, d ~ dy - y => Option a
+        fC :: pi (d :: Num) . 0 < d, d ~ dy - y => Maybe a
         fC {d} = stuffAt {x} {y} l1
     in trichotomy {y} {dy} fA fB fC
 
 stuffAt' :: forall a (w d :: Num) . pi (x y :: Nat) .
-    x < w, y < d => Layout (K a) w d -> Option a
-stuffAt' {x} {y} (Stuff (K i))       = Some i
-stuffAt' {x} {y} Empty               = None
+    x < w, y < d => Layout (K a) w d -> Maybe a
+stuffAt' {x} {y} (Stuff (K i))       = Just i
+stuffAt' {x} {y} Empty               = Nothing
 stuffAt' {x} {y} (Horiz {wx} l1 l2)  =
     trichotomy {x} {wx}
         (\ {d} -> stuffAt' {d} {y} l2)
@@ -293,14 +288,22 @@ tile {1}    {1}    l = l
 tile {w+2}  {1}    l = Horiz {1} l (tile {w+1} {1} l) 
 tile {w}    {d+2}  l = Vert {1} (tile {w} {1} l) (tile {w} {d+1} l)
 
-{-
-tilen :: forall (s :: Num -> Num -> *) . pi (w d x y :: Num) .
+
+
+data Proxy :: Num -> * where
+  Proxy :: forall (n :: Num) . Proxy n
+
+tilen :: forall (s :: Num -> Num -> *) . 
+           (forall a (m n :: Nat) . Proxy m -> Proxy n -> (0 <= m * n => a) -> a) ->
+           (pi (w d x y :: Num) .
              0 <= w, 0 <= d, 1 <= x, 1 <= y =>
-                 Layout s w d -> Layout s (w*x) (d*y)
-tilen {w} {d} {1}    {1}    l = l
-tilen {w} {d} {x+2}  {1}    l = Horiz {w} l (tilen {w} {d} {x+1} {1} l) 
-tilen {w} {d} {x}    {y+2}  l = Vert {d} (tilen {w} {d} {x} {1} l) (tilen {w} {d} {x} {y+1} l)
--}
+                 Layout s w d -> Layout s (w*x) (d*y))
+tilen lem {w} {d} {1}    {1}    l = l
+tilen lem {w} {d} {x+2}  {1}    l = lem (Proxy :: Proxy x) (Proxy :: Proxy w)
+                                    (Horiz {w} l (tilen lem {w} {d} {x+1} {1} l))
+tilen lem {w} {d} {x}    {y+2}  l = lem (Proxy :: Proxy x) (Proxy :: Proxy w)
+                                   (lem (Proxy :: Proxy y) (Proxy :: Proxy d)
+                                       (Vert {d} (tilen lem {w} {d} {x} {1} l) (tilen lem {w} {d} {x} {y+1} l)))
 
 
 -- Vectors and matrices
@@ -331,7 +334,7 @@ data M :: * -> Num -> Num -> * where
 
 unM (M xss) = xss
 
-mOne a = M (Cons (Cons (Some a) Nil) Nil)
+mOne a = M (Cons (Cons (Just a) Nil) Nil)
 
 mHoriz :: forall a . pi (w d x :: Nat) . x <= w =>
               M a x d -> M a (w-x) d -> M a w d
@@ -363,13 +366,12 @@ foldLayout {w} {d} s e h v (Vert {y} l1 l2) =
     v {w} {d} {y} (foldLayout {w} {y} s e h v l1)
                   (foldLayout {w} {d-y} s e h v l2)
 
-render :: forall a . pi (w d :: Num) . Layout (K a) w d -> M (Option a) w d
+render :: forall a . pi (w d :: Num) . Layout (K a) w d -> M (Maybe a) w d
 render {w} {d} l =
     let
-        s :: forall a . pi (w' d' :: Nat) . (K a) w' d' -> M (Option a) w' d'
+        s :: forall a . pi (w' d' :: Nat) . (K a) w' d' -> M (Maybe a) w' d'
         s {w'} {d'} (K c) = mOne c
-    in foldLayout {w} {d} s (returnM None) mHoriz mVert l
-
+    in foldLayout {w} {d} s (returnM Nothing) mHoriz mVert l
 
 
 -- Cropping a w*d layout to produce a wc*dc layout starting from (x, y) 
@@ -461,34 +463,34 @@ data LZip :: (Num -> Num -> *) -> Num -> Num -> * where
 
 lzZip = LZip Root
 
-lzIn :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzIn (LZip c Empty)            = None
-lzIn (LZip c (Stuff s))        = None
-lzIn (LZip c (Horiz {x} l r))  = Some (LZip (HorizLeft {x} c r) l)
-lzIn (LZip c (Vert {y} t b))   = Some (LZip (VertTop {y} c b) t)
+lzIn :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzIn (LZip c Empty)            = Nothing
+lzIn (LZip c (Stuff s))        = Nothing
+lzIn (LZip c (Horiz {x} l r))  = Just (LZip (HorizLeft {x} c r) l)
+lzIn (LZip c (Vert {y} t b))   = Just (LZip (VertTop {y} c b) t)
 
-lzOut :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzOut (LZip Root                  h) = None
-lzOut (LZip (HorizLeft {x} c r)   h) = Some (LZip c (Horiz {x} h r))
-lzOut (LZip (HorizRight {x} l c)  h) = Some (LZip c (Horiz {x} l h))
-lzOut (LZip (VertTop {y} c b)     h) = Some (LZip c (Vert {y} h b))
-lzOut (LZip (VertBottom {y} t c)  h) = Some (LZip c (Vert {y} t h))
+lzOut :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzOut (LZip Root                  h) = Nothing
+lzOut (LZip (HorizLeft {x} c r)   h) = Just (LZip c (Horiz {x} h r))
+lzOut (LZip (HorizRight {x} l c)  h) = Just (LZip c (Horiz {x} l h))
+lzOut (LZip (VertTop {y} c b)     h) = Just (LZip c (Vert {y} h b))
+lzOut (LZip (VertBottom {y} t c)  h) = Just (LZip c (Vert {y} t h))
 
-lzLeft :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzLeft (LZip (HorizRight {x} l c) h)  = Some (LZip (HorizLeft {x} c h) l)
-lzLeft _                              = None
+lzLeft :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzLeft (LZip (HorizRight {x} l c) h)  = Just (LZip (HorizLeft {x} c h) l)
+lzLeft _                              = Nothing
 
-lzRight :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzRight (LZip (HorizLeft {x} c r) h)  = Some (LZip (HorizRight {x} h c) r)
-lzRight _                             = None
+lzRight :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzRight (LZip (HorizLeft {x} c r) h)  = Just (LZip (HorizRight {x} h c) r)
+lzRight _                             = Nothing
 
-lzTop :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzTop (LZip (VertBottom {x} l c) h)  = Some (LZip (VertTop {x} c h) l)
-lzTop _                              = None
+lzTop :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzTop (LZip (VertBottom {x} l c) h)  = Just (LZip (VertTop {x} c h) l)
+lzTop _                              = Nothing
 
-lzBottom :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Option (LZip s w d)
-lzBottom (LZip (VertTop {x} c r) h)  = Some (LZip (VertBottom {x} h c) r)
-lzBottom _                           = None
+lzBottom :: forall (s :: Num -> Num -> *)(w d :: Nat) . LZip s w d -> Maybe (LZip s w d)
+lzBottom (LZip (VertTop {x} c r) h)  = Just (LZip (VertBottom {x} h c) r)
+lzBottom _                           = Nothing
 
 
 lzSnd :: forall (s :: Num -> Num -> *)(w d :: Num) a .
