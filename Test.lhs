@@ -395,6 +395,8 @@
 >   ("x = 2 + 3", True) :
 >   ("x = 2 - 3", True) :
 >   ("x = - 3", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (a + b)) -> f (2 ^ a * 2 ^ b)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (2 * a)) -> f ((2 ^ a) ^ 2)\nf x = x", True) :
 >   []
 
 

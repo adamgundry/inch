@@ -59,6 +59,8 @@
 > monoVar :: NVar a -> Mono a
 > monoVar v = Map.singleton (VarFac v) 1
 
+> singleMono :: Mono a -> NormNum a
+> singleMono x = NN (Map.singleton x 1)
 
 
 > data Fac a k where
@@ -91,7 +93,7 @@
 >     fvFoldMap f (BinFac _)    = mempty
 
 > singleFac :: Fac a KNum -> NormNum a
-> singleFac x = NN (Map.singleton (Map.singleton x 1) 1)
+> singleFac x = singleMono (Map.singleton x 1)
 
 
 
@@ -283,10 +285,15 @@
 >         (Pow,    Just i,   Just j)  | j >= 0     -> fromInteger (i ^ j)
 >         (Pow,    _,        Just j)  | j >= 0     -> m ^ j
 >                                     | otherwise  -> singleFac (BinFac Pow `AppFac` m `AppFac` n)
+>         (Pow,    Just 1,   _)       -> 1
+>         (Pow,    Just 0,   _)       -> 0
+>         (Pow,    _,        _)       -> foldr foo 1 (Map.toList $ elimNN n)
+>           where
+>             foo (x, k) t | Map.null x  = t * (m ^ k)
+>                          | otherwise   = t * (singleFac (BinFac Pow `AppFac` m `AppFac` singleMono x) ^ k)
+
 >         (o,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
 >         (Plus,   _,        _)       -> m + n
 >         (Minus,  _,        _)       -> m - n
 >         (Times,  _,        _)       -> m * n
->         (Pow,    Just 1,   _)       -> 1
->         (Pow,    Just 0,   _)       -> 0
 >         _                           -> singleFac (BinFac o `AppFac` m `AppFac` n)
