@@ -122,6 +122,8 @@
 >   "x = 2 + 3" :
 >   "x = 2 - 3" :
 >   "x = - 3" :
+>   "f :: f ((*) 3 2) -> g (+)\nf = undefined" :
+>   "x :: f min\nx = x" :
 >   []
 
 
@@ -397,6 +399,7 @@
 >   ("x = - 3", True) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (a + b)) -> f (2 ^ a * 2 ^ b)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (2 * a)) -> f ((2 ^ a) ^ 2)\nf x = x", True) :
+>   ("f :: forall (f :: (Num -> Num) -> *) . f (min 2) -> f (min 2)\nf x = x", True) :
 >   []
 
 

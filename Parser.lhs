@@ -56,7 +56,6 @@
 > doubleColon = reservedOp "::"
 
 
-
 Kinds
 
 > kind       = kindBit `chainr1` kindArrow
@@ -72,7 +71,9 @@ Types
 
 > tyVarName  = identLike True "type variable"
 > tyConName  = identLike False "type constructor"
+> numVarName = identLike True "numeric type variable"
 > tyVar      = STyVar <$> tyVarName
+> numVar     = STyVar <$> numVarName
 > tyCon      = STyCon <$> tyConName
 > tyExp      = tyAll <|> tyPi <|> tyQual <|> tyExpArr
 > tyAll      = tyQuant "forall" (SBind All)
@@ -80,41 +81,31 @@ Types
 > tyExpArr   = tyBit `chainr1` tyArrow
 > tyArrow    = reservedOp "->" >> return (--->)
 
-
-> tyBit      = tyBob `chainl1` pure STyApp
-
-> {-
-> tyBob      =    tyVar
->            <|>  tyCon
->            <|>  STyInt <$> try integer
->            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp) <|> tyExp)
-> -}
-
-> numVarName   = identLike True "numeric type variable"
-> numVar       = STyVar <$> numVarName
-
-> tyBob = buildExpressionParser
+> tyBit = buildExpressionParser
 >     [
 >         [prefix "-" negate],
 >         [binary "^" (sbinOp Pow) AssocLeft],
 >         [binary "*" (*) AssocLeft],    
 >         [binary "+" (+) AssocLeft, sbinary "-" (-) AssocLeft]
 >     ]
->     tyAtom
+>     (tyAtom `chainl1` pure STyApp)
 
-> tyAtom     =    prefixBinOp <*> tyAtom <*> tyAtom
->            <|>  prefixUnOp <*> tyAtom
+> tyAtom     =    STyInt <$> try natural
+>            <|>  SBinOp <$> prefixBinOp
+>            <|>  SUnOp <$> prefixUnOp
 >            <|>  tyVar
 >            <|>  tyCon
->            <|>  STyInt <$> try integer
->            <|>  parens ((reservedOp "->" *> pure SArr <|> tyExp)
->                        <|> tyExp)
+>            <|>  parens ((reservedOp "->" *> pure SArr) <|> tyExp)
 
-> prefixBinOp  =    reserved "min" *> pure (sbinOp Min)
->              <|>  reserved "max" *> pure (sbinOp Max)
+> prefixBinOp  =    reserved "min" *> pure Min
+>              <|>  reserved "max" *> pure Max
+>              <|>  try (parens ((specialOp "-" *> pure Minus)
+>                                <|> (reservedOp "*" *> pure Times)
+>                                <|> (reservedOp "+" *> pure Plus)
+>                                <|> (reservedOp "^" *> pure Pow)))
 
-> prefixUnOp   =    reserved "abs" *> pure (sunOp Abs)
->              <|>  reserved "signum" *> pure (sunOp Signum)
+> prefixUnOp   =    reserved "abs" *> pure Abs
+>              <|>  reserved "signum" *> pure Signum
 
 > binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
 > sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc
