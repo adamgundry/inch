@@ -53,6 +53,7 @@ indy :: forall (f :: Nat -> Nat)(m :: Nat) b . 0 <= f 0 => ProxyNN f ->
               (0 <= f m => b) -> b
 indy _ lie s e = lie (Proxy :: Proxy (f m)) e
 
+{-
 possy :: forall a (m n :: Nat) .
                      (forall (x :: Num) a . Proxy x -> (0 <= x => a) -> a) ->
                          (0 <= m * n => a) -> a
@@ -60,3 +61,11 @@ possy lie =
     let foo :: forall (n :: Nat) a . 0 <= m * n => (0 <= m * (n + 1) => a) -> a
         foo x = x
     in indy (ProxyNN :: ProxyNN ((*) m)) lie foo
+-}
+
+
+
+foo :: forall (f :: Num -> Num -> Num) a .
+           (forall (m n :: Num) a . Proxy m -> Proxy n -> (f m n ~ f n m => a) -> a) ->
+               (f 1 3 ~ f 3 1 => a) -> a
+foo comm x = comm (Proxy :: Proxy 1) (Proxy :: Proxy 3) x
