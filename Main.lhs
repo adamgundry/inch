@@ -27,7 +27,7 @@
 > modHeader (Just m) = "module " ++ m ++ " where\n"
 
 > preprocess :: String -> String -> Either String String
-> preprocess fn s = case parse program fn s of
+> preprocess fn s = case parseProgram fn s of
 >     Right (p, mn) -> case runCheckProg p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
 >             Right (p'', st) -> Right $ modHeader mn ++ show (prettyProgram p'')

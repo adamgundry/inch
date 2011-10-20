@@ -1,10 +1,10 @@
-> module Parser where
+> module Parser (parseProgram) where
 
 > import Control.Applicative
 > import Control.Monad
 > import Data.Char
 
-> import Text.ParserCombinators.Parsec hiding (optional, many, (<|>))
+> import Text.ParserCombinators.Parsec hiding (parse, optional, many, (<|>))
 > import Text.ParserCombinators.Parsec.Expr
 > import Text.ParserCombinators.Parsec.Language
 > import qualified Text.ParserCombinators.Parsec.Token as T
@@ -17,12 +17,11 @@
 > import Kit
 > import Kind hiding (kind)
 
+> parseProgram = I.parse program
 
-> parse = I.parse
+> def = haskellDef
 
-> toyDef = haskellDef
-
-> lexer       = T.makeTokenParser toyDef    
+> lexer       = T.makeTokenParser def    
       
 > identifier     = IT.identifier lexer
 > reserved       = IT.reserved lexer
@@ -50,7 +49,7 @@
 
 
 > specialOp s = try $
->     string s >> notFollowedBy (opLetter toyDef) >> whiteSpace
+>     string s >> notFollowedBy (opLetter def) >> whiteSpace
 
 
 > doubleColon = reservedOp "::"
