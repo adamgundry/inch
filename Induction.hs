@@ -26,3 +26,37 @@ elimMulPos MulPos x = x
 
 lemmaMulPos :: forall a. pi (m n :: Nat) . (0 <= m * n => a) -> a
 lemmaMulPos {m} {n} = elimMulPos (mulPos {m} {n})
+
+
+
+data Prf :: * -> * where
+  Prf :: forall a. Prf a
+
+prf :: forall a . a -> Prf a
+prf _ = Prf
+
+ind :: forall (f :: Num -> *)(m :: Nat) . Prf (f 0) ->
+           (forall (n :: Nat) . Prf (f n) -> Prf (f (n+1))) ->
+               Prf (f m)
+ind _ _ = Prf
+
+
+data Proxy :: Num -> * where
+  Proxy :: forall (n :: Num) . Proxy n
+
+data ProxyNN :: (Num -> Num) -> * where
+  ProxyNN :: forall (f :: Num -> Num) . ProxyNN f
+
+indy :: forall (f :: Nat -> Nat)(m :: Nat) b . 0 <= f 0 => ProxyNN f ->
+          (forall (x :: Num) a . Proxy x -> (0 <= x => a) -> a) ->
+            (forall (n :: Nat) a . 0 <= f n => (0 <= f (n+1) => a) -> a) ->
+              (0 <= f m => b) -> b
+indy _ lie s e = lie (Proxy :: Proxy (f m)) e
+
+possy :: forall a (m n :: Nat) .
+                     (forall (x :: Num) a . Proxy x -> (0 <= x => a) -> a) ->
+                         (0 <= m * n => a) -> a
+possy lie =
+    let foo :: forall (n :: Nat) a . 0 <= m * n => (0 <= m * (n + 1) => a) -> a
+        foo x = x
+    in indy (ProxyNN :: ProxyNN ((*) m)) lie foo
