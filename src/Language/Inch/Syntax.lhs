@@ -2,18 +2,18 @@
 >              GADTs, TypeOperators, FlexibleInstances,
 >              StandaloneDeriving, TypeFamilies, RankNTypes,
 >              ImpredicativeTypes, FlexibleContexts,
->              MultiParamTypeClasses #-}
+>              MultiParamTypeClasses, EmptyDataDecls #-}
 
-> module Syntax where
+> module Language.Inch.Syntax where
 
 > import Control.Applicative
 > import Data.Traversable
 > import Data.Monoid
 > import Unsafe.Coerce
 
-> import Kit
-> import Kind
-> import Type
+> import Language.Inch.Kit
+> import Language.Inch.Kind
+> import Language.Inch.Type
 
 
 > data OK

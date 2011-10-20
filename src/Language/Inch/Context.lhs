@@ -2,20 +2,22 @@
 >              GADTs, RankNTypes, TypeSynonymInstances,
 >              MultiParamTypeClasses, FlexibleInstances #-}
 
-> module Context where
+> module Language.Inch.Context where
 
 > import Control.Applicative
 > import Control.Monad.Error
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import qualified Data.Map as Map
+> import Text.PrettyPrint.HughesPJ
 
-> import BwdFwd
-> import Kind
-> import Type
-> import Syntax hiding (Alternative)
-> import Kit
-> import Error
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.Syntax hiding (Alternative)
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.Kit
+> import Language.Inch.Error
 
 > type Bindings = Map.Map TmName (Maybe Sigma, Bool)
 
@@ -38,6 +40,8 @@
 >   show (LetBindings _)         = "LetBindings"
 >   show (LetBody _)             = "LetBody"
 
+> instance Pretty TmLayer where
+>   pretty l = const $ text $ show l
 
 > layerStops :: TmLayer -> Bool
 > layerStops (PatternTop _)  = True
@@ -70,11 +74,21 @@
 >     fvFoldMap f (Some t)  = fvFoldMap f t
 >     fvFoldMap f _         = mempty
 
+> instance Pretty (TyDef k) where
+>   pretty Hole      _ = text "?"
+>   pretty Fixed     _ = text "!"
+>   pretty Exists    _ = text "Ex"
+>   pretty (Some t)  l = pretty (fogSysTy t) l
+
 
 > type TyEntry k = Var () k := TyDef k
 
 > instance FV (TyEntry k) () where
 >     fvFoldMap f (b := d) = fvFoldMap f b <.> fvFoldMap f d
+
+> instance Pretty (TyEntry k) where
+>     pretty (a := d) _ = prettySysVar a <+> text ":="
+>       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind (varKind a))
 
 
 > data AnyTyEntry where
@@ -93,6 +107,14 @@
 >     A           :: TyEntry k -> Entry
 >     Layer       :: TmLayer -> Entry
 >     Constraint  :: CStatus -> Predicate -> Entry
+
+> instance Pretty Entry where
+>   pretty (A a)                  _ = prettyHigh a
+>   pretty (Layer l)              _ = prettyHigh l
+>   pretty (Constraint Given p)   _ =
+>       braces (prettyHigh $ fogSysPred p) <> text "!!"
+>   pretty (Constraint Wanted p)  _ =
+>       braces (prettyHigh $ fogSysPred p) <> text "??"
 
 
 
@@ -365,7 +387,3 @@ Bindings
 >         | x == y     = return $ TmVar y ::: ty
 >         | otherwise  = seek g
 >     seek (g :< _) = seek g
->
->     lookIn [] = Nothing
->     lookIn ((y ::: ty) : bs)  | x == y     = Just $ TmVar y ::: ty
->                               | otherwise  = lookIn bs

@@ -1,6 +1,6 @@
 > {-# LANGUAGE FlexibleContexts #-}
 
-> module Check where
+> module Language.Inch.Check where
 
 > import Prelude hiding (all)
 > import Control.Applicative
@@ -8,15 +8,14 @@
 > import Data.Monoid
 > import Data.Foldable
 
-> import BwdFwd
-> import Context
-> import Error
-> import Kit
-> import Kind hiding (All)
-> import Type
-> import PrettyPrinter
-> import PrettyContext ()
-> import Syntax
+> import Language.Inch.BwdFwd
+> import Language.Inch.Context
+> import Language.Inch.Error
+> import Language.Inch.Kit
+> import Language.Inch.Kind hiding (All)
+> import Language.Inch.Type
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.Syntax
 
 
 > traceContext s = getContext >>= \ g -> mtrace (s ++ "\n" ++ renderMe g)

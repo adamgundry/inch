@@ -1,4 +1,4 @@
-> module Parser (parseProgram) where
+> module Language.Inch.Parser (parseProgram) where
 
 > import Control.Applicative
 > import Control.Monad
@@ -12,10 +12,10 @@
 > import qualified Text.ParserCombinators.Parsec.IndentParser.Token as IT
 
 
-> import Type
-> import Syntax
-> import Kit
-> import Kind hiding (kind)
+> import Language.Inch.Type
+> import Language.Inch.Syntax
+> import Language.Inch.Kit
+> import Language.Inch.Kind hiding (kind)
 
 > parseProgram = I.parse program
 

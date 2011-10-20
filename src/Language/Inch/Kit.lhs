@@ -1,7 +1,7 @@
 > {-# LANGUAGE TypeOperators, GADTs, DeriveFunctor, DeriveFoldable, DeriveTraversable,
 >              RankNTypes, TypeFamilies #-}
 
-> module Kit where
+> module Language.Inch.Kit where
 
 > import Control.Applicative
 > import Data.Foldable

@@ -1,16 +1,16 @@
 > {-# LANGUAGE TypeSynonymInstances, FlexibleContexts, GADTs, TypeOperators,
 >              NoMonomorphismRestriction #-}
 
-> module Error where
+> module Language.Inch.Error where
 
 > import Data.List
 > import qualified Control.Monad.Error as E
 > import Text.PrettyPrint.HughesPJ
 
-> import Kind
-> import Type
-> import Kit
-> import PrettyPrinter
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.Kit
+> import Language.Inch.PrettyPrinter
 
 > data Err where
 >     MissingTyVar       :: String -> Err

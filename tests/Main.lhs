@@ -1,15 +1,17 @@
-> module Test where
+> module Main where
 
 > import Control.Applicative
 > import Control.Monad.State
 > import Data.List
 > import System.Directory
 
-> import Syntax
-> import Parser
-> import PrettyPrinter
-> import ProgramCheck
-> import Erase
+> import Language.Inch.Syntax
+> import Language.Inch.Parser
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.ProgramCheck
+> import Language.Inch.Erase
+
+> main = checks "examples/"
 
 
 > test :: (a -> String) -> (a -> Either String String)
@@ -81,9 +83,9 @@
 
 > checkEx = check "Example.hs"
 
-> checks = do
->     fns <- filter goodFile <$> getDirectoryContents "."
->     fcs <- zip fns <$> mapM readFile fns
+> checks d = do
+>     fns <- filter goodFile <$> getDirectoryContents d
+>     fcs <- zip fns <$> mapM (readFile . (d ++)) fns
 >     putStrLn $ test fst (\ (n, c) -> parseCheck (c, True)) fcs 0 0
 >   where
 >     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)

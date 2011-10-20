@@ -1,15 +1,17 @@
 > {-# LANGUAGE GADTs, TypeOperators, TypeFamilies, RankNTypes,
 >              FlexibleInstances, StandaloneDeriving, MultiParamTypeClasses,
->              FlexibleContexts #-}
+>              FlexibleContexts, EmptyDataDecls #-}
 
-> module Kind where
+> module Language.Inch.Kind where
 
 > import Data.Foldable
+> import Data.Map (Map)
+> import qualified Data.Map as Map
 > import Data.Monoid
 > import Prelude hiding (any, elem)
 
-> import BwdFwd
-> import Kit
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kit
 
 
 
@@ -270,6 +272,9 @@
 
 > instance (FV s a, FV t a, FV u a) => FV (s, t, u) a where
 >     fvFoldMap f (x, y, z) = fvFoldMap f x <.> fvFoldMap f y <.> fvFoldMap f z
+
+> instance (Ord t, FV t a) => FV (Map t x) a where
+>     fvFoldMap f = Map.foldrWithKey (\ t _ m -> fvFoldMap f t <.> m) mempty
 
 
 > data VarSuffix a b where

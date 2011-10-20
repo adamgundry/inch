@@ -1,6 +1,6 @@
 > {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts #-}
 
-> module ProgramCheck where
+> module Language.Inch.ProgramCheck where
 
 > import Control.Applicative
 > import Control.Monad
@@ -10,18 +10,17 @@
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
-> import BwdFwd
-> import Kind
-> import Type
-> import Syntax
-> import Context
-> import Kit
-> import Error
-> import KindCheck
-> import TypeCheck
-> import Check
-> import PrettyPrinter
-> import PrettyContext ()
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.Syntax
+> import Language.Inch.Context
+> import Language.Inch.Kit
+> import Language.Inch.Error
+> import Language.Inch.KindCheck
+> import Language.Inch.TypeCheck
+> import Language.Inch.Check
+> import Language.Inch.PrettyPrinter
 
 > assertContextEmpty :: Contextual ()
 > assertContextEmpty = do

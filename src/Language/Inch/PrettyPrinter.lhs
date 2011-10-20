@@ -1,17 +1,17 @@
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts,
->              TypeOperators, GADTs #-}
+>              TypeOperators, GADTs, PatternGuards #-}
 
-> module PrettyPrinter where
+> module Language.Inch.PrettyPrinter where
 
 > import Data.Foldable
 > import Data.List
 > import Text.PrettyPrint.HughesPJ
 
-> import Kind
-> import Type
-> import BwdFwd
-> import Syntax
-> import Kit
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.BwdFwd
+> import Language.Inch.Syntax
+> import Language.Inch.Kit
 
 
 > data Size = ArgSize | AppSize | ArrSize | LamSize

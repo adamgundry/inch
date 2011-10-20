@@ -1,18 +1,18 @@
 > {-# LANGUAGE TypeOperators, MultiParamTypeClasses, TypeSynonymInstances,
 >              GADTs, TypeFamilies, UndecidableInstances #-}
 
-> module Erase where
+> module Language.Inch.Erase where
 
 > import Control.Applicative hiding (Alternative)
 > import Data.Traversable
 > import Unsafe.Coerce
 
-> import Error
-> import Kit
-> import Kind
-> import Type
-> import Syntax
-> import Context
+> import Language.Inch.Error
+> import Language.Inch.Kit
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.Syntax
+> import Language.Inch.Context
 
 
 > eraseKind :: Kind k -> Maybe (Ex Kind)
@@ -114,6 +114,7 @@
 >   where
 >     andExp a b = TmApp (TmApp (TmCon "(&&)") a) b
 >     toTm (P c m n) = TmApp (TmApp (TmCon (toS c)) (numToTm m)) (numToTm n)
+>     toTm (_ :=> _) = error "eraseGuard.toTm: implications are not allowed!"
 >     toS LE = "(<=)"
 >     toS LS = "(<)"
 >     toS GE = "(>=)"

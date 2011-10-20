@@ -4,18 +4,16 @@
 >              StandaloneDeriving, TypeSynonymInstances,
 >              MultiParamTypeClasses #-}
 
-> module Type where
+> module Language.Inch.Type where
 
-> import Control.Applicative
 > import Data.Foldable hiding (notElem, any)
-> import Data.Maybe
 > import qualified Data.Monoid as M
 > import Data.Traversable
 > import Data.List
 > import Unsafe.Coerce
 
-> import Kit
-> import Kind
+> import Language.Inch.Kit
+> import Language.Inch.Kind
 
 > type TyNum a  = Ty a KNum
 > type TypeNum  = TyNum ()

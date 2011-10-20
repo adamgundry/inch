@@ -1,12 +1,13 @@
 > module Main where
 
 > import Control.Monad.State
-> import System
+> import System.Environment
+> import System.Exit
 
-> import Parser
-> import PrettyPrinter
-> import ProgramCheck
-> import Erase
+> import Language.Inch.Parser
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.ProgramCheck
+> import Language.Inch.Erase
 
 
 > help me = "Usage: " ++ me ++ " [original file] [input file] [output file]"

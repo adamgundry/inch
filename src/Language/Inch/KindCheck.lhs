@@ -1,16 +1,16 @@
 > {-# LANGUAGE TypeOperators, GADTs #-}
 
-> module KindCheck where
+> module Language.Inch.KindCheck where
 
 > import Control.Applicative
 > import Data.Traversable
 
-> import BwdFwd
-> import Kind
-> import Type
-> import Context
-> import Kit
-> import Error
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.Context
+> import Language.Inch.Kit
+> import Language.Inch.Error
 
 
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind

@@ -1,6 +1,6 @@
 > {-# LANGUAGE DeriveFunctor, DeriveFoldable #-}
 
-> module BwdFwd where
+> module Language.Inch.BwdFwd where
 
 > import Data.Foldable
 > import Data.Monoid

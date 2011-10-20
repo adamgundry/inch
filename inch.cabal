@@ -17,38 +17,50 @@ Copyright:           Copyright (c) 2011, Adam Gundry
 Category:            Language
 Build-type:          Simple
 Extra-source-files:  examples/*.hs
-Cabal-version:       >=1.6
+Cabal-version:       >=1.9.2
 
 Executable inch
-  Main-is:           Inch/Main.lhs
-  Build-depends:     IndentParser == 0.2.*,
-                        parsec == 3.1.*,
-                        presburger == 0.3.*
-  Other-modules:     Inch.BwdFwd,
-                        Inch.Check,
-                        Inch.Context
-                        Inch.Erase
-                        Inch.Error
-                        Inch.KindCheck
-                        Inch.Kind
-                        Inch.Kit
-                        Inch.Main
-                        Inch.Num
-                        Inch.Parser
-                        Inch.PrettyContext
-                        Inch.PrettyPrinter
-                        Inch.ProgramCheck
-                        Inch.Solver
-                        Inch.Syntax
-                        Inch.Test
-                        Inch.TyNum
-                        Inch.TypeCheck
-                        Inch.Type
-                        Inch.Unify
+  ghc-options:       -Wall -fno-warn-missing-signatures
+                         -fno-warn-unused-matches -fno-warn-name-shadowing
+  hs-source-dirs:    src
+  Main-is:           Language/Inch/Main.lhs
+  Build-depends:     base == 4.3.*,
+                         IndentParser == 0.2.*,
+                         parsec == 3.1.*,
+                         presburger == 0.3.*,
+                         pretty == 1.0.*,
+                         mtl == 2.0.*,
+                         containers == 0.4.*
+  Other-modules:     Language.Inch.BwdFwd,
+                         Language.Inch.Check,
+                         Language.Inch.Context
+                         Language.Inch.Erase
+                         Language.Inch.Error
+                         Language.Inch.KindCheck
+                         Language.Inch.Kind
+                         Language.Inch.Kit
+                         Language.Inch.Parser
+                         Language.Inch.PrettyPrinter
+                         Language.Inch.ProgramCheck
+                         Language.Inch.Solver
+                         Language.Inch.Syntax
+                         Language.Inch.TyNum
+                         Language.Inch.TypeCheck
+                         Language.Inch.Type
+                         Language.Inch.Unify         
   
-  -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
-  -- Build-tools:         
-  
+Test-Suite test-inch
+    type:            exitcode-stdio-1.0
+    hs-source-dirs:  src tests
+    main-is:         Main.lhs
+    build-depends:   base == 4.3.*,
+                         IndentParser == 0.2.*,
+                         parsec == 3.1.*,
+                         presburger == 0.3.*,
+                         pretty == 1.0.*,
+                         mtl == 2.0.*,
+                         containers == 0.4.*,
+                         directory == 1.1.*
 
 source-repository head
   type:     darcs

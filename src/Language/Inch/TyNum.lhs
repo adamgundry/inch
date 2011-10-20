@@ -1,7 +1,8 @@
 > {-# LANGUAGE GADTs, TypeOperators, TypeSynonymInstances, FlexibleInstances,
->              MultiParamTypeClasses, TypeFamilies, StandaloneDeriving #-}
+>              MultiParamTypeClasses, TypeFamilies, StandaloneDeriving,
+>              PatternGuards #-}
 
-> module TyNum
+> module Language.Inch.TyNum
 >     (  NormalNum
 >     ,  Monomial
 >     ,  Fac(..)
@@ -34,9 +35,9 @@
 > import qualified Data.Map as Map
 > import Data.Monoid
 
-> import Kit
-> import Kind
-> import Type
+> import Language.Inch.Kit
+> import Language.Inch.Kind
+> import Language.Inch.Type
 
 > type NVar a           = Var a KNum
 > type NormalNum        = NormNum ()
@@ -49,9 +50,6 @@
 
 > instance a ~ b => FV (NormNum a) b where
 >     fvFoldMap f = fvFoldMap f . elimNN
-
-> instance (Ord t, FV t a) => FV (Map t x) a where
->     fvFoldMap f = Map.foldrWithKey (\ t _ m -> fvFoldMap f t <.> m) mempty
 
 > type Mono a    = Map (Fac a KNum) Integer
 > type Monomial  = Mono ()
@@ -101,7 +99,7 @@
 > instance Ord (Fac a k) where
 >     (<=) = (<?=)
 
-> type Factor k = Fac () KNum
+> type Factor k = Fac () k
 
 > instance a ~ b => FV (Fac a k) b where
 >     fvFoldMap f (VarFac a)    = f a
@@ -274,7 +272,7 @@
 > normaliseNum (TyInt i)  = fromInteger i
 > normaliseNum t          = facToNum (factorise t)
 >   where
->     factorise :: Type k -> Fac () k
+>     factorise :: Type k -> Factor k
 >     factorise (TyVar a)    = VarFac a
 >     factorise (UnOp o)     = UnFac o
 >     factorise (BinOp o)    = BinFac o
@@ -282,7 +280,7 @@
 >                                  KNum  -> factorise f `AppFac` normaliseNum s
 >                                  _     -> factorise f `AptFac` s
 >
->     facToNum :: Fac () KNum -> NormalNum
+>     facToNum :: Factor KNum -> NormalNum
 >     facToNum (UnFac o `AppFac` m)              = nunOp o m
 >     facToNum (BinFac o `AppFac` m `AppFac` n)  = nbinOp o m n
 >     facToNum f                                 = singleFac f

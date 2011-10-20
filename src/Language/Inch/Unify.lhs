@@ -1,7 +1,7 @@
 > {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, GADTs,
->              RankNTypes #-}
+>              RankNTypes, PatternGuards #-}
 
-> module Unify where
+> module Language.Inch.Unify where
 
 > import Control.Applicative
 > import Control.Monad hiding (mapM_)
@@ -11,16 +11,15 @@
 > import Prelude hiding (any, mapM_)
 > import Text.PrettyPrint.HughesPJ
 
-> import BwdFwd
-> import Kind
-> import Type
-> import TyNum
-> import Context
-> import Kit
-> import Error
-> import PrettyPrinter
-> import PrettyContext ()
-> import Check
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind
+> import Language.Inch.Type
+> import Language.Inch.TyNum
+> import Language.Inch.Context
+> import Language.Inch.Kit
+> import Language.Inch.Error
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.Check
 
 > data Extension = Restore | Replace Suffix
 

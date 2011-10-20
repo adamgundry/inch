@@ -1,7 +1,7 @@
 > {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts, PatternGuards,
 >              RankNTypes #-}
 
-> module TypeCheck where
+> module Language.Inch.TypeCheck where
 
 > import Control.Applicative hiding (Alternative)
 > import Control.Monad
@@ -14,19 +14,19 @@
 > import Data.Traversable
 > import Text.PrettyPrint.HughesPJ
 
-> import BwdFwd
-> import Kind 
-> import Type
-> import TyNum
-> import Syntax
-> import Context
-> import Unify
-> import Kit
-> import Error
-> import PrettyPrinter
-> import KindCheck
-> import Solver
-> import Check
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind 
+> import Language.Inch.Type
+> import Language.Inch.TyNum
+> import Language.Inch.Syntax
+> import Language.Inch.Context
+> import Language.Inch.Unify
+> import Language.Inch.Kit
+> import Language.Inch.Error
+> import Language.Inch.PrettyPrinter
+> import Language.Inch.KindCheck
+> import Language.Inch.Solver
+> import Language.Inch.Check
 
 
 > withLayerExtract :: TmLayer -> (TmLayer -> a) -> Contextual t -> Contextual (t, a)

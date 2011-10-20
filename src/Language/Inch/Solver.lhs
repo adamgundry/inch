@@ -1,7 +1,7 @@
 > {-# LANGUAGE GADTs, TypeOperators, FlexibleContexts, PatternGuards,
 >              RankNTypes #-}
 
-> module Solver where
+> module Language.Inch.Solver where
 
 > import Control.Applicative hiding (Alternative)
 > import Control.Monad.Writer hiding (All)
@@ -13,14 +13,14 @@
 > import qualified Data.Integer.Presburger as P
 > import Data.Integer.Presburger (Formula (TRUE, FALSE, (:=:), (:<:), (:<=:), (:>:), (:>=:), (:\/:), (:/\:), (:=>:)), (.*))
 
-> import BwdFwd
-> import Kind 
-> import Type
-> import TyNum
-> import Context
-> import Unify
-> import Kit
-> import Error
+> import Language.Inch.BwdFwd
+> import Language.Inch.Kind 
+> import Language.Inch.Type
+> import Language.Inch.TyNum
+> import Language.Inch.Context
+> import Language.Inch.Unify
+> import Language.Inch.Kit
+> import Language.Inch.Error
 
 
 > unifySolveConstraints :: Contextual ()
