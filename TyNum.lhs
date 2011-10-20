@@ -66,29 +66,47 @@
 > data Fac a k where
 >     VarFac  :: Var a k -> Fac a k
 >     AppFac  :: Fac a (KNum :-> k) -> NormNum a -> Fac a k
+>     AptFac  :: Fac a (k' :-> k) -> Ty a k' -> Fac a k
 >     UnFac   :: UnOp -> Fac a (KNum :-> KNum)
 >     BinFac  :: BinOp -> Fac a (KNum :-> KNum :-> KNum)
 
-> deriving instance Eq (Fac a k)
 > deriving instance Show (Fac a k)
 
+> instance HetEq (Fac a) where
+>     hetEq (VarFac a)    (VarFac b)    yes no = hetEq a b yes no
+>     hetEq (AppFac f m)  (AppFac g n)  yes no | m == n = hetEq f g yes no
+>     hetEq (AptFac f s)  (AptFac g t)  yes no = hetEq f g (hetEq s t yes no) no
+>     hetEq (UnFac o)     (UnFac o')    yes no | o == o' = yes
+>     hetEq (BinFac o)    (BinFac o')   yes no | o == o' = yes
+>     hetEq _             _             _   no = no
+
+> instance Eq (Fac a k) where
+>     (==) = (=?=)
+
+> instance HetOrd (Fac a) where
+>     VarFac a    <?= VarFac b    = a <?= b
+>     VarFac _    <?= _           = True
+>     _           <?= VarFac _    = False
+>     AppFac f m  <?= AppFac g n  = f <?= g && m <= n
+>     AppFac _ _  <?= _           = True
+>     _           <?= AppFac _ _  = False
+>     AptFac f s  <?= AptFac g t  = f <?= g && s <?= t
+>     AptFac _ _  <?= _           = True
+>     _           <?= AptFac _ _  = False
+>     UnFac o     <?= UnFac p     = o <= p
+>     UnFac _     <?= _           = True
+>     _           <?= UnFac _     = False
+>     BinFac o    <?= BinFac p    = o <= p
+
 > instance Ord (Fac a k) where
->     VarFac a    <= VarFac b    = a <= b
->     VarFac _    <= _           = True
->     _           <= VarFac _    = False
->     AppFac f m  <= AppFac g n  = f <= g && m <= n
->     AppFac _ _  <= _           = True
->     _           <= AppFac _ _  = False
->     UnFac o     <= UnFac p     = o <= p
->     UnFac _     <= _           = True
->     _           <= UnFac _     = False
->     BinFac o    <= BinFac p    = o <= p
+>     (<=) = (<?=)
 
 > type Factor k = Fac () KNum
 
 > instance a ~ b => FV (Fac a k) b where
 >     fvFoldMap f (VarFac a)    = f a
 >     fvFoldMap f (AppFac t m)  = fvFoldMap f t <.> fvFoldMap f m
+>     fvFoldMap f (AptFac t s)  = fvFoldMap f t <.> fvFoldMap f s
 >     fvFoldMap f (UnFac _)     = mempty
 >     fvFoldMap f (BinFac _)    = mempty
 
@@ -100,22 +118,18 @@
 > instance Num (NormNum a) where
 >     fromInteger i   | i == 0     = NN Map.empty
 >                     | otherwise  = NN $ Map.singleton Map.empty i
->
->     NN xs + NN ys   = NN . dropZeroes $ Map.unionWith (+) xs ys
->
->     negate (NN xs)  = NN $ Map.map negate xs
->
->     m      * n      | Just i <- getConstant m  = i *~ n
->                     | Just j <- getConstant n  = j *~ m
->     NN xs  * NN ys  = NN . dropZeroes $
->            Map.fromList [mk x y | x <- Map.toList xs, y <- Map.toList ys]
->       where
->         mk :: (Mono a, Integer) -> (Mono a, Integer) -> (Mono a, Integer)
->         mk (xs, i) (ys, j) = (dropZeroes $ Map.unionWith (+) xs ys, i*j)
+>     (+)     = nbinOp Plus
+>     (-)     = nbinOp Minus
+>     (*)     = nbinOp Times
+>     abs     = nunOp Abs
+>     signum  = nunOp Signum
 
 
 > dropZeroes :: Ord a => Map a Integer -> Map a Integer
 > dropZeroes = Map.filter (/= 0)
+
+> unionMaps :: Ord a => Map a Integer -> Map a Integer -> Map a Integer
+> unionMaps a b = dropZeroes $ Map.unionWith (+) a b
 
 > (*~) :: Integer -> NormNum a -> NormNum a
 > 0 *~ _      = 0
@@ -243,6 +257,7 @@
 >     reifyFac :: Fac a k -> Ty a k
 >     reifyFac (VarFac a)    = TyVar a
 >     reifyFac (AppFac f m)  = TyApp (reifyFac f) (reifyNum m)
+>     reifyFac (AptFac f t)  = TyApp (reifyFac f) t
 >     reifyFac (UnFac o)     = UnOp o
 >     reifyFac (BinFac o)    = BinOp o
 
@@ -255,22 +270,24 @@
 > reifyPred :: Pred (NormNum a) -> Pred (Ty a KNum)
 > reifyPred = fmap reifyNum
 
-> normaliseNum :: Ty a KNum -> NormNum a
-> normaliseNum (TyInt i)           = fromInteger i
-> normaliseNum (TyVar a)           = mkVar a
-> normaliseNum (TyApp (UnOp o) m)  = 
->     let m' = normaliseNum m
->     in case getConstant m' of
->         Just i   -> fromInteger (unOpFun o i)
->         Nothing  -> singleFac (UnFac o `AppFac` m')
-> normaliseNum (TyApp (TyApp (BinOp o) m) n) =
->     nbinOp o (normaliseNum m) (normaliseNum n)
-> normaliseNum (TyApp (TyVar v@(FVar _ (KNum :-> KNum))) m) =
->     singleFac (VarFac v `AppFac` normaliseNum m)
-> normaliseNum (TyApp (TyApp (TyVar v@(FVar _ (KNum :-> KNum :-> KNum))) m) n) =
->     singleFac (VarFac v `AppFac` normaliseNum m `AppFac` normaliseNum n)
+> normaliseNum :: Type KNum -> NormalNum
+> normaliseNum (TyInt i)  = fromInteger i
+> normaliseNum t          = facToNum (factorise t)
+>   where
+>     factorise :: Type k -> Fac () k
+>     factorise (TyVar a)    = VarFac a
+>     factorise (UnOp o)     = UnFac o
+>     factorise (BinOp o)    = BinFac o
+>     factorise (TyApp f s)  = case getTyKind s of
+>                                  KNum  -> factorise f `AppFac` normaliseNum s
+>                                  _     -> factorise f `AptFac` s
+>
+>     facToNum :: Fac () KNum -> NormalNum
+>     facToNum (UnFac o `AppFac` m)              = nunOp o m
+>     facToNum (BinFac o `AppFac` m `AppFac` n)  = nbinOp o m n
+>     facToNum f                                 = singleFac f
 
-> normalisePred :: Pred (Ty a KNum) -> NormPred a
+> normalisePred :: Predicate -> NormalPredicate
 > normalisePred (P c m n) = P c 0 (normaliseNum (n - m))
 > normalisePred (p :=> q) = normalisePred p :=> normalisePred q
 
@@ -280,20 +297,32 @@
 >                                 Just False  -> Just True
 >                                 _           -> trivialPred q
 
+> nunOp :: UnOp -> NormNum a -> NormNum a
+> nunOp o m = case getConstant m of
+>                 Just i   -> fromInteger (unOpFun o i)
+>                 Nothing  -> singleFac (UnFac o `AppFac` m)
+
 > nbinOp :: BinOp -> NormNum a -> NormNum a -> NormNum a
 > nbinOp o m n = case (o, getConstant m, getConstant n) of
 >         (Pow,    Just i,   Just j)  | j >= 0     -> fromInteger (i ^ j)
 >         (Pow,    _,        Just j)  | j >= 0     -> m ^ j
 >                                     | otherwise  -> singleFac (BinFac Pow `AppFac` m `AppFac` n)
 >         (Pow,    Just 1,   _)       -> 1
->         (Pow,    Just 0,   _)       -> 0
 >         (Pow,    _,        _)       -> foldr foo 1 (Map.toList $ elimNN n)
 >           where
 >             foo (x, k) t | Map.null x  = t * (m ^ k)
 >                          | otherwise   = t * (singleFac (BinFac Pow `AppFac` m `AppFac` singleMono x) ^ k)
 
 >         (o,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
->         (Plus,   _,        _)       -> m + n
->         (Minus,  _,        _)       -> m - n
->         (Times,  _,        _)       -> m * n
+>         (Plus,   _,        _)       -> NN $ unionMaps (elimNN m) (elimNN n)
+>         (Minus,  _,        _)       -> NN $ unionMaps (elimNN m) (Map.map negate $ elimNN n)
+>         (Times,  Just i,   _)       -> i *~ n
+>         (Times,  _,        Just j)  -> j *~ m
+>         (Times,  _,        _)       -> NN . dropZeroes . Map.fromList $ 
+>             [(unionMaps xs ys, i*j)
+>                 | (xs, i) <- Map.toList (elimNN m), (ys, j) <- Map.toList (elimNN n)]
+
 >         _                           -> singleFac (BinFac o `AppFac` m `AppFac` n)
+
+
+Note that we cannot rewrite 0 ^ n to 0 because n might turn out to be 0 later!
