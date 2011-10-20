@@ -5,10 +5,12 @@
 > import Data.List
 > import System.Directory
 
+> import Syntax
 > import Parser
 > import PrettyPrinter
 > import ProgramCheck
 > import Erase
+
 
 > test :: (a -> String) -> (a -> Either String String)
 >             -> [a] -> Int -> Int -> String
@@ -22,10 +24,10 @@
 
 
 > roundTrip :: String -> Either String String
-> roundTrip s = case parse program "roundTrip" s of
+> roundTrip s = case parseProgram "roundTrip" s of
 >     Right (prog, _)  ->
 >         let s' = show $ vcatPretty prog in
->         case parse program "roundTrip2" s' of
+>         case parseProgram "roundTrip2" s' of
 >             Right (prog', _)
 >               | prog == prog'  -> Right $ show (vcatPretty prog')
 >               | otherwise      -> Left $ "Round trip mismatch:"
@@ -37,6 +39,61 @@
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
 > roundTripTest = runTest id roundTrip roundTripTestData 0 0
+
+
+> parseCheck :: (String, Bool) -> Either String String
+> parseCheck (s, b) = case parseProgram "parseCheck" s of
+>     Right (p, _)   -> case runCheckProg p of
+>         Right (p', st)
+>             | b      -> Right $ "Accepted good program:\n"
+>                                     ++ show (prettyProgram p') ++ "\n"
+>             | not b  -> Left $ "Accepted bad program:\n"
+>                                     ++ show (prettyProgram p') ++ "\n"
+>         Left err
+>             | b      -> Left $ "Rejected good program:\n"
+>                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
+>             | not b  -> Right $ "Rejected bad program:\n"
+>                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
+>     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
+
+> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
+
+
+> eraseCheck :: String -> Either String String
+> eraseCheck s = case parseProgram "eraseCheck" s of
+>     Right (p, _)   -> case runCheckProg p of
+>         Right (p', st) -> case runStateT (eraseProg p') st of
+>             Right (p'', st) -> case runCheckProg (map fog p'') of
+>                 Right (p''', _) -> Right $ "Erased program:\n" ++ show (prettyProgram p''')
+>                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
+>             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
+
+>         Left err -> Right $ "Skipping rejected program:\n"
+>                             ++ s ++ "\n" ++ renderMe err ++ "\n"
+>     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
+
+> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
+
+
+> check fn = do
+>     s <- readFile fn
+>     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
+
+> checkEx = check "Example.hs"
+
+> checks = do
+>     fns <- filter goodFile <$> getDirectoryContents "."
+>     fcs <- zip fns <$> mapM readFile fns
+>     putStrLn $ test fst (\ (n, c) -> parseCheck (c, True)) fcs 0 0
+>   where
+>     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)
+
+> erase fn = do
+>     s <- readFile fn
+>     putStrLn $ test (const fn) eraseCheck [s] 0 0
+
+> eraseEx = erase "Example.hs"
+
 
 > roundTripTestData = 
 >   "f = x" :
@@ -127,25 +184,6 @@
 >   []
 
 
-
-> parseCheck :: (String, Bool) -> Either String String
-> parseCheck (s, b) = case parse program "parseCheck" s of
->     Right (p, _)   -> case runCheckProg p of
->         Right (p', st)
->             | b      -> Right $ "Accepted good program:\n"
->                                     ++ show (prettyProgram p') ++ "\n"
->             | not b  -> Left $ "Accepted bad program:\n"
->                                     ++ show (prettyProgram p') ++ "\n"
->         Left err
->             | b      -> Left $ "Rejected good program:\n"
->                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
->             | not b  -> Right $ "Rejected bad program:\n"
->                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
->     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
-
-
-
-> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
 
 > vecDecl = "data Vec :: Num -> * -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
@@ -400,39 +438,8 @@
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (a + b)) -> f (2 ^ a * 2 ^ b)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (2 ^ (2 * a)) -> f ((2 ^ a) ^ 2)\nf x = x", True) :
 >   ("f :: forall (f :: (Num -> Num) -> *) . f (min 2) -> f (min 2)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a :: Num) . a ~ 0 => f (0 ^ a) -> f 1\nf x = x", True) :
+>   ("f :: forall (f :: * -> Num)(g :: Num -> *) . g (f Integer) -> g (f Integer)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> Num -> Num -> Num)(g :: Num -> *) . g (f 1 2 3) -> g (f 1 2 2)\nf x = x", False) :
+>   ("f :: Integer", False) :
 >   []
-
-
-
-> eraseCheck :: String -> Either String String
-> eraseCheck s = case parse program "eraseCheck" s of
->     Right (p, _)   -> case runCheckProg p of
->         Right (p', st) -> case runStateT (eraseProg p') st of
->             Right (p'', st) -> Right $ "Erased program:\n" ++ show (prettyProgram p'')
->             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
-
->         Left err -> Right $ "Skipping rejected program:\n"
->                             ++ s ++ "\n" ++ renderMe err ++ "\n"
->     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
-
-> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
-
-
-> check fn = do
->     s <- readFile fn
->     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
-
-> checkEx = check "Example.hs"
-
-> checks = do
->     fns <- filter goodFile <$> getDirectoryContents "."
->     fcs <- zip fns <$> mapM readFile fns
->     putStrLn $ test fst (\ (n, c) -> parseCheck (c, True)) fcs 0 0
->   where
->     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)
-
-> erase fn = do
->     s <- readFile fn
->     putStrLn $ test (const fn) eraseCheck [s] 0 0
-
-> eraseEx = erase "Example.hs"
