@@ -119,6 +119,9 @@
 >         (unifyTypes f1 f2 >> unifyTypes s1 s2)
 >         (erk "Mismatched kinds")
 
+> unifyTypes (UnOp o)       (UnOp o')  | o == o' = return ()
+> unifyTypes (BinOp o)      (BinOp o') | o == o' = return ()
+
 > unifyTypes (TyVar alpha)  tau            = startSolve alpha tau
 > unifyTypes tau            (TyVar alpha)  = startSolve alpha tau
 > unifyTypes tau            upsilon        = errCannotUnify (fogTy tau) (fogTy upsilon)
