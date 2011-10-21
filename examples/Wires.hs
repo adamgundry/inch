@@ -5,8 +5,9 @@
 module Wires where
 
 data Vec :: Num -> * -> * where
-  VNil :: forall a . Vec 0 a
-  VCons :: forall (n :: Num) a . 0 <= n => a -> Vec n a -> Vec (n+1) a
+  VNil   :: Vec 0 a
+  VCons  :: forall (n :: Nat) a . a -> Vec n a -> Vec (n+1) a
+  deriving Show
 
 vhead :: forall a (m :: Num) . 0 < m => Vec m a -> a
 vhead (VCons x xs) = x
@@ -18,7 +19,7 @@ rev = let revapp :: forall (n k :: Nat) . Vec n a -> Vec k a -> Vec (n+k) a
       in revapp VNil
 
 data Wire :: Num -> * -> Num -> * -> * where
-  Stop  :: forall a b . Wire 0 a 0 b
+  Stop  :: Wire 0 a 0 b
   Say   :: forall (m n :: Nat) a b .
                b -> Wire m a n b -> Wire m a (n+1) b
   Ask   :: forall (m n :: Nat) a b .

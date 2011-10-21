@@ -9,6 +9,7 @@ comp f g = \ x -> f (g x)
 data Vec :: Num -> * -> * where
   Nil :: forall a. Vec 0 a
   Cons :: forall (n :: Num) a . 0 <= n => a -> Vec n a -> Vec (n+1) a
+  deriving Show
 
 data DTree :: * -> Num -> * where
   Empty  :: forall a. DTree a 0
@@ -17,6 +18,7 @@ data DTree :: * -> Num -> * where
                DTree a n -> DTree a n -> DTree a (2*n)
   Odd    :: forall a (n :: Num) . 1 <= n =>
                DTree a (n+1) -> DTree a n -> DTree a (2*n+1)
+  deriving Show
 
 insert :: forall a (n :: Num) . a -> DTree a n -> DTree a (n+1)
 insert i Empty       = Leaf i
@@ -58,6 +60,7 @@ data OVec :: Num -> Num -> Num -> * where
   ONil :: forall (l u :: Num) . l <= u => OVec 0 l u
   OCons :: forall (n l u :: Num) . pi (x :: Num) . l <= x =>
                OVec n x u -> OVec (n+1) l u
+  deriving Show
 
 
 ltCompare :: forall a. pi (x y :: Num) . (x <= y => a) -> (x > y => a) -> a
@@ -75,6 +78,7 @@ omerge (OCons {x} xs) (OCons {y} ys)
 
 data In :: Num -> Num -> * where
   In :: forall (l u :: Num) . pi (x :: Num) . l <= x, x <= u => In l u
+  deriving Show
 
 oflatten :: forall (n l u :: Num) . l <= u => DTree (In l u) n -> OVec n l u
 oflatten Empty      = ONil

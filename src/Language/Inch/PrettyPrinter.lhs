@@ -141,8 +141,8 @@
 >     pretty (TmCon s)    = const $ text s
 >     pretty (TmInt k)    = wrapDoc (if k < 0 then ArrSize else minBound) $
 >                               integer k
->     pretty (CharLit c)  = const $ text $ '\'' : c : "'"
->     pretty (StrLit s)   = const $ text $ '"' : s ++ "\""
+>     pretty (CharLit c)  = const $ text $ show c
+>     pretty (StrLit s)   = const $ text $ show s
 >     pretty (TmApp (TmApp (TmBinOp o) m) n) | binOpInfix o =
 >         wrapDoc AppSize $ pretty m ArgSize <+> text (binOpString o) <+> pretty n ArgSize
 >     pretty (TmApp f s)  = wrapDoc AppSize $

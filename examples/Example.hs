@@ -32,13 +32,6 @@ flp      = \ f x y -> f y x
 
 -- Data types
 
-data Pair :: * -> * -> * where
-  Pair :: forall a b. a -> b -> Pair a b
-  deriving Show
-
-p1 (Pair a _) = a
-p2 (Pair _ b) = b
-
 data Nat where
   Zero :: Nat
   Suc :: Nat -> Nat
@@ -195,12 +188,12 @@ vlookup {0}   (VCons x xs) = x
 vlookup {k+1} (VCons x xs) = vlookup {k} xs
 
 
-pairMap :: forall a b c d . (a -> c) -> (b -> d) -> Pair a b -> Pair c d
-pairMap f g (Pair a b) = Pair (f a) (g b)
+pairMap :: forall a b c d . (a -> c) -> (b -> d) -> (a, b) -> (c, d)
+pairMap f g (a, b) = (f a, g b)
 
 
-vsplit :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)
-vsplit {0}   xs           = Pair VNil xs
+vsplit :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> (Vec m a, Vec n a)
+vsplit {0}   xs           = (VNil, xs)
 vsplit {n+1} (VCons x xs) = pairMap (VCons x) i (vsplit {n} xs)
 
 {-
@@ -587,17 +580,17 @@ data Move :: Num -> Num -> * where
   Join :: forall (x y x' y' :: Num) . 
             Move x y -> Move x' y' -> Move (x + x') (y + y')
 
-runMove :: (Integer -> Integer -> Integer) -> Move 0 0 -> List (Pair Integer Integer)
+runMove :: (Integer -> Integer -> Integer) -> Move 0 0 -> List (Integer, Integer)
 runMove plus m =
-  let help :: forall (x y :: Num) . Pair Integer Integer -> Move x y ->
-                  Pair (Pair Integer Integer) (List (Pair Integer Integer)) 
-      help (Pair a b) (Step {x} {y}) = let p = Pair (plus a x) (plus b y)
-                                       in Pair p Nil
+  let help :: forall (x y :: Num) . (Integer, Integer) -> Move x y ->
+                  ((Integer, Integer), List (Integer, Integer))
+      help (a, b) (Step {x} {y}) = let p = (plus a x, plus b y)
+                                   in (p, Nil)
       help q (Join m1 m2) = let x = help q m1
-                                y = help (p1 x) m2
-                            in Pair (p1 y) (append (p2 y) (Cons (p1 x) (p2 x)))
-      x = help (Pair 0 0) m
-  in Cons (p1 x) (p2 x)
+                                y = help (fst x) m2
+                            in (fst y, append (snd y) (Cons (fst x) (snd x)))
+      x = help (0, 0) m
+  in Cons (fst x) (snd x)
 
 
 test = flp runMove (Join (Step {1} {2}) (Join (Step { -1} {0}) (Step {0} { -2})))
@@ -713,9 +706,9 @@ data PotList :: Num -> Num -> * -> * where
   PotCons :: forall a (i j :: Num). a -> PotList i j a -> PotList i (i+j) a
 
 attach :: forall (n :: Num) . Integer -> PotList 1 n Integer ->
-              PotList 0 0 (Pair Integer Integer)
+              PotList 0 0 (Integer, Integer)
 attach _ PotNil          = PotNil
-attach x (PotCons y ys)  = PotCons (Pair x y) (attach x ys)
+attach x (PotCons y ys)  = PotCons (x, y) (attach x ys)
 
 
 
@@ -739,7 +732,7 @@ nateq x = x
 data EQ :: * -> * -> * where
   CONG :: forall a b . (forall (c :: * -> *) . c a -> c b) -> EQ a b
 
-fstEq :: forall a1 a2 b1 b2 . EQ (Pair a1 b1) (Pair a2 b2) -> EQ a1 a2
+fstEq :: forall a1 a2 b1 b2 . EQ (a1, b1) (a2, b2) -> EQ a1 a2
 fstEq (CONG f) = fstEq (CONG f)
 
 

@@ -4,73 +4,12 @@
 
 module Layout where
 
--- Prelude stuff
-
-data Pair :: * -> * -> * where
-  Pair :: forall a b . a -> b -> Pair a b
-
-fstP (Pair a _) = a
-sndP (Pair _ b) = b
-
-
 data Ex :: (Num -> *) -> * where
   Ex :: forall (f :: Num -> *) (n :: Num) . f n -> Ex f
 
 data Ex2 :: (Num -> *) -> (Num -> *)  -> * where
   Ex2 :: forall (f g :: Num -> *) (p :: Num) . f p -> g p -> Ex2 f g
 
-
-
--- Trichotomy principles
-
-{-
-
-triA :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
-        a
-triA {0}   {n+1} a b c = a
-triA {0}   {0}   a b c = b
-triA {m+1} {0}   a b c = c
-triA {m+1} {n+1} a b c = triA {m} {n} a b c
-
-triB :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (m < n => a) -> (m ~ n => a) -> (m > n => a) ->
-        a
-triB {m} {n} a b c | {m < n} = a
-triB {m} {n} a b c | {m ~ n} = b
-triB {m} {n} a b c | {m > n} = c
-
-triC :: forall (a :: Num -> Num -> *) .
-    (forall (m n :: Num) . 0 <= m, m < n => a m n) ->
-    (forall (m   :: Num) . 0 <= m        => a m m) ->
-    (forall (m n :: Num) . 0 <= n, n < m => a m n) ->
-    (forall (m n :: Num) . 0 <= m, 0 <= n => a m n -> a (m+1) (n+1)) ->
-        (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)
-triC a b c step {0}   {n+1} = a
-triC a b c step {0}   {0}   = b
-triC a b c step {m+1} {0}   = c
-triC a b c step {m+1} {n+1} = step (triC a b c step {m} {n})
-
-diff :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (pi (d :: Num) . d ~ m - n => a) -> a
-diff {m}   {0}   a = a {m}
-diff {0}   {n}   a = a { -n }
-diff {m+1} {n+1} a = diff {m} {n} a
-
--}
-
-trichotomy :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n =>
-    (pi (d :: Num) . 0 < d, d ~ m - n => a) ->
-    (n ~ m => a) ->
-    (pi (d :: Num) . 0 < d, d ~ n - m => a) ->
-    a
-trichotomy {0}   {0}   a b c = b
-trichotomy {m+1} {0}   a b c = a {m+1}
-trichotomy {0}   {n+1} a b c = c {n+1}
-trichotomy {m+1} {n+1} a b c = trichotomy {m} {n} a b c
-
-
--- Layout data structures
 
 data Layout :: (Num -> Num -> *) -> Num -> Num -> * where
   Stuff :: forall (s :: Num -> Num -> *)(w d :: Nat) .
@@ -83,175 +22,32 @@ data Layout :: (Num -> Num -> *) -> Num -> Num -> * where
   Vert :: forall (s :: Num -> Num -> *)(w d :: Nat) .
               pi (y :: Nat) . y <= d =>
                   Layout s w y -> Layout s w (d-y) -> Layout s w d
-
-data Ident :: * where
-  A :: Ident
-  B :: Ident
-  C :: Ident
-  D :: Ident
+  deriving Show
 
 data K :: * -> Num -> Num -> * where
   K :: forall a . a -> K a 1 1
+  deriving Show
 
 unK :: forall a (m n :: Num) . K a m n -> a
 unK (K c) = c
 
 
--- Maximum
-
-data Max :: Num -> Num -> Num -> * where
-  Less :: forall (m n :: Num) . m < n => Max m n n
-  Same :: forall (m   :: Num) .          Max m m m
-  More :: forall (m n :: Num) . m > n => Max m n m
-
-stepMax :: forall (m n :: Num) . Ex (Max m n) -> Ex (Max (m+1) (n+1))
-stepMax (Ex Same) = Ex Same
-stepMax (Ex Less) = Ex Less
-stepMax (Ex More) = Ex More
-
-findMax :: pi (m n :: Num) . 0 <= m, 0 <= n => Ex (Max m n)
-findMax {0}   {0}   = Ex Same
-findMax {0}   {n+1} = Ex Less
-findMax {m+1} {0}   = Ex More
-findMax {m+1} {n+1} = stepMax (findMax {m} {n})
-
-
--- Horizontal composition with padding
-
-pad :: forall (s :: Num -> Num -> *)(x y :: Nat) . 
-           pi (w d :: Nat) . Layout s w d -> Layout s (w+x) (d+y)
-pad {w} {d} l = Horiz {w} (Vert {d} l Empty) Empty
-
-horizPadRight :: forall (s :: Num -> Num -> *) .
-                   pi (w1 d1 w2 d2 :: Nat) . d2 <= d1 => 
-                     Layout s w1 d1 -> Layout s w2 d2 -> Layout s (w1+w2) d1
-horizPadRight {w1} {d1} {w2} {d2} l1 l2 = Horiz {w1} l1 (Vert {d2} l2 Empty)
-
-
-{-
-horizPad :: forall (s :: Num -> Num -> *) .
-             pi (w1 d1 w2 d2 :: Nat) . 
-               Layout s w1 d1 -> Layout s w2 d2 -> Layout s (w1 + w2) (d1 + d2)
-horizPad {w1} {d1} {w2} {d2} l1 l2 = 
-  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Layout s (w1 + w2) (d1+d2)
-      horizA {d} = Vert {d1} (Horiz {w1} l1 (Vert {d2} l2 Empty))
-                                  Empty
-
-      horizB :: d1 ~ d2 => Layout s (w1 + w2) (d1 + d2)
-      horizB = Vert {d1} (Horiz {w1} l1 l2) Empty
-
-      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Layout s (w1 + w2) (d1+d2)
-      horizC {d} = Vert {d2} (Horiz {w1} (Vert {d1} l1 Empty) l2)
-                                  Empty
-  in trichotomy {d1} {d2} horizA horizB horizC
-
-horizPad2 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
-              Layout s w1 d1 -> Layout s w2 d2 -> Ex (Layout s (w1 + w2))
-horizPad2 {w1} {d1} {w2} {d2} l1 l2 = 
-  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Ex (Layout s (w1 + w2))
-      horizA {d} = Ex (Horiz {w1} l1 (Vert {d2} l2 Empty))
-
-      horizB :: d1 ~ d2 => Ex (Layout s (w1 + w2))
-      horizB = Ex (Horiz {w1} l1 l2)
-
-      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Ex (Layout s (w1 + w2))
-      horizC {d} = Ex (Horiz {w1} (Vert {d1} l1 Empty) l2)
-  in trichotomy {d1} {d2} horizA horizB horizC
--}
-
-horizPad3 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
-                 Layout s w1 d1 -> Layout s w2 d2 ->
-                     Ex2 (Max d1 d2) (Layout s (w1 + w2))
-horizPad3 {w1} {d1} {w2} {d2} l1 l2 = 
-  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Ex2 (Max d1 d2) (Layout s (w1 + w2))
-      horizA {d} = Ex2 More (Horiz {w1} l1 (Vert {d2} l2 Empty))
-
-      horizB :: d1 ~ d2 => Ex2 (Max d1 d2) (Layout s (w1 + w2))
-      horizB = Ex2 Same (Horiz {w1} l1 l2)
-
-      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Ex2 (Max d1 d2) (Layout s (w1 + w2))
-      horizC {d} = Ex2 Less  (Horiz {w1} (Vert {d1} l1 Empty) l2)
-  in trichotomy {d1} {d2} horizA horizB horizC
-
-
-{-
--- This doesn't work, because the constraints generated by More/Same/Less
--- escape the higher-rank arguments instead of being solved. Why?
-horizPad4 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
-                 Layout s w1 d1 -> Layout s w2 d2 ->
-                     Ex2 (Max d1 d2) (Layout s (w1 + w2))
-horizPad4 {w1} {d1} {w2} {d2} l1 l2 =
-    trichotomy {d1} {d2}
-         (\ {d} -> Ex2 More (Horiz {w1} l1 (Vert {d2} l2 Empty)))
-         (Ex2 Same (Horiz {w1} l1 l2))
-         (\ {d} -> Ex2 Less  (Horiz {w1} (Vert {d1} l1 Empty) l2))
--}
-
-
--- Bona fide max
-
-horizPad5 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
-                 Layout s w1 d1 -> Layout s w2 d2 ->
-                     Layout s (w1 + w2) (max d1 d2)
-horizPad5 {w1} {d1} {w2} {d2} l1 l2 = 
-  let horizA :: pi (d :: Num) . 0 < d, d ~ d1 - d2 => Layout s (w1 + w2) (max d1 d2)
-      horizA {d} = Horiz {w1} l1 (Vert {d2} l2 Empty)
-
-      horizC :: pi (d :: Num) . 0 < d, d ~ d2 - d1 => Layout s (w1 + w2) (max d1 d2)
-      horizC {d} = Horiz {w1} (Vert {d1} l1 Empty) l2
-  in trichotomy {d1} {d2} horizA (Horiz {w1} l1 l2) horizC
-
-
-horizPad6 :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
+horizPad :: forall (s :: Num -> Num -> *) . pi (w1 d1 w2 d2 :: Nat) .
                  Layout s w1 d1 -> Layout s w2 d2 -> Layout s (w1 + w2) (max d1 d2)
-horizPad6 {w1} {d1} {w2} {d2} l1 l2
+horizPad {w1} {d1} {w2} {d2} l1 l2
     | {d1 > d2} = Horiz {w1} l1 (Vert {d2} l2 Empty)
     | {d1 ~ d2} = Horiz {w1} l1 l2
     | {d1 < d2} = Horiz {w1} (Vert {d1} l1 Empty) l2
 
 
--- Find the stuff at given coordinates
-
 stuffAt :: forall a (w d :: Num) . pi (x y :: Nat) .
     x < w, y < d => Layout (K a) w d -> Maybe a
 stuffAt {x} {y} (Stuff (K i))       = Just i
 stuffAt {x} {y} Empty               = Nothing
-stuffAt {x} {y} (Horiz {wx} l1 l2)  =
-    let fA :: pi (d :: Num) . 0 <= d, d ~ x - wx => Maybe a
-        fA {d} = stuffAt {d} {y} l2
-
-        fB :: x ~ wx => Maybe a
-        fB = fA {0}
-
-        fC :: pi (d :: Num) . 0 < d, d ~ wx - x => Maybe a
-        fC {d} = stuffAt {x} {y} l1
-    in trichotomy {x} {wx} fA fB fC
-stuffAt {x} {y} (Vert {dy} l1 l2) =
-    let fA :: pi (d :: Num) . 0 <= d, d ~ y - dy => Maybe a
-        fA {d} = stuffAt {x} {d} l2
-
-        fB :: y ~ dy => Maybe a
-        fB = fA {0}
-
-        fC :: pi (d :: Num) . 0 < d, d ~ dy - y => Maybe a
-        fC {d} = stuffAt {x} {y} l1
-    in trichotomy {y} {dy} fA fB fC
-
-stuffAt' :: forall a (w d :: Num) . pi (x y :: Nat) .
-    x < w, y < d => Layout (K a) w d -> Maybe a
-stuffAt' {x} {y} (Stuff (K i))       = Just i
-stuffAt' {x} {y} Empty               = Nothing
-stuffAt' {x} {y} (Horiz {wx} l1 l2)  =
-    trichotomy {x} {wx}
-        (\ {d} -> stuffAt' {d} {y} l2)
-        (stuffAt' {0} {y} l2)
-        (\ {d} -> stuffAt' {x} {y} l1)
-stuffAt' {x} {y} (Vert {dy} l1 l2) =
-    trichotomy {y} {dy}
-        (\ {d} -> stuffAt' {x} {d} l2)
-        (stuffAt' {x} {0} l2)
-        (\ {d} -> stuffAt' {x} {y} l1)
-
+stuffAt {x} {y} (Horiz {wx} l1 l2) | {x <  wx} = stuffAt {x} {y} l1
+                                   | {x >= wx} = stuffAt {x - wx} {y} l2
+stuffAt {x} {y} (Vert {dy} l1 l2)  | {y <  dy} = stuffAt {x} {y} l1
+                                   | {y >= dy} = stuffAt {x} {y - dy} l2
 
 
 -- Layout is an indexed monad
@@ -311,6 +107,7 @@ tilen lem {w} {d} {x}    {y+2}  l = lem (Proxy :: Proxy x) (Proxy :: Proxy w)
 data Vec :: * -> Num -> * where
   Nil   :: forall a . Vec a 0
   Cons  :: forall a (n :: Nat) . a -> Vec a n -> Vec a (n+1)
+  deriving Show
 
 vappend :: forall a (m n :: Nat) . Vec a m -> Vec a n -> Vec a (m+n)
 vappend Nil          ys = ys
@@ -331,6 +128,7 @@ returnVec {m+1} x  = Cons x (returnVec {m} x)
 
 data M :: * -> Num -> Num -> * where
   M :: forall a (x y :: Num) . Vec (Vec a x) y -> M a x y
+  deriving Show
 
 unM (M xss) = xss
 
@@ -372,6 +170,22 @@ render {w} {d} l =
         s :: forall a . pi (w' d' :: Nat) . (K a) w' d' -> M (Maybe a) w' d'
         s {w'} {d'} (K c) = mOne c
     in foldLayout {w} {d} s (returnM Nothing) mHoriz mVert l
+
+
+append [] ys = ys
+append (x:xs) ys = x : append xs ys
+
+showV :: forall (n :: Num) . Vec (Maybe Char) n -> [Char]
+showV Nil                = ""
+showV (Cons Nothing xs)  = ' ' : showV xs
+showV (Cons (Just i) xs) = i   : showV xs
+
+showM :: forall (w d :: Num) . M (Maybe Char) w d -> [Char]
+showM (M Nil)          = ""
+showM (M (Cons x xs))  = append (showV x) ('\n' : showM (M xs))
+
+renderM {w} {d} l = showM (render {w} {d} l)
+
 
 
 -- Cropping a w*d layout to produce a wc*dc layout starting from (x, y) 
@@ -501,165 +315,37 @@ lzSnd f (LZip _ l) = f l
 
 
 
--- Vector patches: attempt 1
-
-data VP :: * -> * -> * -> Num -> Num -> * where
-  NilVP   :: forall x y p . VP x y p 0 0
-  ConsVP  :: forall x y p (m n :: Nat) . p -> VP x y p m n -> VP x y p (m+1) (n+1)
-  Ins     :: forall x y p (m n :: Nat) . y -> VP x y p m n -> VP x y p m (n+1)
-  Del     :: forall x y p (m n :: Nat) . x -> VP x y p m n -> VP x y p (m+1) n
-
-vpSource :: forall x y p (m n :: Nat) . (p -> x) -> VP x y p m n -> Vec x m
-vpSource f NilVP          = Nil
-vpSource f (ConsVP p vp)  = Cons (f p) (vpSource f vp)
-vpSource f (Ins _ vp)     = vpSource f vp
-vpSource f (Del x vp)     = Cons x (vpSource f vp)
-
-vpDest :: forall x y p (m n :: Nat) . (p -> y) -> VP x y p m n -> Vec y n
-vpDest f NilVP          = Nil
-vpDest f (ConsVP p vp)  = Cons (f p) (vpDest f vp)
-vpDest f (Ins y vp)     = Cons y (vpDest f vp)
-vpDest f (Del _ vp)     = vpDest f vp
-
-composeT :: forall x y z p q (m n k :: Nat) .
-                (p -> x) -> (q -> z) ->
-                VP x y p m n -> VP y z q n k -> VP x z (Pair p q) m k
-composeT f g NilVP          NilVP          = NilVP
-composeT f g xy             (Ins z yz)     = Ins z (composeT f g xy yz)
-composeT f g (Del x xy)     yz             = Del x (composeT f g xy yz)
-composeT f g (ConsVP p xy)  (ConsVP q yz)  = ConsVP (Pair p q) (composeT f g xy yz)
-composeT f g (ConsVP p xy)  (Del y yz)     = Del (f p) (composeT f g xy yz)
-composeT f g (Ins x xy)     (ConsVP q yz)  = Ins (g q) (composeT f g xy yz)
-composeT f g (Ins y xy)     (Del _ yz)     = composeT f g xy yz
-
-composeV :: forall x y p (m n m' n' :: Nat) .
-                VP x y p m n -> VP x y p m' n' -> VP x y p (m+m') (n+n')
-composeV NilVP          bs = bs
-composeV (ConsVP p as)  bs = ConsVP p (composeV as bs)
-composeV (Ins y as)     bs = Ins y (composeV as bs)
-composeV (Del x as)     bs = Del x (composeV as bs)
-
-composeH :: forall x y p x' y' p' (m n :: Nat) .
-                VP x y p m n -> VP x' y' p' m n ->
-                    VP (Pair x x') (Pair y y') (Pair p p') m n 
-composeH NilVP NilVP                   = NilVP
-composeH (ConsVP p as) (ConsVP p' bs)  = ConsVP (Pair p p') (composeH as bs)
-composeH (Ins y as) (Ins y' bs)        = Ins (Pair y y') (composeH as bs)
-composeH (Del x as) (Del x' bs)        = Del (Pair x x') (composeH as bs)
-composeH (Ins y as) (Del x' bs)        = undefined
-
-source2d f = vpSource (vpSource f)
-
-dest2d :: forall x y p (m n j k :: Nat) . 
-              (p -> y) -> VP (Vec x m) (Vec y n) (VP x y p m n) j k -> Vec (Vec y n) k
-dest2d f = vpDest (vpDest f)
-
-
-vpPure :: forall x (m :: Num) . Vec x m -> VP x x x m m 
-vpPure Nil = NilVP
-vpPure (Cons x xs) = ConsVP x (vpPure xs)
-
-vpDel :: forall x y p (m n k :: Nat) . Vec x k -> VP x y p m n -> VP x y p (m+k) n
-vpDel Nil          as = as
-vpDel (Cons k ks)  as = Del k (vpDel ks as)
-
-vpNorm :: forall x y p (m n k :: Nat) . Vec x k -> VP x y p (m-k) n -> VP x y p m n
-vpNorm ks NilVP          = vpDel ks NilVP
-vpNorm ks (ConsVP p ps)  = vpDel ks (ConsVP p (vpNorm Nil ps))
-vpNorm ks (Del x ps)     = vpNorm (Cons x ks) ps
-vpNorm ks (Ins y ps)     = Ins y (vpNorm ks ps)
-
-
-{-
-vpApp :: forall a b (m n k :: Nat) . Vec a k ->
-             VP (a -> b) (a -> b) (a -> b) m n -> VP a a a (m-k) n -> VP b b b m n
-vpApp Nil NilVP         NilVP          = NilVP
-vpApp Nil (ConsVP f fs) (ConsVP a as)  = ConsVP (f a) (vpApp Nil fs as)
-vpApp ks  (Ins f fs)    (Ins a as)     = Ins (f a) (vpApp ks fs as)
-vpApp Nil (Ins f fs)    (ConsVP a as)  = vpApp Nil (Ins f fs) (Ins a (Del a as))
-vpApp (Cons k ks) (Ins f fs) (ConsVP a as) = vpApp ks (Ins f fs) 
-vpApp ks  (Ins f fs)    (Del a as)     = vpApp (Cons a ks) (Ins f fs) as
--}
-
-
--- Vector patches: attempt 2
-
-data Vp :: * -> * -> * -> Num -> Num -> * where
-  Vp :: forall x y p (m n ins del :: Nat) . 
-            Vec x del -> Vec y ins -> MoreVp x y p m n -> Vp x y p (m+del) (n+ins)
-
-data MoreVp :: * -> * -> * -> Num -> Num -> * where
-  Stop  :: forall x y p .
-               MoreVp x y p 0 0
-  Go    :: forall x y p (m n :: Nat) . 
-               p -> Vp x y p m n -> MoreVp x y p (m+1) (n+1)
-
-vpSource' :: forall x y p (m n :: Nat) . (p -> x) -> Vp x y p m n -> Vec x m
-vpSource' f (Vp del ins more) = vappend del (vpSourceMore f more)
-
-vpSourceMore :: forall x y p (m n :: Nat) . (p -> x) -> MoreVp x y p m n -> Vec x m
-vpSourceMore f Stop       = Nil
-vpSourceMore f (Go p vp)  = Cons (f p) (vpSource' f vp)
-
-vpDest' :: forall x y p (m n :: Num) . (p -> y) -> Vp x y p m n -> Vec y n
-vpDest' f (Vp del ins more) = vappend ins (vpDestMore f more)
-
-vpDestMore :: forall x y p (m n :: Num) . (p -> y) -> MoreVp x y p m n -> Vec y n
-vpDestMore f Stop = Nil
-vpDestMore f (Go p vp) = Cons (f p) (vpDest' f vp)
-
-{-
-composeT' :: forall x y z p q (m n k :: Num) . 
-                (p -> x) -> (q -> z) ->
-                    Vp x y p m n -> Vp y z q n k -> Vp x z (Pair p q) m k
-composeT' f g (Vp xdel yins Stop)       (Vp ydel zins Stop)       =
-    Vp xdel zins Stop
-composeT' f g (Vp xdel yins Stop)       (Vp ydel zins (Go q yz))  =
-    undefined
-composeT' f g (Vp xdel yins (Go p xy))  (Vp ydel zins Stop)       =
-    undefined
-composeT' f g (Vp xdel yins (Go p xy))  (Vp ydel zins (Go q yz))  =
-    undefined
-
-composeTMore :: forall x y z p q (m n k ins del :: Num) . 
-                    Vec y ins -> Vec y del -> 
-                        MoreVp x y p m (n-ins) -> MoreVp y z q (n-del) k ->
-                            Vp x z (Pair p q) m k
-composeTMore yins ydel Stop Stop       = Vp Nil Nil Stop
-composeTMore yins ydel Stop (Go p vp)  = undefined
-
-vpApp' :: forall a b (m n :: Num) . 
-             Vp (a -> b) (a -> b) (a -> b) m n -> Vp a a a m n ->
-                 Vp b b b m n
-vpApp' (Vp fdel fins fs) (Vp adel ains as) = undefined
--}
-
-
 -- Test things
 
-l2x1 = Horiz {1} (Stuff (K A)) (Stuff (K B))
+l2x1 = Horiz {1} (Stuff (K 'A')) (Stuff (K 'B'))
 
-l1xn :: forall (n :: Num) . 1 <= n => Layout (K Ident) 1 n
-l1xn = Vert {1} (Stuff (K C)) Empty
+l1xn :: forall a (n :: Num) . 1 <= n => a -> Layout (K a) 1 n
+l1xn x = Vert {1} (Stuff (K x)) Empty
 
-l1x2 = l1xn :: Layout (K Ident) 1 2
+l1x2 :: a -> Layout (K a) 1 2
+l1x2 = l1xn
 
 grid {x} {y} a b c d = Vert {y} (Horiz {x} (Stuff a) (Stuff b))
                                 (Horiz {x} (Stuff c) (Stuff d))
-as {w} {d}  = tile {w} {d} (Stuff (K A))
-bs {w} {d}  = tile {w} {d} (Stuff (K B))
+as {w} {d}  = tile {w} {d} (Stuff (K 'A'))
+bs {w} {d}  = tile {w} {d} (Stuff (K 'B'))
 
-abcd   = grid {1} {1} (K A) (K B) (K C) (K D)
+abcd   = grid {1} {1} (K 'A') (K 'B') (K 'C') (K 'D')
 getD   = stuffAt {1} {1} abcd
 rabcd  = render {2} {2} abcd
 abcdabcd   = joinLayout (grid {2} {2} abcd Empty Empty abcd)
 rabcdabcd  = render {4} {4} abcdabcd
 
-asbs    = horizPadRight {3} {6} {4} {2} (as {3} {6}) (bs {4} {2}) -- 7x6
-rasbs   = render {7} {6} asbs
-thing   = overlay (crop cropK) {7} {6} asbs (pad {4} {4} abcdabcd)
-rthing  = render {7} {6} thing
 
-vpa = Ins 3 (Del 6 (ConsVP 2 NilVP))
-vpb = Ins 6 (Del 3 (ConsVP 2 NilVP))
-vp2d = Ins (Cons 2 Nil) (Del Nil (ConsVP (ConsVP 3 NilVP) NilVP))
+
+
+{-
+
+instance Functor Layout where
+  fmap = mapLayout
+
+instance Monad Layout where
+  (>>=)   = flip bindLayout
+  return  = returnLayout
+
+-}

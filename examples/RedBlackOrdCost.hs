@@ -56,10 +56,11 @@ data Tree :: Num -> Num -> Num -> Num -> * where
                  Tree lo x 0 n -> Tree x hi 0 n -> Tree lo hi 1 n
   TB  :: forall (lo hi cl cr :: Num)(n :: Nat) . pi (x :: Num) .
              Tree lo x cl n -> Tree x hi cr n -> Tree lo hi 0 (n+1)
-
+  deriving Show
 
 data RBT :: Num -> Num -> * where
   RBT :: forall (lo hi :: Num)(n :: Nat) . Tree lo hi 0 n -> RBT lo hi
+  deriving Show
 
 empty = RBT E
 
@@ -69,6 +70,7 @@ empty = RBT E
 
 data T where
   T :: forall (n :: Nat)(lo hi :: Num) . Tree lo hi 0 n -> T
+  deriving Show
 
 emptyT = T E
 
