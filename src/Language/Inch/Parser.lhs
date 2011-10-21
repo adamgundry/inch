@@ -154,6 +154,8 @@ Types
 
 Terms
 
+> data Assoc = NonAssoc | LeftAssoc | RightAssoc
+
 
 > expr = do
 >     t    <- expi 0
@@ -162,11 +164,22 @@ Terms
 >         Just ty -> return $ t :? ty
 >         Nothing -> return t
 
-> expi 10  =    lambda
+> expi _  =    lambda
 >          <|>  letExpr
 >          <|>  caseExpr
 >          <|>  fexp
-> expi i = expi (i+1) -- <|> lexpi i <|> rexpi i
+
+> {-
+> expi i = (do
+>     t    <- expi (i+1)
+>     mot  <- optional ((,) <$> qop NonAssoc i <*> expi (i+1))
+>     case mot of
+>         Nothing      -> return t
+>         Just (o, u)  -> return (o t u)
+>   ) <|> lexpi i <|> rexpi i
+
+> lexpi i
+> -}
 
 
 > letExpr = do
@@ -183,17 +196,10 @@ Terms
 >     as <- I.block $ many caseAlternative
 >     return $ Case t as
 
-> caseAlternative = I.lineFold (CaseAlt <$> casePattern <*> altRest (reservedOp "->")
+> caseAlternative = I.lineFold (CaseAlt <$> patternMore <*> altRest (reservedOp "->")
 >     <?> "case alternative")
 
-> casePattern  =    PatCon <$> dataConName <*> patList
->              <|>  parens casePattern
->              <|>  PatVar <$> patVarName
->              <|>  reservedOp "_" *> pure PatIgnore
-
-> fexp = pexp `chainl1` pure TmApp
-
-> pexp = buildExpressionParser
+> fexp = buildExpressionParser
 >     [
 >         [prefix "-" (tmBinOp Minus (TmInt 0))],
 >         [binary "^" (tmBinOp Pow) AssocLeft],
@@ -201,12 +207,13 @@ Terms
 >         [binary "+" (tmBinOp Plus) AssocLeft, sbinary "-" (tmBinOp Minus) AssocLeft],
 >         [binary ":" (TmApp . TmApp (TmCon listConsName)) AssocRight]
 >     ]
->     aexp
+>     (aexp `chainl1` pure TmApp)
 
 > aexp :: I.IndentCharParser st (STerm ())
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
->       <|>  TmInt <$> try integer
+>       <|>  TmInt <$> try natural
+>       <|>  TmBinOp <$> prefixBinOp
 >       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
 >       <|>  braces (TmBrace <$> tyBit) 
 >       <|>  listy
@@ -307,12 +314,19 @@ Programs
 > patList  =    (:!) <$> pattern <*> patList
 >          <|>  pure P0
 
-> pattern  =    parens (PatCon <$> dataConName <*> patList)
+> pattern  =    try (reservedOp unitConsName >> return (PatCon unitConsName P0))
+>          <|>  parens (fmap (foldr1 (\ x y -> PatCon tupleConsName (x :! y :! P0))) (commaSep1 patternMore))
 >          <|>  braces patBrace
+>          <|>  brackets (foldr (\ x y -> PatCon listConsName (x :! y :! P0)) (PatCon listNilName P0) <$> commaSep patternMore)
 >          <|>  PatCon <$> dataConName <*> pure P0
 >          <|>  PatVar <$> patVarName
 >          <|>  reservedOp "_" *> pure PatIgnore
->          
+
+> patternMore  =    PatCon <$> dataConName <*> patList
+>              <|>  foo <$> pattern `sepBy1` reservedOp ":"
+>   where
+>     foo [x]     = x
+>     foo (x:xs)  = PatCon listConsName (x :! foo xs :! P0)
 
 > patVarName = identLike True "pattern variable"
 

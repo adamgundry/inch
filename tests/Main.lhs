@@ -189,6 +189,13 @@
 >   "y :: [Integer]\ny = 1 : 2 : [3, 4]" :
 >   "x :: ()\nx = ()" :
 >   "x :: (Integer, Integer)\nx = (3, 4)" :
+>   "f () = ()\ng (x, y) = (y, x)" : 
+>   "f [] = []\nf (x:y:xs) = x : xs" :
+>   "f (_, x:_) = x" : 
+>   "f [x,_] = x" : 
+>   "x = a b : c d : e f" :
+>   "f :: g (2 - 3)" :
+>   "f xs = case xs of\n      [] -> []\n      y:ys -> ys" :
 >   []
 
 
@@ -459,4 +466,7 @@
 >   ("x :: ()\nx = ()", True) : 
 >   ("x :: (Integer, Integer)\nx = ()", False) : 
 >   ("x = ((), ())", True) :
+>   ("f () = ()\ng (x, y) = (y, x)", True) : 
+>   ("f () = ()\nf (x, y) = (y, x)", False) : 
+>   ("f xs = case xs of\n      [] -> []\n      y:ys -> y : f ys", True) :
 >   []
