@@ -16,6 +16,11 @@
 > import Language.Inch.Type
 
 
+> listTypeName  = "([])"
+> listNilName   = "[]"
+> listConsName  = "(:)"
+
+
 > data OK
 > data RAW
 

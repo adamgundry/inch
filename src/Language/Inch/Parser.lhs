@@ -95,6 +95,7 @@ Types
 >            <|>  tyVar
 >            <|>  tyCon
 >            <|>  parens ((reservedOp "->" *> pure SArr) <|> tyExp)
+>            <|>  brackets (STyApp (STyCon listTypeName) <$> tyExp)
 
 > prefixBinOp  =    reserved "min" *> pure Min
 >              <|>  reserved "max" *> pure Max
@@ -196,7 +197,8 @@ Terms
 >         [prefix "-" (tmBinOp Minus (TmInt 0))],
 >         [binary "^" (tmBinOp Pow) AssocLeft],
 >         [binary "*" (tmBinOp Times) AssocLeft],    
->         [binary "+" (tmBinOp Plus) AssocLeft, sbinary "-" (tmBinOp Minus) AssocLeft]
+>         [binary "+" (tmBinOp Plus) AssocLeft, sbinary "-" (tmBinOp Minus) AssocLeft],
+>         [binary ":" (TmApp . TmApp (TmCon "(:)")) AssocRight]
 >     ]
 >     aexp
 
@@ -206,6 +208,9 @@ Terms
 >       <|>  TmInt <$> try integer
 >       <|>  parens expr
 >       <|>  braces (TmBrace <$> tyBit) 
+>       <|>  listy
+
+> listy = foldr (TmApp . TmApp (TmCon listConsName)) (TmCon listNilName) <$> brackets (fexp `sepBy` reservedOp ",")
 
 > isVar :: String -> Bool
 > isVar = isLower . head
@@ -217,6 +222,7 @@ Terms
 
 > tmVarName    = identLike True   "term variable"
 > dataConName  = identLike False  "data constructor"
+>                <|> try (parens (reservedOp ":" >> return listConsName))
 
 > lambda = do
 >     reservedOp "\\"

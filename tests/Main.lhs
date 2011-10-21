@@ -185,6 +185,8 @@
 >   "x :: f min\nx = x" :
 >   "data Foo where X :: Foo\n  deriving Show" :
 >   "data Foo where\n    X :: Foo\n  deriving (Eq, Show)" :
+>   "x :: [a]\nx = []" :
+>   "y :: [Integer]\ny = 1 : 2 : [3, 4]" :
 >   []
 
 
@@ -447,4 +449,9 @@
 >   ("f :: forall (f :: * -> Num)(g :: Num -> *) . g (f Integer) -> g (f Integer)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> Num -> Num -> Num)(g :: Num -> *) . g (f 1 2 3) -> g (f 1 2 2)\nf x = x", False) :
 >   ("f :: Integer", False) :
+>   ("x :: forall a . [a]\nx = []", True) :
+>   ("y :: [Integer]\ny = 1 : 2 : [3, 4]", True) :
+>   ("x = [[]]", True) :
+>   ("x = 1 : [] : []", False) :
+>   ("x = 1 + 3 : [6]", True) : 
 >   []
