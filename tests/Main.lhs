@@ -11,6 +11,7 @@
 > import Language.Inch.ProgramCheck
 > import Language.Inch.Erase
 
+> main :: IO ()
 > main = checks "examples/"
 
 
@@ -22,8 +23,14 @@
 >     Right s  -> "PASS\n" ++ s ++ "\n" ++ test g f xs (yes+1) no
 >     Left s   -> "FAIL\n" ++ s ++ "\n" ++ test g f xs yes (no+1)
 
+> runTest :: (a -> String) -> (a -> Either String String) -> [a] -> Int -> Int -> IO ()
 > runTest g f xs yes no = putStrLn $ test g f xs yes no
 
+
+> roundTripTest, parseCheckTest, eraseCheckTest :: IO ()
+> roundTripTest  = runTest id roundTrip roundTripTestData 0 0
+> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
+> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 > roundTrip :: String -> Either String String
 > roundTrip s = case parseProgram "roundTrip" s of
@@ -40,32 +47,26 @@
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> roundTripTest = runTest id roundTrip roundTripTestData 0 0
-
-
 > parseCheck :: (String, Bool) -> Either String String
 > parseCheck (s, b) = case parseProgram "parseCheck" s of
 >     Right (p, _)   -> case runCheckProg p of
->         Right (p', st)
->             | b      -> Right $ "Accepted good program:\n"
+>         Right (p', _)
+>             | b          -> Right $ "Accepted good program:\n"
 >                                     ++ show (prettyProgram p') ++ "\n"
->             | not b  -> Left $ "Accepted bad program:\n"
+>             | otherwise  -> Left $ "Accepted bad program:\n"
 >                                     ++ show (prettyProgram p') ++ "\n"
 >         Left err
->             | b      -> Left $ "Rejected good program:\n"
+>             | b          -> Left $ "Rejected good program:\n"
 >                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
->             | not b  -> Right $ "Rejected bad program:\n"
+>             | otherwise  -> Right $ "Rejected bad program:\n"
 >                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
-
-> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
-
 
 > eraseCheck :: String -> Either String String
 > eraseCheck s = case parseProgram "eraseCheck" s of
 >     Right (p, _)   -> case runCheckProg p of
 >         Right (p', st) -> case runStateT (eraseProg p') st of
->             Right (p'', st) -> case runCheckProg (map fog p'') of
+>             Right (p'', _) -> case runCheckProg (map fog p'') of
 >                 Right (p''', _) -> Right $ "Erased program:\n" ++ show (prettyProgram p''')
 >                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
@@ -74,29 +75,33 @@
 >                             ++ s ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
-> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
-
+> check :: FilePath -> IO ()
 > check fn = do
 >     s <- readFile fn
 >     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
 
+> checkEx :: IO ()
 > checkEx = check "Example.hs"
 
+> checks :: FilePath -> IO ()
 > checks d = do
 >     fns <- filter goodFile <$> getDirectoryContents d
 >     fcs <- zip fns <$> mapM (readFile . (d ++)) fns
->     putStrLn $ test fst (\ (n, c) -> parseCheck (c, True)) fcs 0 0
+>     putStrLn $ test fst (\ (_, c) -> parseCheck (c, True)) fcs 0 0
 >   where
 >     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)
 
+> erase :: FilePath -> IO ()
 > erase fn = do
 >     s <- readFile fn
 >     putStrLn $ test (const fn) eraseCheck [s] 0 0
 
+> eraseEx :: IO ()
 > eraseEx = erase "Example.hs"
 
 
+> roundTripTestData :: [String]
 > roundTripTestData = 
 >   "f = x" :
 >   "f = a b" :
@@ -203,6 +208,8 @@
 
 
 
+> vecDecl, vec2Decl, vec3Decl, natDecl :: String
+
 > vecDecl = "data Vec :: Num -> * -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
 >   ++ "  Cons :: forall a (m n :: Num). 0 <= m, n ~ (m + 1) => a -> Vec m a -> Vec n a\n"
@@ -216,9 +223,9 @@
 >   ++ "  Nil :: forall a . Vec 0 a\n"
 >   ++ "  Cons :: forall a (n :: Num). 0 <= n => a -> Vec n a -> Vec (n+1) a\n"
 
-
 > natDecl = "data Nat where\n Zero :: Nat\n Suc :: Nat -> Nat\n"
 
+> parseCheckTestData :: [(String, Bool)]
 > parseCheckTestData = 
 >   ("f x = x", True) :
 >   ("f = f", True) :

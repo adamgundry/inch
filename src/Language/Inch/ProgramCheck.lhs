@@ -29,6 +29,7 @@
 >         B0  -> return ()
 >         _   -> traceContext "assertContextEmpty" >> erk "context is not empty"
 
+> runCheckProg :: SProgram -> Either ErrorData (Program, ZipState)
 > runCheckProg p = runStateT (checkProg p) initialState
 
 > checkProg :: SProgram -> Contextual Program
@@ -38,7 +39,7 @@
 >     concat <$> traverse checkDecl ds
 >   where
 >     makeTyCon :: SDeclaration () -> Contextual ()
->     makeTyCon (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $
+>     makeTyCon (DataDecl t k _ ds) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
