@@ -207,7 +207,7 @@
 
 > data Decl s a where
 >     DataDecl  :: TyConName -> AKind s k -> [TmConName ::: ATy s a KSet] ->
->                      Decl s a
+>                      [String] -> Decl s a
 >     FunDecl   :: TmName -> [Alt s a] -> Decl s a
 >     SigDecl   :: TmName -> ATy s a KSet -> Decl s a
 
@@ -215,26 +215,28 @@
 
 > instance TravTypes Decl where
 
->     travTypes g (DataDecl x k cs) =
->         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs
+>     travTypes g (DataDecl x k cs ds) =
+>         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs <*> pure ds
 >     travTypes g (FunDecl x ps) =
 >         FunDecl x <$> traverse (travTypes g) ps
 >     travTypes g (SigDecl x ty) = SigDecl x <$> g ty
 
->     fogTypes g (DataDecl x k cs) = DataDecl x (fogKind k)
+>     fogTypes g (DataDecl x k cs ds) = DataDecl x (fogKind k)
 >         (map (\ (x ::: t) -> x ::: fogTy' g [] t) cs)
+>         ds
 >     fogTypes g (FunDecl x ps)  = FunDecl x (map (fogTypes g) ps)
 >     fogTypes g (SigDecl x ty)  = SigDecl x (fogTy' g [] ty)
 
->     renameTypes g (DataDecl x k cs) = DataDecl x k
+>     renameTypes g (DataDecl x k cs ds) = DataDecl x k
 >         (map (\ (x ::: t) -> x ::: renameTy g t) cs)
+>         ds
 >     renameTypes g (FunDecl x ps)  = FunDecl x (map (renameTypes g) ps)
 >     renameTypes g (SigDecl x ty)  = SigDecl x (renameTy g ty) 
 
 > instance a ~ b => FV (Decl OK a) b where
->     fvFoldMap f (DataDecl _ _ cs)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
->     fvFoldMap f (FunDecl _ as)     = fvFoldMap f as
->     fvFoldMap f (SigDecl _ t)      = fvFoldMap f t
+>     fvFoldMap f (DataDecl _ _ cs _)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
+>     fvFoldMap f (FunDecl _ as)       = fvFoldMap f as
+>     fvFoldMap f (SigDecl _ t)        = fvFoldMap f t
 
 
 > data Grd s a where

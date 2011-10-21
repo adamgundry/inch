@@ -61,9 +61,9 @@
 > goodTy = goodFV
 
 > goodDecl :: Context -> Declaration () -> Bool
-> goodDecl g (SigDecl _ t)      = goodTy g t
-> goodDecl g (DataDecl _ _ cs)  = all (\ (_ ::: t) -> goodTy g t) cs
-> goodDecl g (FunDecl _ _)      = True
+> goodDecl g (SigDecl _ t)        = goodTy g t
+> goodDecl g (DataDecl _ _ cs _)  = all (\ (_ ::: t) -> goodTy g t) cs
+> goodDecl g (FunDecl _ _)        = True
 
 
 > verifyContext :: Bool -> String -> Contextual ()

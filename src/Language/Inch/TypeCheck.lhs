@@ -386,8 +386,8 @@ status.
 >     case k of
 >         KSet  -> insertBinding x (Just ty', False)
 >         _     -> errKindNotSet (fogKind k)
-> makeBinding (FunDecl x _)     = return ()
-> makeBinding (DataDecl _ _ _)  = return ()
+> makeBinding (FunDecl x _)       = return ()
+> makeBinding (DataDecl _ _ _ _)  = return ()
 
 > checkInferFunDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkInferFunDecl (FunDecl s []) =
@@ -405,7 +405,7 @@ status.
 > checkInferFunDecl (SigDecl x _) = do
 >     _ ::: ty <- fst <$> lookupBinding x
 >     return [SigDecl x ty]
-> checkInferFunDecl (DataDecl _ _ _) = error "checkInferFunDecl: that's a data declaration"
+> checkInferFunDecl (DataDecl _ _ _ _) = error "checkInferFunDecl: that's a data declaration"
 
 
 > inferFunDecl s pats =

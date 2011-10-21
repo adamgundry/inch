@@ -34,6 +34,7 @@ flp      = \ f x y -> f y x
 
 data Pair :: * -> * -> * where
   Pair :: forall a b. a -> b -> Pair a b
+  deriving Show
 
 p1 (Pair a _) = a
 p2 (Pair _ b) = b
@@ -41,7 +42,7 @@ p2 (Pair _ b) = b
 data Nat where
   Zero :: Nat
   Suc :: Nat -> Nat
-
+  deriving Show
 
 
 -- Booleans
@@ -57,6 +58,7 @@ silly x | True = True
 data Vec :: Num -> * -> * where
   VNil :: forall a. Vec 0 a
   VCons :: forall (n :: Num) a . 0 <= n => a -> Vec n a -> Vec (n+1) a
+  deriving Show
 
 {-
 data Vec :: Num -> * -> * where

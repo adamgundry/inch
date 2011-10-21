@@ -38,7 +38,7 @@
 >     concat <$> traverse checkDecl ds
 >   where
 >     makeTyCon :: SDeclaration () -> Contextual ()
->     makeTyCon (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $
+>     makeTyCon (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
@@ -46,10 +46,10 @@
 >     makeTyCon _ = return ()
 
 > checkDecl :: SDeclaration () -> Contextual [Declaration ()]
-> checkDecl (DataDecl t k cs) = inLocation (text $ "in data type " ++ t) $ 
+> checkDecl (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $ 
 >   unEx (kindKind k) $ \ k -> do
 >     cs    <- traverse (checkConstructor t) cs
->     return [DataDecl t k cs]
+>     return [DataDecl t k cs ds]
 > checkDecl d = do
 >   assertContextEmpty 
 >   ds <- checkInferFunDecl d

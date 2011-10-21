@@ -38,9 +38,9 @@
 >             Right (p'', st) -> Right (sigs p', erased)
 >                 where
 >                     sigs    = show . prettyProgram . filter dataOrSigDecl
->                     dataOrSigDecl (SigDecl _ _)     = True
->                     dataOrSigDecl (DataDecl _ _ _)  = True
->                     dataOrSigDecl (FunDecl _ _)     = False
+>                     dataOrSigDecl (SigDecl _ _)       = True
+>                     dataOrSigDecl (DataDecl _ _ _ _)  = True
+>                     dataOrSigDecl (FunDecl _ _)       = False
 >                     erased  = modHeader mn ++ show (prettyProgram p'')
 >             Left err        -> Left $ "erase error:\n" ++ renderMe err ++ "\n"
 

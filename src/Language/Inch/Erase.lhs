@@ -142,11 +142,11 @@
 > erasePatList (p :! ps) = erasePat p :! erasePatList ps
 
 > eraseDecl :: Declaration () -> Contextual (Declaration ())
-> eraseDecl (DataDecl s k cs) =
+> eraseDecl (DataDecl s k cs ds) =
 >     case eraseKind k of
 >         Just (Ex k') -> do
 >             cs <- traverse eraseCon cs
->             return $ DataDecl s k' cs
+>             return $ DataDecl s k' cs ds
 >         Nothing -> error $ "eraseType: failed to erase kind " ++ show k
 > eraseDecl (FunDecl x ps) =
 >     FunDecl x <$> traverse eraseAlt ps

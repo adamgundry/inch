@@ -183,6 +183,8 @@
 >   "x = - 3" :
 >   "f :: f ((*) 3 2) -> g (+)\nf = undefined" :
 >   "x :: f min\nx = x" :
+>   "data Foo where X :: Foo\n  deriving Show" :
+>   "data Foo where\n    X :: Foo\n  deriving (Eq, Show)" :
 >   []
 
 
@@ -190,6 +192,7 @@
 > vecDecl = "data Vec :: Num -> * -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
 >   ++ "  Cons :: forall a (m n :: Num). 0 <= m, n ~ (m + 1) => a -> Vec m a -> Vec n a\n"
+>   ++ " deriving (Eq, Show)\n"
 
 > vec2Decl = "data Vec :: * -> Num -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec a n\n"

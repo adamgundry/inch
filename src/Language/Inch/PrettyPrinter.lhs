@@ -160,10 +160,13 @@
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
 
 > instance Pretty (SDeclaration a) where
->     pretty (DataDecl n k cs) _ = hang (text "data" <+> text n
+>     pretty (DataDecl n k cs ds) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
->             vcat (map prettyHigh cs)
+>             vcat (map prettyHigh cs) $$ derivingClause ds
+>       where
+>         derivingClause []  = empty
+>         derivingClause ds  = text "deriving" <+> parens (hsep (punctuate  (text ",") (map text ds)))
 >     pretty (FunDecl n ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
 >     pretty (SigDecl n ty) _ = text n <+> text "::" <+> prettyHigh ty
 

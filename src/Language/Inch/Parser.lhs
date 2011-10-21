@@ -252,10 +252,13 @@ Programs
 >     k <- (doubleColon >> kind) <|> return SKSet
 >     reserved "where"
 >     cs <- many $ I.lineFold constructor
->     return $ DataDecl s k cs
+>     ds <- maybe [] id <$> optional (reserved "deriving" >>
+>               parens (className `sepBy` reservedOp ",")
+>               <|> fmap pure className)
+>     return $ DataDecl s k cs ds
 >     
 
-
+> className = identLike False "type class name"
 
 > constructor = do
 >     s <- dataConName
