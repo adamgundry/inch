@@ -214,6 +214,14 @@ Fresh names
 >                     String -> Kind k -> m (Type k)
 > unknownTyVar s k = TyVar <$> fresh SysVar s k Hole
 
+> tyVarNamesInScope :: (Functor m, MonadState ZipState m) => m [String]
+> tyVarNamesInScope = help <$> getContext
+>   where
+>     help :: Context -> [String]
+>     help B0                 = []
+>     help (g :< A (v := _))  = nameToString (varName v) : help g
+>     help (g :< _)           = help g
+
 
 Context
 

@@ -219,10 +219,10 @@
 >   ("f x y z = x (y z)", True) :
 >   ("f x y z = x y z", True) :
 >   ("f x = x :: Foo", False) :
->   ("f :: forall a. a -> a\nf x = x", True) :
->   ("f :: forall a. a\nf = f", True) :
+>   ("f :: a -> a\nf x = x", True) :
+>   ("f :: a\nf = f", True) :
 >   ("f :: forall a b. (a -> b) -> (a -> b)\nf = \\ x -> x", True) :
->   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf = \\ x y z -> x y z", True) :
+>   ("f :: (a -> b -> c) -> a -> b -> c\nf = \\ x y z -> x y z", True) :
 >   ("f :: forall a b c. (b -> c) -> (a -> b) -> a -> c\nf x y z = x (y z)", True) :
 >   ("f :: forall a b c. (a -> b -> c) -> a -> b -> c\nf x y z = x y z", True) :
 >   (natDecl ++ "plus Zero n = n\nplus (Suc m) n = Suc (plus m n)\nf x = x :: Nat -> Nat", True) :

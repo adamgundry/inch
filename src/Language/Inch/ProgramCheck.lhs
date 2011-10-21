@@ -59,7 +59,7 @@
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
->     TK ty' k <- inferKind All B0 ty
+>     TK ty' k <- inferKind All B0 (wrapForall [] ty)
 >     case k of
 >       KSet -> do
 >         unless (ty' `targets` t) $ errConstructorTarget ty

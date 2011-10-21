@@ -382,7 +382,8 @@ status.
 
 > makeBinding :: SDeclaration () -> Contextual ()
 > makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
->     TK ty' k <- inferKind All B0 ty
+>     bs <- tyVarNamesInScope
+>     TK ty' k <- inferKind All B0 (wrapForall bs ty)
 >     case k of
 >         KSet  -> insertBinding x (Just ty', False)
 >         _     -> errKindNotSet (fogKind k)

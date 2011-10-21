@@ -3,6 +3,9 @@
 > module Language.Inch.KindCheck where
 
 > import Control.Applicative
+> import Data.Foldable hiding (elem, foldr)
+> import Data.Set (Set)
+> import qualified Data.Set as Set
 > import Data.Traversable
 
 > import Language.Inch.BwdFwd
@@ -11,6 +14,23 @@
 > import Language.Inch.Context
 > import Language.Inch.Kit
 > import Language.Inch.Error
+
+
+> wrapForall :: [String] -> SType -> SType
+> wrapForall _ t@(SBind All _ _ _) = t
+> wrapForall bs t = Set.fold (\ x t -> SBind All x SKSet t) t (collectUnbound bs t)
+>   where
+>     collectUnbound :: [String] -> SType -> Set String
+>     collectUnbound bs (STyVar s) | s `elem` bs  = Set.empty
+>                                  | otherwise    = Set.singleton s
+>     collectUnbound bs (STyCon _)       = Set.empty
+>     collectUnbound bs (STyApp f s)     = collectUnbound bs f `Set.union` collectUnbound bs s
+>     collectUnbound bs SArr             = Set.empty
+>     collectUnbound bs (STyInt _)       = Set.empty
+>     collectUnbound bs (SUnOp _)        = Set.empty
+>     collectUnbound bs (SBinOp _)       = Set.empty
+>     collectUnbound bs (SBind _ b _ t)  = collectUnbound (b:bs) t
+>     collectUnbound bs (SQual p t)      = foldMap (collectUnbound bs) p `Set.union` collectUnbound bs t
 
 
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind
