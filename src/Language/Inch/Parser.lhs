@@ -210,10 +210,13 @@ Terms
 >     (aexp `chainl1` pure TmApp)
 
 > aexp :: I.IndentCharParser st (STerm ())
-> aexp  =    TmVar <$> tmVarName
->       <|>  TmCon <$> dataConName
->       <|>  TmInt <$> try natural
+> aexp  =    TmInt <$> try natural
+>       <|>  CharLit <$> charLiteral
+>       <|>  StrLit  <$> stringLiteral
 >       <|>  TmBinOp <$> prefixBinOp
+>       <|>  TmUnOp <$> prefixUnOp
+>       <|>  TmVar <$> tmVarName
+>       <|>  TmCon <$> dataConName
 >       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
 >       <|>  braces (TmBrace <$> tyBit) 
 >       <|>  listy
@@ -315,15 +318,19 @@ Programs
 >          <|>  pure P0
 
 > pattern  =    try (reservedOp unitConsName >> return (PatCon unitConsName P0))
->          <|>  parens (fmap (foldr1 (\ x y -> PatCon tupleConsName (x :! y :! P0))) (commaSep1 patternMore))
+>          <|>  parens (foldr1 tupleConsPat <$> commaSep1 patternMore)
 >          <|>  braces patBrace
->          <|>  brackets (foldr (\ x y -> PatCon listConsName (x :! y :! P0)) (PatCon listNilName P0) <$> commaSep patternMore)
+>          <|>  brackets (foldr listConsPat listNilPat <$> commaSep patternMore)
 >          <|>  PatCon <$> dataConName <*> pure P0
 >          <|>  PatVar <$> patVarName
 >          <|>  reservedOp "_" *> pure PatIgnore
+>   where
+>     tupleConsPat x y  = PatCon tupleConsName (x :! y :! P0)
+>     listConsPat x y   = PatCon listConsName (x :! y :! P0)
+>     listNilPat        = PatCon listNilName P0
 
 > patternMore  =    PatCon <$> dataConName <*> patList
->              <|>  foo <$> pattern `sepBy1` reservedOp ":"
+>              <|>  foo <$> pattern `sepBy1` colon
 >   where
 >     foo [x]     = x
 >     foo (x:xs)  = PatCon listConsName (x :! foo xs :! P0)

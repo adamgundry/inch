@@ -196,6 +196,9 @@
 >   "x = a b : c d : e f" :
 >   "f :: g (2 - 3)" :
 >   "f xs = case xs of\n      [] -> []\n      y:ys -> ys" :
+>   "a = \"hello\"" :
+>   "b = 'w' : 'o' : 'r' : ['l', 'd']" :
+>   "f (_:x) = x" :
 >   []
 
 
@@ -469,4 +472,7 @@
 >   ("f () = ()\ng (x, y) = (y, x)", True) : 
 >   ("f () = ()\nf (x, y) = (y, x)", False) : 
 >   ("f xs = case xs of\n      [] -> []\n      y:ys -> y : f ys", True) :
+>   ("scanl            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl f q xs     =  q : (case xs of\n                            []   -> []\n                            x:xs -> scanl f (f q x) xs\n                        )", True) :
+>   ("a = \"hello\"", True) :
+>   ("b w = w : 'o' : 'r' : ['l', 'd']", True) :
 >   []

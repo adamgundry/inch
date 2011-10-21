@@ -153,6 +153,8 @@
 >     TmVar    :: TmName                    -> Tm s a
 >     TmCon    :: TmConName                 -> Tm s a
 >     TmInt    :: Integer                   -> Tm s a
+>     CharLit  :: Char                      -> Tm s a
+>     StrLit   :: String                    -> Tm s a
 >     TmApp    :: Tm s a -> Tm s a          -> Tm s a
 >     TmBrace  :: ATy s a KNum              -> Tm s a
 >     Lam      :: TmName -> Tm s a          -> Tm s a
@@ -179,6 +181,8 @@
 >     fogTypes g (TmVar x)     = TmVar x
 >     fogTypes g (TmCon c)     = TmCon c
 >     fogTypes g (TmInt k)     = TmInt k
+>     fogTypes g (CharLit c)   = CharLit c
+>     fogTypes g (StrLit s)    = StrLit s
 >     fogTypes g (TmApp f s)   = TmApp (fogTypes g f) (fogTypes g s)
 >     fogTypes g (TmBrace n)   = TmBrace (fogTy' g [] n)
 >     fogTypes g (Lam x b)     = Lam x (fogTypes g b)
@@ -193,6 +197,8 @@
 >     renameTypes g (TmVar x)     = TmVar x
 >     renameTypes g (TmCon c)     = TmCon c
 >     renameTypes g (TmInt k)     = TmInt k
+>     renameTypes g (CharLit c)   = CharLit c
+>     renameTypes g (StrLit s)    = StrLit s
 >     renameTypes g (TmApp f s)   = TmApp (renameTypes g f) (renameTypes g s)
 >     renameTypes g (TmBrace n)   = TmBrace (renameTy g n)
 >     renameTypes g (Lam x b)     = Lam x (renameTypes g b)

@@ -272,6 +272,14 @@ status.
 >     _ <- instSigma tyInteger mty
 >     return $ TmInt k ::: tyInteger
 
+> checkInfer mty (CharLit c) = do
+>     _ <- instSigma tyChar mty
+>     return $ CharLit c ::: tyChar
+
+> checkInfer mty (StrLit s) = do
+>     _ <- instSigma tyString mty
+>     return $ StrLit s ::: tyString
+
 > checkInfer mty (TmUnOp o) = do
 >     _ <- instSigma (tyInteger --> tyInteger) mty
 >     return $ TmUnOp o ::: tyInteger --> tyInteger

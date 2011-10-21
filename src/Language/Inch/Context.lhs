@@ -148,6 +148,8 @@ Initial state
 > tyList        = TyApp (TyCon listTypeName (KSet :-> KSet))
 > tyUnit        = TyCon unitTypeName KSet
 > tyTuple       = TyApp . TyApp (TyCon tupleTypeName (KSet :-> KSet :-> KSet))
+> tyChar        = TyCon "Char" KSet
+> tyString      = tyList tyChar
 
 > initialState = St 0 B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
@@ -160,6 +162,7 @@ Initial state
 >   (listTypeName,  Ex (KSet :-> KSet)) :
 >   (unitTypeName,  Ex KSet) :
 >   (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
+>   ("Char",        Ex KSet) :
 >   []
 > initTmCons = Map.fromList $
 >   ("True",     tyBool) :
@@ -184,6 +187,7 @@ Initial state
 >   ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
 >   ("otherwise",  (Just tyBool, True)) :
 >   ("not",        (Just (tyBool --> tyBool), True)) :
+>   ("error",      (Just (Bind All "a" KSet (tyString --> TyVar (BVar Top))), True)) :
 >   []
 
 

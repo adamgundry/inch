@@ -78,6 +78,8 @@
 > eraseTm (TmVar x)    = pure $ TmVar x
 > eraseTm (TmCon c)    = pure $ TmCon c
 > eraseTm (TmInt k)    = pure $ TmInt k
+> eraseTm (CharLit c)  = pure $ CharLit c
+> eraseTm (StrLit s)   = pure $ StrLit s
 > eraseTm (TmUnOp o)   = pure $ TmUnOp o
 > eraseTm (TmBinOp o)  = pure $ TmBinOp o
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
