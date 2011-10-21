@@ -95,6 +95,7 @@
 >     pretty (STyVar v)                  = const $ text v
 >     pretty (STyCon c)                  = const $ text c
 >     pretty (STyApp (STyCon l) t) | l == listTypeName  = const $ brackets (prettyHigh t)
+>     pretty (STyApp (STyApp (STyCon c) s) t) | c == tupleTypeName = const $ parens (prettyHigh s <> text "," <+> prettyHigh t)
 >     pretty (STyApp (STyApp f s) t) | Just fx <- infixName f = wrapDoc ArrSize $ 
 >         pretty s AppSize <+> text fx <++> pretty t AppSize
 >     pretty (STyApp f s)  = wrapDoc AppSize $ 

@@ -70,6 +70,7 @@ Types
 
 > tyVarName  = identLike True "type variable"
 > tyConName  = identLike False "type constructor"
+>              <|> try (reservedOp "()" >> return unitTypeName)
 > numVarName = identLike True "numeric type variable"
 > tyVar      = STyVar <$> tyVarName
 > numVar     = STyVar <$> numVarName
@@ -94,7 +95,7 @@ Types
 >            <|>  SUnOp <$> prefixUnOp
 >            <|>  tyVar
 >            <|>  tyCon
->            <|>  parens ((reservedOp "->" *> pure SArr) <|> tyExp)
+>            <|>  parens ((reservedOp "->" *> pure SArr) <|> fmap (foldr1 (STyApp . STyApp (STyCon tupleTypeName))) (commaSep1 tyExp))
 >            <|>  brackets (STyApp (STyCon listTypeName) <$> tyExp)
 
 > prefixBinOp  =    reserved "min" *> pure Min
@@ -131,7 +132,7 @@ Types
 >     t <- tyExp
 >     return $ foldr SQual t ps
 
-> predicates = predicate `sepBy1` reservedOp ","
+> predicates = commaSep1 predicate
 
 > predicate = do
 >     n   <- tyBit
@@ -198,7 +199,7 @@ Terms
 >         [binary "^" (tmBinOp Pow) AssocLeft],
 >         [binary "*" (tmBinOp Times) AssocLeft],    
 >         [binary "+" (tmBinOp Plus) AssocLeft, sbinary "-" (tmBinOp Minus) AssocLeft],
->         [binary ":" (TmApp . TmApp (TmCon "(:)")) AssocRight]
+>         [binary ":" (TmApp . TmApp (TmCon listConsName)) AssocRight]
 >     ]
 >     aexp
 
@@ -206,11 +207,11 @@ Terms
 > aexp  =    TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  TmInt <$> try integer
->       <|>  parens expr
+>       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
 >       <|>  braces (TmBrace <$> tyBit) 
 >       <|>  listy
 
-> listy = foldr (TmApp . TmApp (TmCon listConsName)) (TmCon listNilName) <$> brackets (fexp `sepBy` reservedOp ",")
+> listy = foldr (TmApp . TmApp (TmCon listConsName)) (TmCon listNilName) <$> brackets (commaSep fexp)
 
 > isVar :: String -> Bool
 > isVar = isLower . head
@@ -222,7 +223,9 @@ Terms
 
 > tmVarName    = identLike True   "term variable"
 > dataConName  = identLike False  "data constructor"
->                <|> try (parens (reservedOp ":" >> return listConsName))
+>                <|> try (reservedOp "()" >> return unitConsName)
+>                <|> try (parens ((reservedOp ":" >> return listConsName)
+>                                <|> (reservedOp "," >> return tupleConsName)))
 
 > lambda = do
 >     reservedOp "\\"
@@ -259,7 +262,7 @@ Programs
 >     reserved "where"
 >     cs <- many $ I.lineFold constructor
 >     ds <- maybe [] id <$> optional (reserved "deriving" >>
->               parens (className `sepBy` reservedOp ",")
+>               parens (commaSep className)
 >               <|> fmap pure className)
 >     return $ DataDecl s k cs ds
 >     

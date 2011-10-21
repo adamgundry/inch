@@ -146,6 +146,8 @@ Initial state
 > tyMaybe       = TyApp (TyCon "Maybe" (KSet :-> KSet))
 > tyEither a b  = TyApp (TyApp (TyCon "Either" (KSet :-> KSet :-> KSet)) a) b
 > tyList        = TyApp (TyCon listTypeName (KSet :-> KSet))
+> tyUnit        = TyCon unitTypeName KSet
+> tyTuple       = TyApp . TyApp (TyCon tupleTypeName (KSet :-> KSet :-> KSet))
 
 > initialState = St 0 B0 initTyCons initTmCons initBindings
 > initTyCons = Map.fromList $
@@ -156,6 +158,8 @@ Initial state
 >   ("Ordering",    Ex KSet) :
 >   ("Either",      Ex (KSet :-> KSet :-> KSet)) :
 >   (listTypeName,  Ex (KSet :-> KSet)) :
+>   (unitTypeName,  Ex KSet) :
+>   (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
 >   []
 > initTmCons = Map.fromList $
 >   ("True",     tyBool) :
@@ -170,6 +174,8 @@ Initial state
 >   ("Right",    Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar Top) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
 >   (listNilName,   Bind All "a" KSet (tyList (TyVar (BVar Top)))) :
 >   (listConsName,  Bind All "a" KSet (TyVar (BVar Top) --> tyList (TyVar (BVar Top)) --> tyList (TyVar (BVar Top)))) :
+>   (unitConsName,  tyUnit) :
+>   (tupleConsName, Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top) --> tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
 >   []
 > initBindings = Map.fromList $
 >   ("undefined",  (Just (Bind All "a" KSet (TyVar (BVar Top))), True)) :

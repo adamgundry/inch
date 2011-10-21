@@ -20,6 +20,12 @@
 > listNilName   = "[]"
 > listConsName  = "(:)"
 
+> unitTypeName = "()"
+> unitConsName = "()"
+
+> tupleTypeName = "(,)"
+> tupleConsName = "(,)"
+
 
 > data OK
 > data RAW

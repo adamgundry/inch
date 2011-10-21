@@ -187,6 +187,8 @@
 >   "data Foo where\n    X :: Foo\n  deriving (Eq, Show)" :
 >   "x :: [a]\nx = []" :
 >   "y :: [Integer]\ny = 1 : 2 : [3, 4]" :
+>   "x :: ()\nx = ()" :
+>   "x :: (Integer, Integer)\nx = (3, 4)" :
 >   []
 
 
@@ -454,4 +456,7 @@
 >   ("x = [[]]", True) :
 >   ("x = 1 : [] : []", False) :
 >   ("x = 1 + 3 : [6]", True) : 
+>   ("x :: ()\nx = ()", True) : 
+>   ("x :: (Integer, Integer)\nx = ()", False) : 
+>   ("x = ((), ())", True) :
 >   []
