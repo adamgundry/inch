@@ -234,7 +234,7 @@ Programs
 
 > program = do
 >     whiteSpace
->     optional (reserved "#line" >> integer >> stringLiteral)
+>     _ <- optional (reserved "#line" >> integer >> stringLiteral)
 >     mn <- optional (reserved "module" *>
 >                        identLike False "module name" <* reserved "where")
 >     ds <- many decl

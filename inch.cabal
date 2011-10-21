@@ -17,14 +17,14 @@ Copyright:           Copyright (c) 2011, Adam Gundry
 Category:            Language
 Build-type:          Simple
 Extra-source-files:  examples/*.hs
-Cabal-version:       >=1.9.2
+Cabal-version:       >=1.8
 
 Executable inch
   ghc-options:       -Wall -fno-warn-missing-signatures
                          -fno-warn-unused-matches -fno-warn-name-shadowing
   hs-source-dirs:    src
   Main-is:           Language/Inch/Main.lhs
-  Build-depends:     base == 4.3.*,
+  Build-depends:     base == 4.*,
                          IndentParser == 0.2.*,
                          parsec == 3.1.*,
                          presburger == 0.3.*,

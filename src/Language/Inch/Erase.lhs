@@ -33,10 +33,13 @@
 > eraseType :: Type k -> Contextual (Ex Kind, TyKind)
 > eraseType (TyVar (FVar a k))    = 
 >     case eraseKind k of
->         Just (Ex l) -> return (Ex k, TK (TyVar (FVar a l)) l)
+>         Just (Ex l)  -> return (Ex k, TK (TyVar (FVar a l)) l)
+>         Nothing      -> error $ "eraseType: failed to erase kind " ++ show k
+> eraseType (TyVar (BVar b)) = impossibleBVar b
 > eraseType (TyCon c k)  =
 >     case eraseKind k of
 >         Just (Ex l) -> return (Ex k, TK (TyCon c l) l)
+>         Nothing      -> error $ "eraseType: failed to erase kind " ++ show k
 > eraseType (TyApp f s)  = do
 >         (Ex k, TK f' kf) <- eraseType f
 >         case (k, kf) of
@@ -45,6 +48,7 @@
 >                 (_, TK s' ks) <- eraseType s
 >                 hetEq k'' ks (return (Ex l, TK (TyApp f' s') l''))
 >                             (erk "Kind mismatch")
+>             _ -> error "eraseType: ill-kinded application"
 > eraseType Arr = return $ (Ex (KSet :-> KSet :-> KSet),
 >                           TK Arr (KSet :-> KSet :-> KSet))
 > eraseType (Bind Pi x KNum t)   = do
@@ -63,6 +67,7 @@
 >         Nothing -> eraseType $ unbindTy (error "eraseType: erk") t
 > eraseType (Qual p t) = eraseType t
 
+> eraseType t = error $ "eraseType: illegal type " ++ show t
 
 > eraseToSet t = do
 >     (_, TK t KSet) <- eraseType t
@@ -93,6 +98,7 @@
 > numToTm (TyInt i)  = TmInt i
 > numToTm (TyApp (UnOp o) m) = TmApp (TmUnOp o) (numToTm m)
 > numToTm (TyApp (TyApp (BinOp o) m) n) = TmApp (TmApp (TmBinOp o) (numToTm m)) (numToTm n)
+> numToTm t = error $ "numToTm: illegal type " ++ show t
 
 
 > eraseCon :: Constructor -> Contextual Constructor
@@ -141,6 +147,7 @@
 >         Just (Ex k') -> do
 >             cs <- traverse eraseCon cs
 >             return $ DataDecl s k' cs
+>         Nothing -> error $ "eraseType: failed to erase kind " ++ show k
 > eraseDecl (FunDecl x ps) =
 >     FunDecl x <$> traverse eraseAlt ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty

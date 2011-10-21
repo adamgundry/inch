@@ -28,7 +28,7 @@
 
 
 > data Comparator = LE | LS | GE | GR | EL
->   deriving (Eq, Show)
+>   deriving (Eq, Ord, Show)
 
 > compFun :: Comparator -> Integer -> Integer -> Bool
 > compFun LE = (<=)
@@ -40,7 +40,7 @@
 > data Pred ty where
 >     P      :: Comparator -> ty -> ty -> Pred ty
 >     (:=>)  :: Pred ty -> Pred ty -> Pred ty
->   deriving (Eq, Show, Functor, Foldable, Traversable)
+>   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 > (%==%), (%<=%), (%<%), (%>=%), (%>%) :: forall ty. ty -> ty -> Pred ty
 > (%==%)  = P EL
@@ -140,6 +140,9 @@
 >     Bind b x k t  <?= Bind b' x' k' t'  = b <= b' && x <= x' && k <?= k' && t <?= unsafeCoerce t'
 >     Bind _ _ _ _  <?= _                 = True
 >     _             <?= Bind _ _ _ _      = False
+>     Qual p s      <?= Qual q t          = p <= q && s <?= t 
+>     Qual _ _      <?= _                 = True
+>     _             <?= Qual _ _          = False
 >     Arr           <?= _                 = True
 >     _             <?= Arr               = False
 >     TyInt i       <?= TyInt j           = i <= j

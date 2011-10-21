@@ -176,15 +176,20 @@
 >     (<=) = (<?=)
 
 
+> impossibleBVar :: BVar () k -> a
+> impossibleBVar b = error $ "impossible BVar: " ++ show b
 
 > varName :: Var () k -> TyName
-> varName (FVar a _) = a
+> varName (FVar a _)  = a
+> varName (BVar b)    = impossibleBVar b
 
 > varKind :: Var () k -> Kind k
-> varKind (FVar _ k) = k
+> varKind (FVar _ k)  = k
+> varKind (BVar b)    = impossibleBVar b
 
 > varBinder :: Var () k -> Maybe Binder
-> varBinder (FVar a _) = nameBinder a
+> varBinder (FVar a _)  = nameBinder a
+> varBinder (BVar b)    = impossibleBVar b
 
 > fogVar :: Var () k -> String
 > fogVar = fogVar' nameToString []
@@ -227,8 +232,8 @@
 > unbindVar v (FVar a k)      = FVar a k
 
 > wkClosedVar :: Var () k -> Var a k
-> wkClosedVar (FVar a k) = FVar a k
-
+> wkClosedVar (FVar a k)  = FVar a k
+> wkClosedVar (BVar b)    = impossibleBVar b
 
 
 > class FV t a where

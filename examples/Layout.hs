@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -F -pgmF ./toy #-}
+{-# OPTIONS_GHC -F -pgmF inch #-}
 {-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables,
              NPlusKPatterns #-}
 

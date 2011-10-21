@@ -279,6 +279,7 @@
 >     factorise (TyApp f s)  = case getTyKind s of
 >                                  KNum  -> factorise f `AppFac` normaliseNum s
 >                                  _     -> factorise f `AptFac` s
+>     factorise t = error $ "normaliseNum: can't factorise " ++ show t
 >
 >     facToNum :: Factor KNum -> NormalNum
 >     facToNum (UnFac o `AppFac` m)              = nunOp o m
