@@ -30,7 +30,8 @@ Executable inch
                          presburger == 0.3.*,
                          pretty == 1.0.*,
                          mtl == 2.0.*,
-                         containers == 0.4.*
+                         containers == 0.4.*,
+                         filepath == 1.2.*
   Other-modules:     Language.Inch.BwdFwd,
                          Language.Inch.Check,
                          Language.Inch.Context
