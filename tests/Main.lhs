@@ -66,9 +66,11 @@
 > eraseCheck :: String -> Either String String
 > eraseCheck s = case parseModule "eraseCheck" s of
 >     Right mod   -> case runStateT (checkModule mod) initialState of
->         Right (mod', st) -> case runStateT (eraseModule mod') st of
->             Right (mod'', st') -> case evalStateT (checkModule (fog mod'')) st' of
->                 Right mod''' -> Right $ "Erased program:\n" ++ renderMe (fog mod''')
+>         Right (mod', st) -> case evalStateT (eraseModule mod') st of
+>             Right mod'' -> case evalStateT (checkModule (fog mod'')) initialState of
+>                 Right mod''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog mod''')) of
+>                     Right mod'''' -> Right $ "Erased program:\n" ++ renderMe mod''''
+>                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog mod''') ++ "\n" ++ show err
 >                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
 
@@ -208,6 +210,7 @@
 >   "x = y where y = 3" :
 >   "x = y\n  where\n    y = z\n    z = x" :
 >   "import A.B.C\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
+>   "f (n + 1) = n" :
 >   []
 
 
@@ -490,4 +493,5 @@
 >   ("f x | z = 3\n   | otherwise = 2\n  where z = x", True) :
 >   ("f = case True of True -> 3", True) :
 >   ("f :: Integer\nf = case True of True -> 3", True) :
+>   ("x :: Bool\nx = (<) 2 3", True) :
 >   []

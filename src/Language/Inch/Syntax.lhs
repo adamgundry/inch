@@ -114,6 +114,8 @@
 > data (:*:) f g a b where
 >     (:*:) :: f a b -> g a b -> (:*:) f g a b 
 
+> deriving instance (Show (f s a), Show (g s a)) => Show ((:*:) f g s a)
+
 > instance (Eq (f RAW b), Eq (g RAW b)) => Eq ((f :*: g) RAW b) where
 >     x :*: y == x' :*: y'  =  x == x' && y == y'
 
@@ -183,7 +185,9 @@
 >     (:?)     :: Tm s a -> ATy s a KSet    -> Tm s a
 >     TmUnOp   :: UnOp                      -> Tm s a
 >     TmBinOp  :: BinOp                     -> Tm s a
+>     TmComp   :: Comparator                -> Tm s a
 
+> deriving instance Show (Tm OK a)
 > deriving instance Eq (Tm RAW a)
 
 > instance TravTypes Tm where
@@ -212,6 +216,7 @@
 >     fogTypes g (t :? ty)     = fogTypes g t :? fogTy' g [] ty
 >     fogTypes g (TmUnOp o)    = TmUnOp o
 >     fogTypes g (TmBinOp o)   = TmBinOp o
+>     fogTypes g (TmComp c)    = TmComp c
 
 >     renameTypes g (TmVar x)     = TmVar x
 >     renameTypes g (TmCon c)     = TmCon c
@@ -228,6 +233,7 @@
 >     renameTypes g (t :? ty)     = renameTypes g t :? renameTy g ty
 >     renameTypes g (TmUnOp o)    = TmUnOp o
 >     renameTypes g (TmBinOp o)   = TmBinOp o
+>     renameTypes g (TmComp c)    = TmComp c
 
 > instance a ~ b => FV (Tm OK a) b where
 >     fvFoldMap g (TmApp f s)   = fvFoldMap g f <.> fvFoldMap g s
@@ -247,6 +253,7 @@
 >     FunDecl   :: TmName -> [Alt s a] -> Decl s a
 >     SigDecl   :: TmName -> ATy s a KSet -> Decl s a
 
+> deriving instance Show (Decl OK a)
 > deriving instance Eq (Decl RAW a)
 
 > instance TravTypes Decl where
@@ -276,24 +283,25 @@
 
 
 > data Grd s a where
->     ExpGuard  :: Tm s a -> Grd s a
+>     ExpGuard  :: [Tm s a] -> Grd s a
 >     NumGuard  :: [Pred (ATy s a KNum)] -> Grd s a
 
+> deriving instance Show (Grd OK a)
 > deriving instance Eq (Grd RAW a)
 
 > instance TravTypes Grd where
 
->     travTypes g (ExpGuard t)   = ExpGuard <$> travTypes g t
+>     travTypes g (ExpGuard ts)  = ExpGuard <$> traverse (travTypes g) ts
 >     travTypes g (NumGuard ps)  = NumGuard <$> traverse (traverse g) ps
 
->     fogTypes g (ExpGuard t)  = ExpGuard (fogTypes g t)
->     fogTypes g (NumGuard ps) = NumGuard (map (fmap (fogTy' g [])) ps)
+>     fogTypes g (ExpGuard ts)  = ExpGuard (map (fogTypes g) ts)
+>     fogTypes g (NumGuard ps)  = NumGuard (map (fmap (fogTy' g [])) ps)
 
->     renameTypes g (ExpGuard t)  = ExpGuard (renameTypes g t)
->     renameTypes g (NumGuard ps) = NumGuard (map (fmap (renameTy g)) ps)
+>     renameTypes g (ExpGuard ts)  = ExpGuard (map (renameTypes g) ts)
+>     renameTypes g (NumGuard ps)  = NumGuard (map (fmap (renameTy g)) ps)
 
 > instance a ~ b => FV (Grd OK a) b where
->     fvFoldMap f (ExpGuard t)   = fvFoldMap f t
+>     fvFoldMap f (ExpGuard ts)  = fvFoldMap f ts
 >     fvFoldMap f (NumGuard ps)  = fvFoldMap f ps
 
 
@@ -332,6 +340,8 @@
 >     Guarded    :: [(Grd :*: Tm) s b] -> [Decl s b] -> GrdTms s b
 >     Unguarded  :: Tm s b -> [Decl s b] -> GrdTms s b
 
+> deriving instance Show (GrdTms OK b)
+
 > instance Eq (GrdTms RAW b) where
 >     Guarded xs ds   == Guarded xs' ds'   = xs == xs' && ds == ds'
 >     Unguarded t ds  == Unguarded t' ds'  = t == t' && ds == ds'
@@ -357,6 +367,8 @@
 
 > data Alt s a where
 >     Alt :: PatList s a b -> GrdTms s b -> Alt s a
+
+> deriving instance Show (Alt OK a)
 
 > instance Eq (Alt RAW a) where
 >    (Alt xs gt) == (Alt xs' gt') =
@@ -384,6 +396,8 @@
 
 > data CaseAlt s a where
 >     CaseAlt :: Pat s a b -> GrdTms s b -> CaseAlt s a
+
+> deriving instance Show (CaseAlt OK a)
 
 > instance Eq (CaseAlt RAW a) where
 >    (CaseAlt x gt) == (CaseAlt x' gt') =
@@ -434,6 +448,8 @@
 >     P0    :: PatList s a a
 >     (:!)  :: Pat s a b -> PatList s b c -> PatList s a c
 
+> deriving instance Show (PatList s a b)
+
 > infixr 5 :!
 
 > instance HetEq (PatList RAW a) where
@@ -472,6 +488,10 @@
 >     PatIgnore  ::                                 Pat s a a
 >     PatBrace   :: String -> Integer           ->  Pat s a (a, KNum)
 >     PatBraceK  :: Integer                     ->  Pat s a a
+>     PatIntLit  :: Integer                     ->  Pat s a a
+>     PatNPlusK  :: String -> Integer           ->  Pat s a a
+
+> deriving instance Show (Pat s a b)
 
 > instance HetEq (Pat RAW a) where
 >     hetEq (PatVar x)      (PatVar y) t f      | x == y  = t
@@ -479,6 +499,8 @@
 >     hetEq PatIgnore       PatIgnore t f                 = t
 >     hetEq (PatBrace _ j)  (PatBrace _ k) t f  | j == k  = t
 >     hetEq (PatBraceK j)   (PatBraceK k) t f   | j == k  = t
+>     hetEq (PatIntLit i)   (PatIntLit j) t f   | i == j  = t
+>     hetEq (PatNPlusK n k) (PatNPlusK n' k') t f | n == n' && k == k' = t
 >     hetEq _ _ _ f = f
 
 > instance TravTypes2 Pat where
@@ -488,6 +510,8 @@
 >     fogTypes2 g PatIgnore       = (PatIgnore, g)
 >     fogTypes2 g (PatBrace x k)  = (PatBrace x k, wkF g x)
 >     fogTypes2 g (PatBraceK k)   = (PatBraceK k, g)
+>     fogTypes2 g (PatIntLit i)   = (PatIntLit i, g)
+>     fogTypes2 g (PatNPlusK n k) = (PatNPlusK n k, g)
 
 >     renameTypes2 g E0       (PatVar x)      q = q E0 (PatVar x)
 >     renameTypes2 g ex       (PatCon x ps)   q = renameTypes2 g ex ps
@@ -495,6 +519,8 @@
 >     renameTypes2 g E0       PatIgnore       q = q E0 PatIgnore
 >     renameTypes2 g (EC E0)  (PatBrace x k)  q = q (EC E0) (PatBrace x k)
 >     renameTypes2 g E0       (PatBraceK k)   q = q E0 (PatBraceK k)
+>     renameTypes2 g E0       (PatIntLit i)   q = q E0 (PatIntLit i)
+>     renameTypes2 g E0       (PatNPlusK n k) q = q E0 (PatNPlusK n k)
 
 > instance FV2 Pat a where
 >     fvFoldMap2 f (PatVar _)      = (mempty, f)
@@ -502,6 +528,8 @@
 >     fvFoldMap2 f PatIgnore       = (mempty, f)
 >     fvFoldMap2 f (PatBrace _ _)  = (mempty, wkF f mempty)
 >     fvFoldMap2 f (PatBraceK _)   = (mempty, f)
+>     fvFoldMap2 f (PatIntLit _)   = (mempty, f)
+>     fvFoldMap2 f (PatNPlusK _ _) = (mempty, f)
 
 > extPat :: Pat s a b -> (forall x . Ext a b x -> p) -> p
 > extPat (PatVar _)      q = q E0
@@ -509,6 +537,8 @@
 > extPat PatIgnore       q = q E0
 > extPat (PatBrace _ _)  q = q (EC E0)
 > extPat (PatBraceK _)   q = q E0
+> extPat (PatIntLit _)   q = q E0
+> extPat (PatNPlusK _ _) q = q E0
 
 > extPatList :: PatList s a b -> (forall x . Ext a b x -> p) -> p
 > extPatList P0         q = q E0

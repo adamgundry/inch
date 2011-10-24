@@ -1,11 +1,10 @@
 > {-# LANGUAGE TypeOperators, MultiParamTypeClasses, TypeSynonymInstances,
->              GADTs, TypeFamilies, UndecidableInstances #-}
+>              GADTs, TypeFamilies, UndecidableInstances, ImpredicativeTypes #-}
 
 > module Language.Inch.Erase where
 
 > import Control.Applicative hiding (Alternative)
 > import Data.Traversable
-> import Unsafe.Coerce
 
 > import Language.Inch.Error
 > import Language.Inch.Kit
@@ -82,6 +81,7 @@
 > eraseTm (StrLit s)   = pure $ StrLit s
 > eraseTm (TmUnOp o)   = pure $ TmUnOp o
 > eraseTm (TmBinOp o)  = pure $ TmBinOp o
+> eraseTm (TmComp c)   = pure $ TmComp c
 > eraseTm (TmApp f s)  = TmApp <$> eraseTm f <*> eraseTm s
 > eraseTm (TmBrace n)  = pure $ numToTm n
 > eraseTm (Lam x b)    = Lam x <$> eraseTm b
@@ -107,10 +107,16 @@
 > eraseCon (c ::: t) = (c :::) <$> eraseToSet t
 
 > eraseAlt :: Alternative () -> Contextual (Alternative ())
-> eraseAlt (Alt ps gt) = Alt (erasePatList ps) <$> eraseGuardTerms (unsafeCoerce gt)
+> eraseAlt (Alt ps gt) = do
+>     (ps', f)  <- erasePatList ps
+>     gt'       <- eraseGuardTerms (renameTypes f gt)
+>     return $ Alt ps' gt'
 
 > eraseCaseAlt :: CaseAlternative () -> Contextual (CaseAlternative ())
-> eraseCaseAlt (CaseAlt p gt) = CaseAlt (erasePat p) <$> eraseGuardTerms(unsafeCoerce gt)
+> eraseCaseAlt (CaseAlt p gt) = do
+>     (p', f)  <- erasePat p
+>     gt'      <- eraseGuardTerms (renameTypes f gt)
+>     return $ CaseAlt p' gt'
 
 > eraseGuardTerms :: GuardTerms () -> Contextual (GuardTerms ())
 > eraseGuardTerms (Unguarded e ds) = Unguarded <$> eraseTm e
@@ -120,30 +126,35 @@
 >   where er (g :*: t) = (eraseGuard g :*:) <$> eraseTm t
 
 > eraseGuard :: Guard () -> Guard ()
-> eraseGuard (NumGuard ps)  = ExpGuard (foldr1 andExp $ map toTm ps)
+> eraseGuard (NumGuard ps)  = ExpGuard (map toTm ps)
 >   where
->     andExp a b = TmApp (TmApp (TmCon "(&&)") a) b
->     toTm (P c m n) = TmApp (TmApp (TmCon (toS c)) (numToTm m)) (numToTm n)
+>     toTm (P c m n) = TmApp (TmApp (TmComp c) (numToTm m)) (numToTm n)
 >     toTm (_ :=> _) = error "eraseGuard.toTm: implications are not allowed!"
->     toS LE = "(<=)"
->     toS LS = "(<)"
->     toS GE = "(>=)"
->     toS GR = "(>)"
->     toS EL = "(==)"
 > eraseGuard g              = g
 
-> erasePat :: Pattern a b -> Pattern () ()
-> erasePat (PatVar v)      = PatVar v
-> erasePat (PatCon c ps)   = PatCon c (erasePatList ps)
-> erasePat PatIgnore       = PatIgnore
-> erasePat (PatBrace a 0)  = PatVar a
-> erasePat (PatBrace a k)  = PatCon "+" (PatVar a :! PatCon (show k) P0 :! P0)
-> erasePat (PatBraceK k)   = PatCon (show k) P0
+> erasePat :: Pattern a b -> Contextual (Pattern () (), forall k . Var b k -> Var a k)
+> erasePat (PatVar v)      = return (PatVar v, id)
+> erasePat (PatCon c ps)   = do
+>     (ps', f) <- erasePatList ps
+>     return (PatCon c ps', f)
+> erasePat PatIgnore       = return (PatIgnore, id)
+> erasePat (PatBrace a 0)  = do
+>     x <- fresh (UserVar Pi) a KNum Hole
+>     return (PatVar a, unbindVar (wkClosedVar x))
+> erasePat (PatBrace a k)  = do
+>     x <- fresh (UserVar Pi) a KNum Hole
+>     return (PatNPlusK a k, unbindVar (wkClosedVar x))
 
+> erasePat (PatBraceK k)   = return (PatIntLit k, id)
+> erasePat (PatIntLit i)   = return (PatIntLit i, id)
+> erasePat (PatNPlusK n k) = return (PatNPlusK n k, id)
 
-> erasePatList :: PatternList a b -> PatternList () ()
-> erasePatList P0 = P0
-> erasePatList (p :! ps) = erasePat p :! erasePatList ps
+> erasePatList :: PatternList a b -> Contextual (PatternList () (), forall k . Var b k -> Var a k)
+> erasePatList P0         = return (P0, id)
+> erasePatList (p :! ps)  = do
+>     (p',   f) <- erasePat p
+>     (ps',  g) <- erasePatList ps
+>     return (p' :! ps', f . g)
 
 > eraseDecl :: Declaration () -> Contextual (Declaration ())
 > eraseDecl (DataDecl s k cs ds) =

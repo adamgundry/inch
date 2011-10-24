@@ -112,6 +112,12 @@ Types
 > prefixUnOp   =    reserved "abs" *> pure Abs
 >              <|>  reserved "signum" *> pure Signum
 
+> prefixComparator  =    reservedOp "(==)" *> pure EL
+>                   <|>  reservedOp "(>=)" *> pure GE
+>                   <|>  reservedOp "(>)"  *> pure GR
+>                   <|>  reservedOp "(<=)" *> pure LE
+>                   <|>  reservedOp "(<)"  *> pure LS
+
 > binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
 > sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc
 > prefix   name fun       = Prefix (do{ reservedOp name; return fun })
@@ -219,6 +225,7 @@ Terms
 >       <|>  StrLit  <$> stringLiteral
 >       <|>  TmBinOp <$> prefixBinOp
 >       <|>  TmUnOp <$> prefixUnOp
+>       <|>  TmComp <$> prefixComparator
 >       <|>  TmVar <$> tmVarName
 >       <|>  TmCon <$> dataConName
 >       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
@@ -330,7 +337,7 @@ Modules
 >                     <*> whereClause
 
 > guarded  =    NumGuard <$> braces predicates
->          <|>  ExpGuard <$> expr
+>          <|>  ExpGuard <$> commaSep expr
 
 > whereClause = maybe [] id <$> optional (reserved "where" >> I.block localDecls)
 
@@ -344,6 +351,7 @@ Modules
 >          <|>  parens (foldr1 tupleConsPat <$> commaSep1 patternMore)
 >          <|>  braces patBrace
 >          <|>  brackets (foldr listConsPat listNilPat <$> commaSep patternMore)
+>          <|>  PatIntLit <$> try integer
 >          <|>  PatCon <$> dataConName <*> pure P0
 >          <|>  PatVar <$> patVarName
 >          <|>  reservedOp "_" *> pure PatIgnore
@@ -353,10 +361,10 @@ Modules
 >     listNilPat        = PatCon listNilName P0
 
 > patternMore  =    PatCon <$> dataConName <*> patList
->              <|>  foo <$> pattern `sepBy1` colon
+>              <|>  mkList <$> pattern `sepBy1` colon
 >   where
->     foo [x]     = x
->     foo (x:xs)  = PatCon listConsName (x :! foo xs :! P0)
+>     mkList [x]     = x
+>     mkList (x:xs)  = PatCon listConsName (x :! mkList xs :! P0)
 
 > patVarName = identLike True "pattern variable"
 

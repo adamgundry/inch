@@ -288,6 +288,10 @@ status.
 >     _ <- instSigma (tyInteger --> tyInteger --> tyInteger) mty
 >     return $ TmBinOp o ::: tyInteger --> tyInteger --> tyInteger
 
+> checkInfer mty (TmComp c) = do
+>     _ <- instSigma (tyInteger --> tyInteger --> tyBool) mty
+>     return $ TmComp c ::: tyInteger --> tyInteger --> tyBool
+
 > checkInfer mty (TmApp f (TmBrace n)) = do
 >     f ::: fty  <- inferRho f   
 >     case fty of
@@ -503,7 +507,7 @@ status.
 >       p <- checkPredKind Pi B0 p
 >       modifyContext (:< Constraint Given p)
 >       return p
-> checkGuard (ExpGuard t)   = ExpGuard <$> checkRho tyBool t
+> checkGuard (ExpGuard ts)   = ExpGuard <$> traverse (checkRho tyBool) ts
 
  
 
@@ -539,6 +543,19 @@ status.
 >     (dom, cod) <- unifyFun ty
 >     checkPat top cod ps $ \ (xs, ex, vs, r) ->
 >         q (PatIgnore :! xs, ex, vs, r)
+
+> checkPat top ty (PatIntLit i :! ps) q = do
+>     (dom, cod) <- unifyFun ty
+>     unify dom tyInteger
+>     checkPat top cod ps $ \ (xs, ex, vs, r) ->
+>         q (PatIntLit i :! xs, ex, vs, r)
+
+> checkPat top ty (PatNPlusK n k :! ps) q = do
+>     (dom, cod) <- unifyFun ty
+>     unify dom tyInteger
+>     withLayer (LamBody (n ::: tyInteger)) $ 
+>         checkPat top cod ps $ \ (xs, ex, vs, r) ->
+>             q (PatNPlusK n k :! xs, ex, vs, r)
 
 > checkPat top (Bind Pi x KNum t) (PatBraceK k :! ps) q = do
 >     b        <- fresh SysVar x KNum (Some (TyInt k))
@@ -613,6 +630,15 @@ status.
 >     b <- unknownTyVar "_b" KSet
 >     inferPat top ps $ \ (xs, ex, vs, tr, ty) ->
 >         q (PatIgnore :! xs, ex, vs, tr, b --> ty)
+
+> inferPat top (PatIntLit i :! ps) q =
+>     inferPat top ps $ \ (xs, ex, vs, tr, ty) ->
+>         q (PatIntLit i :! xs, ex, vs, tr, tyInteger --> ty)
+
+> inferPat top (PatNPlusK n k :! ps) q = 
+>     withLayer (LamBody (n ::: tyInteger)) $ 
+>         inferPat top ps $ \ (xs, ex, vs, tr, ty) ->
+>             q (PatNPlusK n k :! xs, ex, vs, tr, tyInteger --> ty)
 
 > inferPat top (PatBrace a 0 :! ps) q = do
 >     n <- fresh (UserVar Pi) a KNum Exists

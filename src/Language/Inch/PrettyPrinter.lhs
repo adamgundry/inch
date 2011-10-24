@@ -152,6 +152,7 @@
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 >     pretty (TmUnOp o)   = pretty o
 >     pretty (TmBinOp o)  = pretty o
+>     pretty (TmComp c)   = parens . pretty c
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t
@@ -237,9 +238,11 @@
 >     pretty (PatBrace a 0)  = const $ braces $ text a
 >     pretty (PatBrace a k)  = const $ braces $
 >                                     text a <+> text "+" <+> integer k
+>     pretty (PatIntLit i)   = const $ integer i
+>     pretty (PatNPlusK n k) = const $ parens $ text n <+> text "+" <+> integer k
 
 > instance Pretty (SGuard a) where
->     pretty (ExpGuard t)  = pretty t
+>     pretty (ExpGuard t)  = const $ fsepPretty t
 >     pretty (NumGuard p)  = const $ braces (fsepPretty p)
 
 
