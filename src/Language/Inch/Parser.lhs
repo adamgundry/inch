@@ -1,8 +1,9 @@
-> module Language.Inch.Parser (parseProgram) where
+> module Language.Inch.Parser (parseModule) where
 
 > import Control.Applicative
 > import Control.Monad
 > import Data.Char
+> import Data.Maybe
 
 > import Text.ParserCombinators.Parsec hiding (parse, optional, many, (<|>))
 > import Text.ParserCombinators.Parsec.Expr
@@ -17,7 +18,7 @@
 > import Language.Inch.Kit
 > import Language.Inch.Kind hiding (kind)
 
-> parseProgram = I.parse program
+> parseModule = I.parse module_
 
 > def = haskellDef
 
@@ -50,6 +51,8 @@
 
 > specialOp s = try $
 >     string s >> notFollowedBy (opLetter def) >> whiteSpace
+
+> optionalList p = maybe [] id <$> optional p
 
 
 > doubleColon = reservedOp "::"
@@ -249,16 +252,28 @@ Terms
 >     wrapLam (Right s : ss)  t = NumLam s $ rawCoerce $ wrapLam ss t
 
 
-Programs
+Modules
 
-> program = do
+> module_ = do
 >     whiteSpace
 >     _ <- optional (reserved "#line" >> integer >> stringLiteral)
->     mn <- optional (reserved "module" *>
->                        identLike False "module name" <* reserved "where")
+>     mh <- optional (reserved "module" *>
+>                        ((,) <$> identLike False "module name"
+>                            <*> optionalList (parens (commaSep identifier)))
+>                     <* reserved "where")
+>     is <- many importStmt
 >     ds <- many decl
 >     eof
->     return (ds, mn)
+>     return $ Mod mh is ds
+
+> importStmt = do
+>     reserved "import"
+>     q   <- isJust <$> optional (reserved "qualified")
+>     n   <- identLike False "module name"
+>     as  <- optional (reserved "as" *> identLike False "module name")
+>     im  <- optional (parens (commaSep identifier))
+>     ex  <- optionalList (reserved "hiding" *> parens (commaSep identifier))
+>     return $ Import q n as im ex
 
 > decl  =    dataDecl
 >       <|>  sigDecl

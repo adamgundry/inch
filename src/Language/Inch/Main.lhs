@@ -5,6 +5,7 @@
 > import System.Exit
 > import System.FilePath
 
+> import Language.Inch.Context
 > import Language.Inch.Syntax
 > import Language.Inch.Parser
 > import Language.Inch.PrettyPrinter
@@ -32,16 +33,16 @@
 > modHeader (Just m) = "module " ++ m ++ " where\n"
 
 > preprocess :: String -> String -> Either String (String, String)
-> preprocess fn s = case parseProgram fn s of
->     Right (p, mn) -> case runCheckProg p of
->         Right (p', st) -> case runStateT (eraseProg p') st of
->             Right (p'', st) -> Right (sigs p', erased)
+> preprocess fn s = case parseModule fn s of
+>     Right mod -> case runStateT (checkModule mod) initialState of
+>         Right (mod', st) -> case evalStateT (eraseModule mod') st of
+>             Right mod'' -> Right (sigs p, renderMe (fog mod''))
 >                 where
->                     sigs    = show . prettyProgram . filter dataOrSigDecl
+>                     Mod _ _ p = mod''
+>                     sigs    = renderMe . map fog . filter dataOrSigDecl
 >                     dataOrSigDecl (SigDecl _ _)       = True
 >                     dataOrSigDecl (DataDecl _ _ _ _)  = True
 >                     dataOrSigDecl (FunDecl _ _)       = False
->                     erased  = modHeader mn ++ show (prettyProgram p'')
 >             Left err        -> Left $ "erase error:\n" ++ renderMe err ++ "\n"
 
 >         Left err -> Left $ "type-checking failed:\n"

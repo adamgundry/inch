@@ -5,6 +5,7 @@
 > import Data.List
 > import System.Directory
 
+> import Language.Inch.Context
 > import Language.Inch.Syntax
 > import Language.Inch.Parser
 > import Language.Inch.PrettyPrinter
@@ -33,41 +34,41 @@
 > eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 > roundTrip :: String -> Either String String
-> roundTrip s = case parseProgram "roundTrip" s of
->     Right (prog, _)  ->
->         let s' = show $ vcatPretty prog in
->         case parseProgram "roundTrip2" s' of
->             Right (prog', _)
->               | prog == prog'  -> Right $ show (vcatPretty prog')
+> roundTrip s = case parseModule "roundTrip" s of
+>     Right mod  ->
+>         let s' = renderMe mod in
+>         case parseModule "roundTrip2" s' of
+>             Right mod'
+>               | mod == mod'  -> Right $ renderMe mod'
 >               | otherwise      -> Left $ "Round trip mismatch:"
 >                     ++ "\n" ++ s ++ "\n" ++ s'
->                     ++ "\n" ++ show (vcatPretty prog')
+>                     ++ "\n" ++ renderMe mod'
 >                     -- ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err -> Left $ "Round trip re-parse:\n"
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
 > parseCheck :: (String, Bool) -> Either String String
-> parseCheck (s, b) = case parseProgram "parseCheck" s of
->     Right (p, _)   -> case runCheckProg p of
->         Right (p', _)
+> parseCheck (s, b) = case parseModule "parseCheck" s of
+>     Right mod   -> case evalStateT (checkModule mod) initialState of
+>         Right mod'
 >             | b          -> Right $ "Accepted good program:\n"
->                                     ++ show (prettyProgram p') ++ "\n"
+>                                     ++ renderMe (fog mod') ++ "\n"
 >             | otherwise  -> Left $ "Accepted bad program:\n"
->                                     ++ show (prettyProgram p') ++ "\n"
+>                                     ++ renderMe (fog mod') ++ "\n"
 >         Left err
 >             | b          -> Left $ "Rejected good program:\n"
->                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ renderMe mod ++ "\n" ++ renderMe err ++ "\n"
 >             | otherwise  -> Right $ "Rejected bad program:\n"
->                             ++ show (prettySProgram p) ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ renderMe mod ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
 > eraseCheck :: String -> Either String String
-> eraseCheck s = case parseProgram "eraseCheck" s of
->     Right (p, _)   -> case runCheckProg p of
->         Right (p', st) -> case runStateT (eraseProg p') st of
->             Right (p'', _) -> case runCheckProg (map fog p'') of
->                 Right (p''', _) -> Right $ "Erased program:\n" ++ show (prettyProgram p''')
+> eraseCheck s = case parseModule "eraseCheck" s of
+>     Right mod   -> case runStateT (checkModule mod) initialState of
+>         Right (mod', st) -> case runStateT (eraseModule mod') st of
+>             Right (mod'', st') -> case evalStateT (checkModule (fog mod'')) st' of
+>                 Right mod''' -> Right $ "Erased program:\n" ++ renderMe (fog mod''')
 >                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
 
@@ -206,6 +207,7 @@
 >   "f (_:x) = x" :
 >   "x = y where y = 3" :
 >   "x = y\n  where\n    y = z\n    z = x" :
+>   "import A\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
 >   []
 
 

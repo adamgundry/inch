@@ -29,14 +29,12 @@
 >         B0  -> return ()
 >         _   -> traceContext "assertContextEmpty" >> erk "context is not empty"
 
-> runCheckProg :: SProgram -> Either ErrorData (Program, ZipState)
-> runCheckProg p = runStateT (checkProg p) initialState
-
-> checkProg :: SProgram -> Contextual Program
-> checkProg ds = do
+> checkModule :: SModule () -> Contextual (Module ())
+> checkModule (Mod mh is ds) = do
 >     mapM_ makeTyCon ds
 >     mapM_ makeBinding ds
->     concat <$> traverse checkDecl ds
+>     ds' <- concat <$> traverse checkDecl ds
+>     return $ Mod mh is ds'
 >   where
 >     makeTyCon :: SDeclaration () -> Contextual ()
 >     makeTyCon (DataDecl t k _ ds) = inLocation (text $ "in data type " ++ t) $

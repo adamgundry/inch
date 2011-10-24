@@ -31,12 +31,6 @@
 >   | dSize > curSize  = parens d
 >   | otherwise        = d
 
-> prettyProgram :: Program -> Doc
-> prettyProgram = prettySProgram . map fog
-
-> prettySProgram :: SProgram -> Doc
-> prettySProgram = vcat . intersperse (text " ") . map prettyHigh
-
 > prettyVar :: Var () k -> Doc
 > prettyVar = prettyHigh . fogVar
 
@@ -59,6 +53,8 @@
 > instance Pretty String where
 >     pretty s _ = text s
 
+> instance Pretty [SDeclaration ()] where
+>     pretty ds _ = vcat (map prettyHigh ds)
 
 > instance Pretty SKind where
 >     pretty SKSet       = const $ text "*"
@@ -162,6 +158,32 @@
 > prettyLam d (NumLam a t) = prettyLam (d <+> braces (text a)) t
 > prettyLam d t = wrapDoc LamSize $
 >         text "\\" <+> d <+> text "->" <+> pretty t AppSize
+
+
+> parenCommaList :: Doc -> [String] -> Doc
+> parenCommaList d [] = empty
+> parenCommaList d xs = d <+> parens (hsep (punctuate (text ",") (map text xs)))
+
+
+> instance Pretty (SModule a) where
+>     pretty (Mod mh is ds) _ = maybe empty prettyModHeader mh
+>                                   $$ vcat (map prettyHigh is)
+>                                   $$ vcat (intersperse (text " ") (map prettyHigh ds))
+>       where
+>         prettyModHeader (s, es) = text "module" <+> text s <+> parenCommaList empty es <+> text "where"
+
+
+> instance Pretty Import where
+>     pretty (Import q n as imp hid) _ = text "import"
+>                                            <+> (if q then text "qualified" else empty)
+>                                            <+> text n
+>                                            <+> (maybe empty (\ s -> text "as" <+> text s) as)
+>                                            <+> prettyImp imp
+>                                            <+> parenCommaList (text "hiding") hid
+>       where
+>         prettyImp Nothing   = empty
+>         prettyImp (Just xs) = parens (hsep (punctuate (text ",") (map text xs)))
+
 
 > instance Pretty (SDeclaration a) where
 >     pretty (DataDecl n k cs ds) _ = hang (text "data" <+> text n

@@ -3,6 +3,15 @@
 
 module InchPrelude where
 
+import Prelude hiding (subtract, const, flip, maybe, either,
+                         curry, uncurry, until, asTypeOf, map,
+                         filter, concat, concatMap, head, tail,
+                         last, init, null, length, foldl, foldl1,
+                         foldr, foldr1, iterate, repeat, replicate,
+                         take, drop, splitAt, takeWhile, reverse,
+                         and, or, any, all, sum, product, maximum,
+                         minimum, zip, zipWith, zipWith3)
+
 -- Numeric functions
 
 
@@ -302,8 +311,7 @@ iterate f x      =  x : iterate f (f x)
 
 
 repeat           :: a -> [a]
-repeat x         =  let xs = x:xs
-                    in xs
+repeat x         =  xs where xs = x:xs
 
 
 replicate        :: Integer -> a -> [a]

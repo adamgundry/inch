@@ -48,28 +48,27 @@
 
 
 
-> type Prog s       = [Decl s ()]
 > type Con s        = TmConName ::: ATy s () KSet
 
 > type Term             = Tm OK
+> type Module           = Mod OK
 > type Constructor      = Con OK
 > type Alternative      = Alt OK
 > type CaseAlternative  = CaseAlt OK
 > type PatternList      = PatList OK
 > type Pattern          = Pat OK
 > type Declaration      = Decl OK
-> type Program          = Prog OK
 > type Guard            = Grd OK
 > type GuardTerms       = GrdTms OK
 
 > type STerm             = Tm RAW
+> type SModule           = Mod RAW
 > type SConstructor      = Con RAW
 > type SAlternative      = Alt RAW
 > type SCaseAlternative  = CaseAlt RAW
 > type SPatternList      = PatList RAW
 > type SPattern          = Pat RAW
 > type SDeclaration      = Decl RAW
-> type SProgram          = Prog RAW
 > type SGuard            = Grd RAW
 > type SGuardTerms       = GrdTms RAW
 
@@ -146,6 +145,26 @@
 > -}
 
 
+
+
+
+> data Mod s a where
+>     Mod :: Maybe (String, [String]) -> [Import] -> [Decl s a] -> Mod s a
+
+> deriving instance Eq (Mod RAW a)
+
+> instance TravTypes Mod where
+>     travTypes    g (Mod mh is ds) = Mod mh is <$> traverse (travTypes g) ds
+>     fogTypes     g (Mod mh is ds) = Mod mh is (map (fogTypes g) ds)
+>     renameTypes  g (Mod mh is ds) = Mod mh is (map (renameTypes g) ds)
+
+> data Import = Import  {  qualified   :: Bool
+>                       ,  importName  :: String
+>                       ,  asName      :: Maybe String
+>                       ,  impSpec     :: Maybe [String]
+>                       ,  hidingSpec  :: [String]
+>                       }
+>   deriving (Eq, Show)
 
 
 

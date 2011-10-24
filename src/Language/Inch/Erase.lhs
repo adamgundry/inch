@@ -156,5 +156,5 @@
 >     FunDecl x <$> traverse eraseAlt ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
 
-> eraseProg :: Program -> Contextual Program
-> eraseProg = traverse eraseDecl
+> eraseModule :: Module () -> Contextual (Module ())
+> eraseModule (Mod mh is ds) = Mod mh is <$> traverse eraseDecl ds
