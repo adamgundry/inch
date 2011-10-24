@@ -207,7 +207,7 @@
 >   "f (_:x) = x" :
 >   "x = y where y = 3" :
 >   "x = y\n  where\n    y = z\n    z = x" :
->   "import A\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
+>   "import A.B.C\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
 >   []
 
 

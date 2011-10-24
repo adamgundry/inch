@@ -4,6 +4,8 @@
 
 module RedBlackOrdCost where
 
+import Unsafe.Coerce
+
 -- Abstraction barrier
 
 data Cost :: Num -> * -> * where
@@ -89,9 +91,7 @@ weakling {x} t = wkTree2 t
 
 wkTree2 :: forall (lo lo' hi hi' c n :: Num) . lo' <= lo, hi <= hi' =>
                Tree lo hi c n -> Tree lo' hi' c n
-wkTree2 E            = E
-wkTree2 (TR {x} l r) = TR {x} (wkTree2 l) (wkTree2 r)
-wkTree2 (TB {x} l r) = TB {x} (wkTree2 l) (wkTree2 r)
+wkTree2 = unsafeCoerce
 
 
 

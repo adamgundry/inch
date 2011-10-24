@@ -190,6 +190,7 @@ Initial state
 >   ("error",      (Just (Bind All "a" KSet (tyString --> TyVar (BVar Top))), True)) :
 >   ("fst",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar (Pop Top))))), True)) :
 >   ("snd",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar Top)))), True)) :
+>   ("unsafeCoerce",  (Just (Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top)))), True)) :
 >   []
 
 

@@ -4,6 +4,7 @@
 > import Control.Monad
 > import Data.Char
 > import Data.Maybe
+> import Data.List
 
 > import Text.ParserCombinators.Parsec hiding (parse, optional, many, (<|>))
 > import Text.ParserCombinators.Parsec.Expr
@@ -258,7 +259,7 @@ Modules
 >     whiteSpace
 >     _ <- optional (reserved "#line" >> integer >> stringLiteral)
 >     mh <- optional (reserved "module" *>
->                        ((,) <$> identLike False "module name"
+>                        ((,) <$> modName
 >                            <*> optionalList (parens (commaSep identifier)))
 >                     <* reserved "where")
 >     is <- many importStmt
@@ -269,11 +270,13 @@ Modules
 > importStmt = do
 >     reserved "import"
 >     q   <- isJust <$> optional (reserved "qualified")
->     n   <- identLike False "module name"
->     as  <- optional (reserved "as" *> identLike False "module name")
+>     n   <- modName
+>     as  <- optional (reserved "as" *> modName)
 >     im  <- optional (parens (commaSep identifier))
 >     ex  <- optionalList (reserved "hiding" *> parens (commaSep identifier))
 >     return $ Import q n as im ex
+
+> modName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
 > decl  =    dataDecl
 >       <|>  sigDecl
