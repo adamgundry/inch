@@ -365,7 +365,7 @@ status.
 >   inLocation (text "in case alternative" <++> prettyHigh c) $
 >   withLayer CaseTop $ do
 >     ca <- checkPat True (sty --> resty) (p :! P0) $ \ (p :! P0, ex, vs, rty) -> do
->       gt <- checkGuardTerms sty (rawCoerce gt)
+>       gt <- checkGuardTerms rty (rawCoerce gt)
 >       return $ CaseAlt p (renameTypes (renameVS vs) gt)
 >     unifySolveConstraints
 >     solveConstraints
@@ -377,7 +377,7 @@ status.
 >   inLocation (text "in case alternative" <++> prettyHigh c) $
 >    withLayer CaseTop $ do
 >     ca <- checkPat True (sty --> resty) (p :! P0) $ \ (p :! P0, ex, vs, rty) -> do
->       gt <- checkGuardTerms resty (rawCoerce gt)
+>       gt <- checkGuardTerms rty (rawCoerce gt)
 >       return $ CaseAlt p (renameTypes (renameVS vs) gt)
 >     return $ ca ::: resty
 

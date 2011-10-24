@@ -483,9 +483,11 @@
 >   ("f () = ()\ng (x, y) = (y, x)", True) : 
 >   ("f () = ()\nf (x, y) = (y, x)", False) : 
 >   ("f xs = case xs of\n      [] -> []\n      y:ys -> y : f ys", True) :
->   ("scanl            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl f q xs     =  q : (case xs of\n                            []   -> []\n                            x:xs -> scanl f (f q x) xs\n                        )", True) :
+>   ("scanl            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl f q xs     =  q : (case xs of\n                            []   -> []\n                            x:ys -> scanl f (f q x) ys\n                        )", True) :
 >   ("a = \"hello\"", True) :
 >   ("b w = w : 'o' : 'r' : ['l', 'd']", True) :
 >   ("x = y\n  where y = 3", True) :
 >   ("f x | z = 3\n   | otherwise = 2\n  where z = x", True) :
+>   ("f = case True of True -> 3", True) :
+>   ("f :: Integer\nf = case True of True -> 3", True) :
 >   []

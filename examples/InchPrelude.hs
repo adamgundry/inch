@@ -3,14 +3,15 @@
 
 module InchPrelude where
 
-import Prelude hiding (subtract, const, flip, maybe, either,
-                         curry, uncurry, until, asTypeOf, map,
-                         filter, concat, concatMap, head, tail,
-                         last, init, null, length, foldl, foldl1,
+import Prelude hiding (subtract, const, flip, maybe, either, curry,
+                         uncurry, until, asTypeOf, map, filter,
+                         concat, concatMap, head, tail, last, init,
+                         null, length, foldl, foldl1, scanl, scanl1,
                          foldr, foldr1, iterate, repeat, replicate,
-                         take, drop, splitAt, takeWhile, reverse,
-                         and, or, any, all, sum, product, maximum,
-                         minimum, zip, zipWith, zipWith3)
+                         take, drop, splitAt, takeWhile, unlines,
+                         unwords, reverse, and, or, any, all, sum,
+                         product, maximum, minimum, zip, zipWith,
+                         zipWith3)
 
 -- Numeric functions
 
@@ -262,22 +263,15 @@ foldl1           :: (a -> a -> a) -> [a] -> a
 foldl1 f (x:xs)  =  foldl f x xs
 foldl1 _ []      =  error "Prelude.foldl1: empty list"
 
-
-{-
--- Why doesn't this type check?
 scanl            :: (a -> b -> a) -> a -> [b] -> [a]
 scanl f q xs     =  q : (case xs of
                             []   -> []
                             x:xs -> scanl f (f q x) xs
                         )
 
-
 scanl1           :: (a -> a -> a) -> [a] -> [a]
 scanl1 f (x:xs)  =  scanl f x xs
 scanl1 _ []      =  []
--}
-
-
 
 foldr            :: (a -> b -> b) -> b -> [a] -> b
 foldr f z []     =  z
@@ -317,11 +311,9 @@ repeat x         =  xs where xs = x:xs
 replicate        :: Integer -> a -> [a]
 replicate n x    =  take n (repeat x)
 
-{-
 cycle            :: [a] -> [a]
 cycle []         =  error "Prelude.cycle: empty list"
-cycle xs         =  xs' where xs' = xs ++ xs'
--}
+cycle xs         =  xs' where xs' = append xs xs'
 
 take                   :: Integer -> [a] -> [a]
 -- take n _      | n <= 0 =  []
@@ -385,23 +377,19 @@ words s          =  case dropWhile Char.isSpace s of
                       "" -> []
                       s' -> w : words s''
                             where (w, s'') = break Char.isSpace s'
-
-
-unlines          :: [String] -> String
-unlines          =  concatMap (++ "\n")
-
-
-unwords          :: [String] -> String
-unwords []       =  ""
-unwords ws       =  foldr1 (\w s -> w ++ ' ':s) ws
 -}
 
+unlines          :: [[Char]] -> [Char]
+unlines          =  concatMap (\ x -> append x "\n")
 
+
+
+unwords          :: [[Char]] -> [Char]
+unwords []       =  ""
+unwords ws       =  foldr1 (\w s -> append w (' ':s)) ws
 
 reverse          :: [a] -> [a]
 reverse          =  foldl (flip (:)) []
-
-
 
 and              :: [Bool] -> Bool
 and              =  foldr amp True
