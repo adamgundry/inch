@@ -16,7 +16,7 @@ Maintainer:          Adam Gundry <adam.gundry@cis.strath.ac.uk>
 Copyright:           Copyright (c) 2011, Adam Gundry
 Category:            Language
 Build-type:          Simple
-Extra-source-files:  examples/*.hs
+Extra-source-files:  examples/Vectors.hs
 Cabal-version:       >=1.8
 
 Executable inch

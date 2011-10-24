@@ -62,7 +62,7 @@
 
 > instance Pretty SKind where
 >     pretty SKSet       = const $ text "*"
->     pretty SKNum       = const $ text "Num"
+>     pretty SKNum       = const $ text "Integer"
 >     pretty SKNat       = const $ text "Nat"
 >     pretty (k :--> l)  = wrapDoc AppSize $
 >         pretty k ArgSize <+> text "->" <+> pretty l AppSize
