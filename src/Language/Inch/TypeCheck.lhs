@@ -458,12 +458,17 @@ status.
 
 
 > checkGuardTerms :: Rho -> SGuardTerms () -> Contextual (GuardTerms ())
-> checkGuardTerms rho (Unguarded t)  = do
->     t <- checkRho rho t
->     unifySolveConstraints
->     solveConstraints
->     return $ Unguarded t
-> checkGuardTerms rho (Guarded gts)  = Guarded <$> traverse chk gts
+> checkGuardTerms rho (Unguarded t ds)  = do
+>     (ds, bs) <- checkLocalDecls ds
+>     withLayer (LetBody bs) $ do
+>         t <- checkRho rho t
+>         unifySolveConstraints
+>         solveConstraints
+>         return $ Unguarded t ds
+> checkGuardTerms rho (Guarded gts ds)  = do
+>     (ds, bs) <- checkLocalDecls ds
+>     withLayer (LetBody bs) $ do
+>         Guarded <$> traverse chk gts <*> pure ds
 >   where
 >     chk (g :*: t) = withLayer GuardTop $ do
 >         g <- checkGuard g
@@ -474,17 +479,21 @@ status.
 
 
 > inferGuardTerms :: SGuardTerms () -> Contextual (GuardTerms () ::: Rho)
-> inferGuardTerms (Unguarded e) = do
->     e ::: r <- inferRho e
->     return $ Unguarded e ::: r
-> inferGuardTerms (Guarded gts) = do
->     xs <- traverse (\ (g :*: t) -> do
+> inferGuardTerms (Unguarded e ds) = do
+>     (ds, bs) <- checkLocalDecls ds
+>     withLayer (LetBody bs) $ do
+>         e ::: r <- inferRho e
+>         return $ Unguarded e ds ::: r
+> inferGuardTerms (Guarded gts ds) = do
+>     (ds, bs) <- checkLocalDecls ds
+>     withLayer (LetBody bs) $ do
+>         xs <- traverse (\ (g :*: t) -> do
 >                           g <- checkGuard g 
 >                           t ::: r <- inferRho t
 >                           return $ (g :*: t) ::: r) gts
->     let gts ::: tys = unzipAsc xs
->     ty <- unifyList tys
->     return $ Guarded gts ::: ty
+>         let gts ::: tys = unzipAsc xs
+>         ty <- unifyList tys
+>         return $ Guarded gts ds ::: ty
 
 
 > checkGuard :: SGuard () -> Contextual (Guard ())

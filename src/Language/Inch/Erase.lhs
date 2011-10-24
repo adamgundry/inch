@@ -113,8 +113,10 @@
 > eraseCaseAlt (CaseAlt p gt) = CaseAlt (erasePat p) <$> eraseGuardTerms(unsafeCoerce gt)
 
 > eraseGuardTerms :: GuardTerms () -> Contextual (GuardTerms ())
-> eraseGuardTerms (Unguarded e) = Unguarded <$> eraseTm e
-> eraseGuardTerms (Guarded gts) = Guarded <$> traverse er gts
+> eraseGuardTerms (Unguarded e ds) = Unguarded <$> eraseTm e
+>                                    <*> traverse eraseDecl ds
+> eraseGuardTerms (Guarded gts ds) = Guarded <$> traverse er gts
+>                                    <*> traverse eraseDecl ds
 >   where er (g :*: t) = (eraseGuard g :*:) <$> eraseTm t
 
 > eraseGuard :: Guard () -> Guard ()

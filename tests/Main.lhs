@@ -204,6 +204,8 @@
 >   "a = \"hello\"" :
 >   "b = 'w' : 'o' : 'r' : ['l', 'd']" :
 >   "f (_:x) = x" :
+>   "x = y where y = 3" :
+>   "x = y\n  where\n    y = z\n    z = x" :
 >   []
 
 
@@ -482,4 +484,6 @@
 >   ("scanl            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl f q xs     =  q : (case xs of\n                            []   -> []\n                            x:xs -> scanl f (f q x) xs\n                        )", True) :
 >   ("a = \"hello\"", True) :
 >   ("b w = w : 'o' : 'r' : ['l', 'd']", True) :
+>   ("x = y\n  where y = 3", True) :
+>   ("f x | z = 3\n   | otherwise = 2\n  where z = x", True) :
 >   []

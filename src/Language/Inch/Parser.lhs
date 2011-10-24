@@ -184,7 +184,7 @@ Terms
 
 > letExpr = do
 >     reserved "let"
->     ds <- I.block $ many (sigDecl <|> funDecl)
+>     ds <- I.block localDecls
 >     reserved "in"
 >     t <- expr
 >     return $ Let ds t
@@ -307,11 +307,16 @@ Programs
 
 > alternative = Alt <$> patList <*> altRest (reservedOp "=")
 
-> altRest p  =    Unguarded <$> (p *> expr)
+> altRest p  =    Unguarded <$> (p *> expr) <*> whereClause
 >            <|>  Guarded <$> (many1 (reservedOp "|" *> ((:*:) <$> guarded <* p <*> expr)))
+>                     <*> whereClause
 
 > guarded  =    NumGuard <$> braces predicates
 >          <|>  ExpGuard <$> expr
+
+> whereClause = maybe [] id <$> optional (reserved "where" >> I.block localDecls)
+
+> localDecls = many (sigDecl <|> funDecl)
 
 
 > patList  =    (:!) <$> pattern <*> patList

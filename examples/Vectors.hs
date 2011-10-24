@@ -21,11 +21,11 @@ vappend VNil         ys = ys
 vappend (VCons x xs) ys = VCons x (vappend xs ys)
 
 vreverse :: forall (n :: Nat) a . Vec a n -> Vec a n
-vreverse xs =
-  let vrevapp :: forall (m n :: Nat) a . Vec a m -> Vec a n -> Vec a (m+n)
-      vrevapp VNil         ys = ys
-      vrevapp (VCons x xs) ys = vrevapp xs (VCons x ys)
-  in vrevapp xs VNil
+vreverse xs = vrevapp xs VNil
+  where
+    vrevapp :: forall (m n :: Nat) a . Vec a m -> Vec a n -> Vec a (m+n)
+    vrevapp VNil         ys = ys
+    vrevapp (VCons x xs) ys = vrevapp xs (VCons x ys)
 
 vec :: pi (n :: Nat) . a -> Vec a n
 vec {0}   a = VNil
@@ -74,8 +74,8 @@ vlookup {k+1} (VCons _ xs) = vlookup {k} xs
 
 vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec a (m + n) -> (Vec a m, Vec a n)
 vsplit {0}   xs           = (VNil, xs)
-vsplit {m+1} (VCons x xs) = let f (ys, zs) = (VCons x ys, zs)
-                            in f (vsplit {m} xs)
+vsplit {m+1} (VCons x xs) = f (vsplit {m} xs)
+  where f (ys, zs) = (VCons x ys, zs)
 
 vjoin :: forall a (m :: Nat) . Vec (Vec a m) m -> Vec a m
 vjoin VNil                     = VNil

@@ -310,25 +310,31 @@
 
 
 > data GrdTms s b where
->     Guarded    :: [(Grd :*: Tm) s b] -> GrdTms s b
->     Unguarded  :: Tm s b -> GrdTms s b
+>     Guarded    :: [(Grd :*: Tm) s b] -> [Decl s b] -> GrdTms s b
+>     Unguarded  :: Tm s b -> [Decl s b] -> GrdTms s b
 
 > instance Eq (GrdTms RAW b) where
->     Guarded xs   == Guarded xs'   = xs == xs'
->     Unguarded t  == Unguarded t'  = t == t'
->     _            == _             = False
+>     Guarded xs ds   == Guarded xs' ds'   = xs == xs' && ds == ds'
+>     Unguarded t ds  == Unguarded t' ds'  = t == t' && ds == ds'
+>     _               == _                 = False
 
 > instance TravTypes GrdTms where
->     travTypes g (Guarded xs)      = Guarded <$> traverse (travTypes g) xs
->     travTypes g (Unguarded t)     = Unguarded <$> travTypes g t
->     fogTypes g (Guarded xs)       = Guarded (map (fogTypes g) xs)
->     fogTypes g (Unguarded t)      = Unguarded (fogTypes g t)
->     renameTypes g (Guarded xs)    = Guarded (map (renameTypes g) xs)
->     renameTypes g (Unguarded t)   = Unguarded (renameTypes g t)
+>     travTypes g (Guarded xs ds)     = Guarded <$> traverse (travTypes g) xs
+>                                           <*> traverse (travTypes g) ds
+>     travTypes g (Unguarded t ds)    = Unguarded <$> travTypes g t
+>                                           <*> traverse (travTypes g) ds
+>     fogTypes g (Guarded xs ds)      = Guarded (map (fogTypes g) xs)
+>                                           (map (fogTypes g) ds)
+>     fogTypes g (Unguarded t ds)     = Unguarded (fogTypes g t)
+>                                           (map (fogTypes g) ds)
+>     renameTypes g (Guarded xs ds)   = Guarded (map (renameTypes g) xs)
+>                                           (map (renameTypes g) ds)
+>     renameTypes g (Unguarded t ds)  = Unguarded (renameTypes g t)
+>                                           (map (renameTypes g) ds)
 
 > instance FV (GrdTms OK b) b where
->     fvFoldMap f (Guarded xs)   = fvFoldMap f xs
->     fvFoldMap f (Unguarded t)  = fvFoldMap f t
+>     fvFoldMap f (Guarded xs ds)   = fvFoldMap f xs <.> fvFoldMap f ds
+>     fvFoldMap f (Unguarded t ds)  = fvFoldMap f t <.> fvFoldMap f ds
 
 > data Alt s a where
 >     Alt :: PatList s a b -> GrdTms s b -> Alt s a
@@ -352,8 +358,8 @@
 >                               in m <.> fvFoldMap f' gt
 
 > isVarAlt :: Alt s a -> Bool
-> isVarAlt (Alt P0 (Unguarded _))  = True
-> isVarAlt _                       = False
+> isVarAlt (Alt P0 (Unguarded _ _))  = True
+> isVarAlt _                         = False
 
 
 
