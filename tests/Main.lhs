@@ -41,8 +41,8 @@
 >             Right mod'
 >               | mod == mod'  -> Right $ renderMe mod'
 >               | otherwise      -> Left $ "Round trip mismatch:"
->                     ++ "\n" ++ s ++ "\n" ++ s'
->                     ++ "\n" ++ renderMe mod'
+>                     ++ "\n" ++ s' ++ "\n" ++ renderMe mod'
+>                     ++ "\n" ++ show mod ++ "\n" ++ show mod'
 >                     -- ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err -> Left $ "Round trip re-parse:\n"
 >                                    ++ s' ++ "\n" ++ show err
@@ -207,10 +207,15 @@
 >   "a = \"hello\"" :
 >   "b = 'w' : 'o' : 'r' : ['l', 'd']" :
 >   "f (_:x) = x" :
+>   "f (_ : x) = x" :
 >   "x = y where y = 3" :
 >   "x = y\n  where\n    y = z\n    z = x" :
 >   "import A.B.C\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
 >   "f (n + 1) = n" :
+>   "(&&) :: Bool -> Bool -> Bool\n(&&) True x = x\n(&&) False _ = False" :
+>   "(&&) :: Bool -> Bool -> Bool\nTrue && x = x\nFalse && _ = False" :
+>   "f :: _a -> _a\nf x = x" :
+>   "x = (case xs of\n    [] -> []\n    (:) x ys -> scanl f (f q x) ys)" :
 >   []
 
 
@@ -494,4 +499,6 @@
 >   ("f = case True of True -> 3", True) :
 >   ("f :: Integer\nf = case True of True -> 3", True) :
 >   ("x :: Bool\nx = (<) 2 3", True) :
+>   ("data Empty where", True) :
+>   ("(&&) :: Bool -> Bool -> Bool\nTrue && x = x\nFalse && _ = False", True) :
 >   []

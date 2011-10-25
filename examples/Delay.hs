@@ -41,41 +41,41 @@ data Tree :: * -> * where
 
 
 repMin :: forall a. (a -> a -> a) -> Tree a -> Tree a
-repMin min t =
+repMin min_ t =
   let help :: Tree a -> a -> Pair (Tree a) a
       help (Leaf x) y = Pair (Leaf y) x
       help (Node l r) y =
         let lm = help l y
             rm = help r y
-        in Pair (Node (p1 lm) (p1 rm)) (min (p2 lm) (p2 rm))
+        in Pair (Node (p1 lm) (p1 rm)) (min_ (p2 lm) (p2 rm))
           
       ans = help t (p2 ans)
   in p1 ans
 
 
 repMin2 :: forall a. (a -> a -> a) -> Tree a -> D 1 (Tree a)
-repMin2 min t =
+repMin2 min_ t =
   let help :: Tree a -> D 1 a -> Pair (D 1 (Tree a)) a
       help (Leaf x) dy = Pair (ap (pure Leaf) dy) x
       help (Node l r) dy =
         let lm = help l dy
             rm = help r dy
-        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min (p2 lm) (p2 rm))
+        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min_ (p2 lm) (p2 rm))
           
       ans = fix (\ x -> help t (ap (pure p2) x))
   in p1 ans
 
 repMin3 :: forall a (n :: Nat). (a -> a -> a) -> Tree a -> D (n+1) (Tree a)
-repMin3 min t =
+repMin3 min_ t =
   let help :: Tree a -> D (n+1) a -> Pair (D (n+1) (Tree a)) a
       help (Leaf x) dy = Pair (ap (pure Leaf) dy) x
       help (Node l r) dy =
         let lm = help l dy
             rm = help r dy
-        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min (p2 lm) (p2 rm))
+        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min_ (p2 lm) (p2 rm))
           
       ans = fix (\ x -> help t (ap (pure p2) x))
   in p1 ans
 
-repMin4 min t = splat {1} (repMin3 min t)
+repMin4 min_ t = splat {1} (repMin3 min_ t)
             

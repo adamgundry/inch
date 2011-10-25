@@ -21,7 +21,8 @@
 
 > parseModule = I.parse module_
 
-> def = haskellDef
+> def = haskellDef { identStart = identStart haskellDef <|> char '_' 
+>                  , reservedNames = "_" : reservedNames haskellDef }
 
 > lexer       = T.makeTokenParser def    
       
@@ -50,13 +51,55 @@
 > commaSep1      = IT.commaSep1 lexer
 
 
+> backticks p = reservedOp "`" *> p <* reservedOp "`"
+
 > specialOp s = try $
 >     string s >> notFollowedBy (opLetter def) >> whiteSpace
 
 > optionalList p = maybe [] id <$> optional p
 
-
 > doubleColon = reservedOp "::"
+
+> underscore = reserved "_"
+
+> wrapParens p = (\ s -> "(" ++ s ++ ")") <$> p
+
+> isVar :: String -> Bool
+> isVar ('_':_:_)  = True
+> isVar (x:_)      = isLower x
+
+> isVarOp :: String -> Bool
+> isVarOp (':':_)  = False
+> isVarOp _        = True
+
+> identLike var desc = try $ do
+>     s <- identifier <?> desc
+>     when (var /= isVar s) $ fail $ "expected " ++ desc
+>     return s
+
+> opLike var desc = try $ do
+>     s <- operator <?> desc
+>     when (var /= isVarOp s) $ fail $ "expected " ++ desc
+>     return s
+
+
+> varid   = identLike True "variable"
+> conid   = identLike False "constructor"
+> varsym  = wrapParens (opLike True "variable symbol")
+> consym  = wrapParens (opLike False "constructor symbol")
+
+> var     = varid <|> try (parens varsym)
+> con     = conid <|> try (parens consym)
+> varop   = varsym <|> backticks varid
+> conop   = consym <|> backticks conid
+> op      = varop <|> conop
+
+> gcon    =    reservedOp "()" *> return "()"
+>         <|>  reservedOp "[]" *> return "[]"
+>         <|>  reservedOp "(,)" *> return "(,)"
+>         <|>  con
+
+
 
 
 Kinds
@@ -164,37 +207,22 @@ Types
 
 Terms
 
-> data Assoc = NonAssoc | LeftAssoc | RightAssoc
-
-
 > expr = do
->     t    <- expi 0
+>     t    <- lexp
 >     mty  <- optionMaybe (doubleColon >> tyExp)
 >     case mty of
 >         Just ty -> return $ t :? ty
 >         Nothing -> return t
 
-> expi _  =    lambda
->          <|>  letExpr
->          <|>  caseExpr
->          <|>  fexp
-
-> {-
-> expi i = (do
->     t    <- expi (i+1)
->     mot  <- optional ((,) <$> qop NonAssoc i <*> expi (i+1))
->     case mot of
->         Nothing      -> return t
->         Just (o, u)  -> return (o t u)
->   ) <|> lexpi i <|> rexpi i
-
-> lexpi i
-> -}
+> lexp  =    lambda
+>       <|>  letExpr
+>       <|>  caseExpr
+>       <|>  fexp
 
 
 > letExpr = do
 >     reserved "let"
->     ds <- I.block localDecls
+>     ds <- I.block decls
 >     reserved "in"
 >     t <- expr
 >     return $ Let ds t
@@ -206,7 +234,7 @@ Terms
 >     as <- I.block $ many caseAlternative
 >     return $ Case t as
 
-> caseAlternative = I.lineFold (CaseAlt <$> patternMore <*> altRest (reservedOp "->")
+> caseAlternative = I.lineFold (CaseAlt <$> pat <*> altRest (reservedOp "->")
 >     <?> "case alternative")
 
 > fexp = buildExpressionParser
@@ -226,31 +254,17 @@ Terms
 >       <|>  TmBinOp <$> prefixBinOp
 >       <|>  TmUnOp <$> prefixUnOp
 >       <|>  TmComp <$> prefixComparator
->       <|>  TmVar <$> tmVarName
->       <|>  TmCon <$> dataConName
+>       <|>  TmVar <$> var
+>       <|>  TmCon <$> gcon
 >       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
 >       <|>  braces (TmBrace <$> tyBit) 
 >       <|>  listy
 
 > listy = foldr (TmApp . TmApp (TmCon listConsName)) (TmCon listNilName) <$> brackets (commaSep fexp)
 
-> isVar :: String -> Bool
-> isVar = isLower . head
-
-> identLike var desc = try $ do
->     s <- identifier <?> desc
->     when (var /= isVar s) $ fail $ "expected " ++ desc
->     return s
-
-> tmVarName    = identLike True   "term variable"
-> dataConName  = identLike False  "data constructor"
->                <|> try (reservedOp "()" >> return unitConsName)
->                <|> try (parens ((reservedOp ":" >> return listConsName)
->                                <|> (reservedOp "," >> return tupleConsName)))
-
 > lambda = do
 >     reservedOp "\\"
->     ss <- many1 $ (Left <$> tmVarName) <|> (Right <$> braces numVarName)
+>     ss <- many1 $ (Left <$> var) <|> (Right <$> braces numVarName)
 >     reservedOp "->"
 >     t <- expr
 >     return $ wrapLam ss t
@@ -270,7 +284,7 @@ Modules
 >                            <*> optionalList (parens (commaSep identifier)))
 >                     <* reserved "where")
 >     is <- many importStmt
->     ds <- many decl
+>     ds <- topdecls
 >     eof
 >     return $ Mod mh is ds
 
@@ -285,10 +299,21 @@ Modules
 
 > modName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
-> decl  =    dataDecl
->       <|>  sigDecl
->       <|>  funDecl
 
+> topdecls  = associate <$> many (dataDecl <|> sigDecl <|> funDecl)
+> decls     = associate <$> many (sigDecl <|> funDecl)
+
+> associate :: [SDeclaration ()] -> [SDeclaration ()]
+> associate = map joinFun . groupBy sameFun
+>   where
+>     sameFun (FunDecl x _) (FunDecl y _)  = x == y
+>     sameFun _             _              = False
+> 
+>     joinFun :: [SDeclaration ()] -> SDeclaration ()
+>     joinFun [d] = d
+>     joinFun fs@(FunDecl x _ : _) = FunDecl x (join (map altsOf fs))
+
+>     altsOf (FunDecl _ as) = as
 
 > dataDecl = I.lineFold $ do
 >     try (reserved "data")
@@ -305,32 +330,23 @@ Modules
 > className = identLike False "type class name"
 
 > constructor = do
->     s <- dataConName
+>     s <- con
 >     doubleColon
 >     t <- tyExp
 >     return $ s ::: t
 
 
 > sigDecl = I.lineFold $ do
->     s   <- try $ tmVarName <* doubleColon
+>     s   <- try $ var <* doubleColon
 >     ty  <- tyExp
 >     return $ SigDecl s ty
 
 
-> funDecl = do
->     (s, p)  <- alternativeStart
->     ps      <- many $ alternativeFor s
->     return $ FunDecl s (p:ps)
+> funDecl = I.lineFold $ do
+>     (v, ps)  <- funlhs
+>     gt       <- rhs
+>     return $ FunDecl v [Alt (foldr (:!) P0 ps) gt]
 
-
-> alternativeStart = I.lineFold $ (,) <$> tmVarName <*> alternative
-
-> alternativeFor s = I.lineFold $ try $ do
->     x <- tmVarName
->     unless (s == x) $ fail $ "expected pattern for " ++ show s
->     alternative
-
-> alternative = Alt <$> patList <*> altRest (reservedOp "=")
 
 > altRest p  =    Unguarded <$> (p *> expr) <*> whereClause
 >            <|>  Guarded <$> (many1 (reservedOp "|" *> ((:*:) <$> guarded <* p <*> expr)))
@@ -339,37 +355,56 @@ Modules
 > guarded  =    NumGuard <$> braces predicates
 >          <|>  ExpGuard <$> commaSep expr
 
-> whereClause = maybe [] id <$> optional (reserved "where" >> I.block localDecls)
-
-> localDecls = many (sigDecl <|> funDecl)
+> whereClause = maybe [] id <$> optional (reserved "where" >> I.block decls)
 
 
-> patList  =    (:!) <$> pattern <*> patList
+
+
+
+> funlhs  =    (,) <$> var <*> many apat
+>         <|>  (\ x o y -> (o, [x, y])) <$> pat <*> varop <*> pat
+>         <|>  (\ (o, ps) qs -> (o, ps ++ qs)) <$> parens funlhs <*> many apat
+
+> rhs = (Unguarded <$> (reservedOp "=" *> expr)
+>     <|> Guarded <$> (many1 (reservedOp "|" *> ((:*:) <$> guarded <* reservedOp "=" <*> expr))))
+>     <*> whereClause
+
+
+> patList  =    (:!) <$> apat <*> patList
 >          <|>  pure P0
 
-> pattern  =    try (reservedOp unitConsName >> return (PatCon unitConsName P0))
->          <|>  parens (foldr1 tupleConsPat <$> commaSep1 patternMore)
->          <|>  braces patBrace
->          <|>  brackets (foldr listConsPat listNilPat <$> commaSep patternMore)
+> pat = do
+>     l   <- lpat
+>     mr  <- optional ((,) <$> conop <*> pat)
+>     case mr of
+>         Nothing      -> return l
+>         Just (o, r)  -> return $ PatCon o (l :! r :! P0)
+
+> lpat  =    PatCon <$> gcon <*> patList
+>       <|>  apat
+
+> apat =        nplusk
+>          <|>  PatCon <$> gcon <*> pure P0
 >          <|>  PatIntLit <$> try integer
->          <|>  PatCon <$> dataConName <*> pure P0
->          <|>  PatVar <$> patVarName
->          <|>  reservedOp "_" *> pure PatIgnore
+>          <|>  underscore *> pure PatIgnore
+>          <|>  parens (foldr1 tupleConsPat <$> commaSep1 pat)
+>          <|>  brackets (foldr listConsPat listNilPat <$> commaSep pat)
+>          <|>  braces patBrace
 >   where
 >     tupleConsPat x y  = PatCon tupleConsName (x :! y :! P0)
 >     listConsPat x y   = PatCon listConsName (x :! y :! P0)
 >     listNilPat        = PatCon listNilName P0
 
-> patternMore  =    PatCon <$> dataConName <*> patList
->              <|>  mkList <$> pattern `sepBy1` colon
->   where
->     mkList [x]     = x
->     mkList (x:xs)  = PatCon listConsName (x :! mkList xs :! P0)
+> nplusk = do
+>     v <- var
+>     mk <- optional (reservedOp "+" *> integer)
+>     return $ case mk of
+>        Nothing  -> PatVar v
+>        Just k   -> PatNPlusK v k
 
-> patVarName = identLike True "pattern variable"
 
 > patBrace = do
->     ma  <- optional patVarName
+>     ma  <- optional var
 >     k   <- option 0 $ case ma of
 >                           Just _   -> reservedOp "+" *> integer
 >                           Nothing  -> integer
@@ -379,6 +414,6 @@ Modules
 
 
 > signature = I.lineFold $ do
->     s <- try $ tmVarName <* doubleColon
+>     s <- try $ var <* doubleColon
 >     t <- tyExp
 >     return (s, t)

@@ -153,6 +153,7 @@
 > data Mod s a where
 >     Mod :: Maybe (String, [String]) -> [Import] -> [Decl s a] -> Mod s a
 
+> deriving instance Show (Mod RAW a)
 > deriving instance Eq (Mod RAW a)
 
 > instance TravTypes Mod where
@@ -187,6 +188,7 @@
 >     TmBinOp  :: BinOp                     -> Tm s a
 >     TmComp   :: Comparator                -> Tm s a
 
+> deriving instance Show (Tm RAW a)
 > deriving instance Show (Tm OK a)
 > deriving instance Eq (Tm RAW a)
 
@@ -253,6 +255,7 @@
 >     FunDecl   :: TmName -> [Alt s a] -> Decl s a
 >     SigDecl   :: TmName -> ATy s a KSet -> Decl s a
 
+> deriving instance Show (Decl RAW a)
 > deriving instance Show (Decl OK a)
 > deriving instance Eq (Decl RAW a)
 
@@ -286,6 +289,7 @@
 >     ExpGuard  :: [Tm s a] -> Grd s a
 >     NumGuard  :: [Pred (ATy s a KNum)] -> Grd s a
 
+> deriving instance Show (Grd RAW a)
 > deriving instance Show (Grd OK a)
 > deriving instance Eq (Grd RAW a)
 
@@ -340,6 +344,7 @@
 >     Guarded    :: [(Grd :*: Tm) s b] -> [Decl s b] -> GrdTms s b
 >     Unguarded  :: Tm s b -> [Decl s b] -> GrdTms s b
 
+> deriving instance Show (GrdTms RAW a)
 > deriving instance Show (GrdTms OK b)
 
 > instance Eq (GrdTms RAW b) where
@@ -368,6 +373,7 @@
 > data Alt s a where
 >     Alt :: PatList s a b -> GrdTms s b -> Alt s a
 
+> deriving instance Show (Alt RAW a)
 > deriving instance Show (Alt OK a)
 
 > instance Eq (Alt RAW a) where
@@ -397,6 +403,7 @@
 > data CaseAlt s a where
 >     CaseAlt :: Pat s a b -> GrdTms s b -> CaseAlt s a
 
+> deriving instance Show (CaseAlt RAW a)
 > deriving instance Show (CaseAlt OK a)
 
 > instance Eq (CaseAlt RAW a) where

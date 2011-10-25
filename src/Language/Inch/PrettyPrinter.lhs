@@ -152,6 +152,7 @@
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
 >     pretty (TmUnOp o)   = pretty o
 >     pretty (TmBinOp o)  = pretty o
+>     pretty (TmComp EL)  = const . parens $ text "=="
 >     pretty (TmComp c)   = parens . pretty c
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
