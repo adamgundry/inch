@@ -43,14 +43,6 @@
 > instance Pretty TmLayer where
 >   pretty l = const $ text $ show l
 
-> layerStops :: TmLayer -> Bool
-> layerStops (PatternTop _)  = True
-> layerStops CaseTop         = True
-> layerStops FunTop          = True
-> layerStops GenMark         = True
-> layerStops GuardTop        = True
-> layerStops _               = False
-
 > matchLayer :: TmLayer -> TmLayer -> Bool
 > matchLayer (PatternTop (x ::: _))  (PatternTop (y ::: _))  = x == y
 > matchLayer CaseTop                 CaseTop                 = True
@@ -61,6 +53,31 @@
 > matchLayer (LetBindings _)         (LetBindings _)         = True
 > matchLayer (LetBody _)             (LetBody _)             = True
 > matchLayer _                       _                       = False
+
+
+The |withLayerExtract| function takes two boolean parameters: |stop|
+indicates whether the layer should stop numeric unification
+constraints, and |drop| indicates whether hypotheses should be dropped
+when the layer is extracted.
+
+> withLayerExtract :: Bool -> Bool -> TmLayer -> (TmLayer -> a) -> Contextual t -> Contextual (t, a)
+> withLayerExtract stop drop l f m = do
+>     modifyContext (:< Layer l stop)
+>     t <- m
+>     (g, a) <- extract <$> getContext
+>     putContext g
+>     return (t, a)
+>   where
+>     extract (g :< Layer l' z) | matchLayer l l'  = (g, f l')
+>                               | otherwise        = error $ "withLayerExtract: wrong layer in " ++ renderMe (g :< Layer l' z) ++ " (looking for " ++ renderMe l ++ ")"
+>     extract (g :< Constraint Given _) | drop = extract g
+>     extract (g :< e)                         = (g' :< e, a)
+>       where (g', a) = extract g
+>     extract B0 = error $ "withLayerExtract: ran out of context"
+
+> withLayer :: Bool -> Bool -> TmLayer -> Contextual t -> Contextual t
+> withLayer stop drop l m = fst <$> withLayerExtract stop drop l (const ()) m
+
 
 
 > data CStatus = Given | Wanted
@@ -105,12 +122,12 @@
 
 > data Entry where
 >     A           :: TyEntry k -> Entry
->     Layer       :: TmLayer -> Entry
+>     Layer       :: TmLayer -> Bool -> Entry
 >     Constraint  :: CStatus -> Predicate -> Entry
 
 > instance Pretty Entry where
 >   pretty (A a)                  _ = prettyHigh a
->   pretty (Layer l)              _ = prettyHigh l
+>   pretty (Layer l _)            _ = prettyHigh l
 >   pretty (Constraint Given p)   _ =
 >       braces (prettyHigh $ fogSysPred p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ =
@@ -316,18 +333,18 @@ Bindings
 
 > lookupBinding x = help =<< getContext
 >   where
->     help B0                             = lookupTopBinding x
->     help (g :< Layer (LetBindings bs))  = lookupBindingIn x bs
->     help (g :< _)                       = help g
+>     help B0                               = lookupTopBinding x
+>     help (g :< Layer (LetBindings bs) _)  = lookupBindingIn x bs
+>     help (g :< _)                         = help g
 
 > modifyBindings :: (Bindings -> Contextual Bindings) -> Contextual ()
 > modifyBindings f = flip help [] =<< getContext
 >   where
 >     help :: Context -> [Entry] -> Contextual ()
 >     help B0 _ = modifyTopBindings f
->     help (g :< Layer (LetBindings bs)) h = do
+>     help (g :< Layer (LetBindings bs) z) h = do
 >         bs' <- f bs
->         putContext $ (g :< Layer (LetBindings bs')) <><< h
+>         putContext $ (g :< Layer (LetBindings bs') z) <><< h
 >     help (g :< e) h = help g (e:h)
 
 > insertBinding x ty = modifyBindings $ insertBindingIn x ty
@@ -405,11 +422,11 @@ Bindings
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = fst <$> lookupTopBinding x
->     seek (g :< Layer (LamBody (y ::: ty)))
+>     seek (g :< Layer (LamBody (y ::: ty)) _)
 >         | x == y = return $ TmVar y ::: ty
->     seek (g :< Layer (LetBody bs))   = (fst <$> lookupBindingIn x bs) <|> seek g
->     seek (g :< Layer (LetBindings bs))  = (fst <$> lookupBindingIn x bs) <|> seek g
->     seek (g :< Layer (PatternTop (y ::: ty)))
+>     seek (g :< Layer (LetBody bs) _)   = (fst <$> lookupBindingIn x bs) <|> seek g
+>     seek (g :< Layer (LetBindings bs) _)  = (fst <$> lookupBindingIn x bs) <|> seek g
+>     seek (g :< Layer (PatternTop (y ::: ty)) _)
 >         | x == y     = return $ TmVar y ::: ty
 >         | otherwise  = seek g
 >     seek (g :< _) = seek g

@@ -47,9 +47,9 @@
 >       putContext _Gamma
 >       case xD of
 >         A (a@(FVar _ KNum) := d) -> ext xD =<< f (a := d)
->         Layer l | layerStops l -> do
+>         Layer l True -> do
+>             modifyContext (:< Layer l True)
 >             m
->             modifyContext (:< Layer l)
 >             modifyContext (:< Constraint Wanted p)
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
 >     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred p)) $

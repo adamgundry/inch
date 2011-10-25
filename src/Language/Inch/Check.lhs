@@ -37,7 +37,7 @@ Set this to True in order to verify the context regularly:
 > goodEntry :: Context -> Entry -> Bool
 > goodEntry g (A (a := d))      = not (g `defines` a) && goodTyDef g d
 > goodEntry g (Constraint _ p)  = all (goodTy g) p
-> goodEntry g (Layer l)         = goodLayer g l
+> goodEntry g (Layer l _)       = goodLayer g l
 
 > goodTyDef :: Context -> TyDef k -> Bool
 > goodTyDef g (Some t)  = goodTy g t

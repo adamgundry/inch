@@ -21,6 +21,7 @@
 > import Language.Inch.Unify
 > import Language.Inch.Kit
 > import Language.Inch.Error
+> import Language.Inch.Check
 
 
 > unifySolveConstraints :: Contextual ()
@@ -32,8 +33,8 @@
 >   where
 >     collectEqualities :: Context -> Writer [(Type KNum, Type KNum)] Context
 >     collectEqualities B0 = return B0
->     collectEqualities (g :< Layer l) | layerStops l  = return $ g :< Layer l
->                                      | otherwise     = (:< Layer l) <$> collectEqualities g
+>     collectEqualities (g :< Layer l True)  = return $ g :< Layer l True
+>     collectEqualities (g :< Layer l False) = (:< Layer l False) <$> collectEqualities g
 >     collectEqualities (g :< Constraint Wanted (P EL m n)) = tell [(m, n)]
 >         >> collectEqualities g
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
@@ -57,9 +58,9 @@
 >         collect g vs (subsPreds a d hs) (subsPreds a d ps) <:< A e
 >     collect (g :< A e@(a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
 >         collect g (a:vs) hs ps <:< A e
->     collect (g :< Layer l) vs hs ps  | layerStops l  = (g :< Layer l, vs', hs', ps')
->                                      | otherwise     = collect g vs hs ps <:< Layer l
+>     collect (g :< Layer l True)   vs hs ps = (g :< Layer l True, vs', hs', ps')
 >         where (vs', hs', ps') = collectHyps g vs hs ps
+>     collect (g :< Layer l False)  vs hs ps = collect g vs hs ps <:< Layer l False
 >     collect (g :< e) vs hs ps = collect g vs hs ps <:< e
 >
 >     collectHyps ::  Context -> [Var () KNum] -> [Predicate] -> [Predicate] ->
@@ -82,7 +83,7 @@
 >     (hs, qs) <- trySolveConstraints
 >     case qs of
 >         []  -> return ()
->         _   -> errCannotDeduce hs qs
+>         _   -> traceContext "halp" >> errCannotDeduce hs qs
 
 > solveOrSuspend :: Contextual ()
 > solveOrSuspend = want . snd =<< trySolveConstraints

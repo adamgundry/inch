@@ -74,8 +74,8 @@ vlookup {k+1} (VCons _ xs) = vlookup {k} xs
 
 vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec a (m + n) -> (Vec a m, Vec a n)
 vsplit {0}   xs           = (VNil, xs)
-vsplit {m+1} (VCons x xs) = f (vsplit {m} xs)
-  where f (ys, zs) = (VCons x ys, zs)
+vsplit {m+1} (VCons x xs) = case vsplit {m} xs of
+                                (ys, zs) -> (VCons x ys, zs)
 
 vjoin :: forall a (m :: Nat) . Vec (Vec a m) m -> Vec a m
 vjoin VNil                     = VNil
