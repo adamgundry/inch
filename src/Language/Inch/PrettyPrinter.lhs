@@ -214,7 +214,7 @@
 > prettyGuardTerms :: Doc -> SGuardTerms a -> Doc
 > prettyGuardTerms d (Unguarded e ds) = d <++> prettyHigh e $$ prettyWhere ds
 > prettyGuardTerms d (Guarded gts ds) =
->     vcat (map (\ (g :*: e) -> text "|" <+> prettyLow g <+> d <++> prettyHigh e) gts)
+>     vcat (map (\ (g :*: e) -> text "|" <+> prettyLow g <+> d <+> prettyHigh e) gts)
 >     $$ prettyWhere ds
 
 > prettyWhere :: [SDeclaration a] -> Doc 

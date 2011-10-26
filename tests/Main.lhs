@@ -504,4 +504,7 @@
 >   (vecDecl ++ "vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec (m + n) a -> (Vec m a, Vec n a)\nvsplit {0}   xs           = (Nil, xs)\nvsplit {m+1} (Cons x xs) = case vsplit {m} xs of\n                                (ys, zs) -> (Cons x ys, zs)", True) :
 >   (vecDecl ++ "vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec (m + n) a -> (Vec m a, Vec n a)\nvsplit {0}   xs           = (Nil, xs)\nvsplit {m+1} (Cons x xs) = case vsplit {m} xs of\n                                (ys, zs) | True -> (Cons x ys, zs)", True) :
 >   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo = foo", True) :
+>   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo = foo", True) :
+>   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\ngoo = foo", True) :
+>   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo :: forall a (i :: Integer)(n :: Nat) . 0 <= i - n => Vec i a -> Vec i a\ngoo = foo", True) :
 >   []

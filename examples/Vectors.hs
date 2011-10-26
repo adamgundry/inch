@@ -65,8 +65,8 @@ vec2list  = vfold [] (:)
 
 
 plan :: pi (n :: Nat) . Vec Integer n
-plan {0}   = VNil
-plan {m+1} = VCons m (plan {m})
+plan {0}           = VNil
+plan {m} | {m > 0} = VCons m (plan {m-1})
 
 vlookup :: forall (n :: Nat) a . pi (m :: Nat) . m < n => Vec a n -> a
 vlookup {0}   (VCons x _)  = x
