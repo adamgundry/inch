@@ -4,6 +4,7 @@
 > import Control.Monad.State
 > import Data.List
 > import System.Directory
+> import System.Exit
 
 > import Language.Inch.Context
 > import Language.Inch.Syntax
@@ -13,25 +14,28 @@
 > import Language.Inch.Erase
 
 > main :: IO ()
-> main = checks "examples/"
+> main = do
+>   (_, no) <- checks "examples/"
+>   if no > 0 then exitFailure else exitSuccess
 
 
 > test :: (a -> String) -> (a -> Either String String)
->             -> [a] -> Int -> Int -> String
-> test _ _ [] yes no = "Passed " ++ show yes ++ " tests, failed "
+>             -> [a] -> Int -> Int -> IO (Int, Int)
+> test _ _ [] yes no = do
+>     putStrLn $ "Passed " ++ show yes ++ " tests, failed "
 >                          ++ show no ++ " tests."
-> test g f (x:xs) yes no = "TEST\n" ++ g x ++ "\n" ++ case f x of
->     Right s  -> "PASS\n" ++ s ++ "\n" ++ test g f xs (yes+1) no
->     Left s   -> "FAIL\n" ++ s ++ "\n" ++ test g f xs yes (no+1)
-
-> runTest :: (a -> String) -> (a -> Either String String) -> [a] -> Int -> Int -> IO ()
-> runTest g f xs yes no = putStrLn $ test g f xs yes no
+>     return (yes, no)
+> test g f (x:xs) yes no = do
+>     putStrLn $ "TEST\n" ++ g x
+>     case f x of
+>         Right s  -> putStrLn ("PASS\n" ++ s) >> test g f xs (yes+1) no
+>         Left s   -> putStrLn ("FAIL\n" ++ s) >> test g f xs yes (no+1)
 
 
 > roundTripTest, parseCheckTest, eraseCheckTest :: IO ()
-> roundTripTest  = runTest id roundTrip roundTripTestData 0 0
-> parseCheckTest = runTest fst parseCheck parseCheckTestData 0 0
-> eraseCheckTest = runTest id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
+> roundTripTest  = void $ test id roundTrip roundTripTestData 0 0
+> parseCheckTest = void $ test fst parseCheck parseCheckTestData 0 0
+> eraseCheckTest = void $ test id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
 
 > roundTrip :: String -> Either String String
 > roundTrip s = case parseModule "roundTrip" s of
@@ -82,23 +86,21 @@
 > check :: FilePath -> IO ()
 > check fn = do
 >     s <- readFile fn
->     putStrLn $ test (const fn) parseCheck [(s, True)] 0 0
+>     void $ test (const fn) parseCheck [(s, True)] 0 0
 
 > checkEx :: IO ()
 > checkEx = check "Example.hs"
 
-> checks :: FilePath -> IO ()
+> checks :: FilePath -> IO (Int, Int)
 > checks d = do
->     fns <- filter goodFile <$> getDirectoryContents d
+>     fns <- filter (".hs" `isSuffixOf`) <$> getDirectoryContents d
 >     fcs <- zip fns <$> mapM (readFile . (d ++)) fns
->     putStrLn $ test fst (\ (_, c) -> parseCheck (c, True)) fcs 0 0
->   where
->     goodFile fn = (".hs" `isSuffixOf` fn) && not ("Extras.hs" `isSuffixOf` fn)
+>     test fst (\ (_, c) -> parseCheck (c, True)) fcs 0 0
 
 > erase :: FilePath -> IO ()
 > erase fn = do
 >     s <- readFile fn
->     putStrLn $ test (const fn) eraseCheck [s] 0 0
+>     void $ test (const fn) eraseCheck [s] 0 0
 
 > eraseEx :: IO ()
 > eraseEx = erase "Example.hs"

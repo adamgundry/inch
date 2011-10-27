@@ -195,10 +195,10 @@ error'            =  error
 undefined'        :: a
 undefined'        =  error "Prelude.undefined"
 
-
-map :: (a -> b) -> [a] -> [b]
-map f []     = []
-map f (x:xs) = f x : map f xs
+-- built in
+map' :: (a -> b) -> [a] -> [b]
+map' f []     = []
+map' f (x:xs) = f x : map' f xs
 
 -- should be (++)
 append :: [a] -> [a] -> [a]

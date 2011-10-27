@@ -193,3 +193,17 @@ adder :: (forall (x y :: Nat) t . Proxy x -> Proxy y -> (0 <= x * y => t) -> t) 
              (pi (m :: Nat) . Wire (2 * 2 ^ m + 1) Bool (1 + 2 ^ m) Bool)
 adder lem {0}    = fadd
 adder lem {m+1}  = ripple lem {m} (adder lem {m})
+
+
+
+
+btoc True   = '1'
+btoc False  = '0'
+
+vtol :: forall a (n :: Num) . Vec n a -> [a]
+vtol VNil          = []
+vtol (VCons x xs)  = x : vtol xs
+
+vtob xs = map btoc (vtol xs)
+
+test' {m} p {k} = vtob (run p (toBin {m} {k}))

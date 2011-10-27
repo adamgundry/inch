@@ -4,17 +4,9 @@
 
 module Delay where
 
-data Pair :: * -> * -> * where
-  Pair :: forall a b. a -> b -> Pair a b
-
-p1 (Pair a _) = a
-p2 (Pair _ b) = b
-
-
-
-
 data D :: Num -> * -> * where
   D :: forall a (n :: Num) . a -> D n a
+  deriving Show
 
 pure = D
 
@@ -38,44 +30,44 @@ fix f = f (pure (fix f))
 data Tree :: * -> * where
   Leaf :: forall a . a -> Tree a
   Node :: forall a . Tree a -> Tree a -> Tree a
-
+  deriving Show
 
 repMin :: forall a. (a -> a -> a) -> Tree a -> Tree a
 repMin min_ t =
-  let help :: Tree a -> a -> Pair (Tree a) a
-      help (Leaf x) y = Pair (Leaf y) x
+  let help :: Tree a -> a -> (Tree a, a)
+      help (Leaf x) y = (Leaf y, x)
       help (Node l r) y =
         let lm = help l y
             rm = help r y
-        in Pair (Node (p1 lm) (p1 rm)) (min_ (p2 lm) (p2 rm))
+        in (Node (fst lm) (fst rm), min_ (snd lm) (snd rm))
           
-      ans = help t (p2 ans)
-  in p1 ans
+      ans = help t (snd ans)
+  in fst ans
 
 
 repMin2 :: forall a. (a -> a -> a) -> Tree a -> D 1 (Tree a)
 repMin2 min_ t =
-  let help :: Tree a -> D 1 a -> Pair (D 1 (Tree a)) a
-      help (Leaf x) dy = Pair (ap (pure Leaf) dy) x
+  let help :: Tree a -> D 1 a -> (D 1 (Tree a), a)
+      help (Leaf x) dy = (ap (pure Leaf) dy, x)
       help (Node l r) dy =
         let lm = help l dy
             rm = help r dy
-        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min_ (p2 lm) (p2 rm))
+        in (ap (ap (pure Node) (fst lm)) (fst rm), min_ (snd lm) (snd rm))
           
-      ans = fix (\ x -> help t (ap (pure p2) x))
-  in p1 ans
+      ans = fix (\ x -> help t (ap (pure snd) x))
+  in fst ans
 
 repMin3 :: forall a (n :: Nat). (a -> a -> a) -> Tree a -> D (n+1) (Tree a)
 repMin3 min_ t =
-  let help :: Tree a -> D (n+1) a -> Pair (D (n+1) (Tree a)) a
-      help (Leaf x) dy = Pair (ap (pure Leaf) dy) x
+  let help :: Tree a -> D (n+1) a -> (D (n+1) (Tree a), a)
+      help (Leaf x) dy = (ap (pure Leaf) dy, x)
       help (Node l r) dy =
         let lm = help l dy
             rm = help r dy
-        in Pair (ap (ap (pure Node) (p1 lm)) (p1 rm)) (min_ (p2 lm) (p2 rm))
+        in (ap (ap (pure Node) (fst lm)) (fst rm), min_ (snd lm) (snd rm))
           
-      ans = fix (\ x -> help t (ap (pure p2) x))
-  in p1 ans
+      ans = fix (\ x -> help t (ap (pure snd) x))
+  in fst ans
 
 repMin4 min_ t = splat {1} (repMin3 min_ t)
             

@@ -5,7 +5,8 @@ module RedBlack where
 
 
 data Ex :: (Num -> *) -> * where
-  Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p
+    Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p
+  deriving Show
 
 unEx :: forall a (p :: Num -> *) . (forall (n :: Num) . p n -> a) -> Ex p -> a
 unEx f (Ex x) = f x
@@ -13,15 +14,17 @@ unEx f (Ex x) = f x
 
 
 data Colour :: Num -> * where
-  Black  :: Colour 0
-  Red    :: Colour 1
+    Black  :: Colour 0
+    Red    :: Colour 1
+  deriving Show
 
 data Tree :: * -> Num -> Num -> * where
-  E   :: forall a . Tree a 0 0
-  TR  :: forall a (n :: Num) .
-             a -> Tree a 0 n -> Tree a 0 n -> Tree a 1 n
-  TB  :: forall a (cl cr n :: Num) .
-             a -> Tree a cl n -> Tree a cr n -> Tree a 0 (n+1)
+    E   :: forall a . Tree a 0 0
+    TR  :: forall a (n :: Num) .
+               a -> Tree a 0 n -> Tree a 0 n -> Tree a 1 n
+    TB  :: forall a (cl cr n :: Num) .
+               a -> Tree a cl n -> Tree a cr n -> Tree a 0 (n+1)
+  deriving Show
 
 member :: forall a (cl n :: Num) .
               (a -> a -> Ordering) -> a -> Tree a cl n -> Bool
@@ -39,24 +42,27 @@ member cmp x (TB y a b) =
     case_ GT = member cmp x b
   in case_ (cmp x y)
 
-blackHeight :: forall a b (c n :: Num) . b -> (b -> b) -> Tree a c n -> b
-blackHeight zero suc E = zero
-blackHeight zero suc (TB _ l _) = suc (blackHeight zero suc l)
-blackHeight zero suc (TR _ l _) = blackHeight zero suc l
+member' = member compare
+
+blackHeight :: forall a (c n :: Num) . Tree a c n -> Integer
+blackHeight E           = 0
+blackHeight (TB _ l _)  = 1 + blackHeight l
+blackHeight (TR _ l _)  = blackHeight l
 
 
 -- indexed by root colour, root black height, hole colour and hole black height
 
 data TreeZip :: * -> Num -> Num -> Num -> Num -> * where
-  Root  :: forall a (c n :: Num) . TreeZip a c n c n
-  ZRL   :: forall a (n rc rn :: Num) .
-               a -> TreeZip a rc rn 1 n -> Tree a 0 n -> TreeZip a rc rn 0 n
-  ZRR   :: forall a (n rc rn :: Num) .
-               a -> Tree a 0 n -> TreeZip a rc rn 1 n -> TreeZip a rc rn 0 n
-  ZBL   :: forall a (n c rc rn hc :: Num) .
-               a -> TreeZip a rc rn 0 (n+1) -> Tree a c n -> TreeZip a rc rn hc n
-  ZBR   :: forall a (n c rc rn hc :: Num) .
-               a -> Tree a c n -> TreeZip a rc rn 0 (n+1) -> TreeZip a rc rn hc n
+    Root  :: forall a (c n :: Num) . TreeZip a c n c n
+    ZRL   :: forall a (n rc rn :: Num) .
+                 a -> TreeZip a rc rn 1 n -> Tree a 0 n -> TreeZip a rc rn 0 n
+    ZRR   :: forall a (n rc rn :: Num) .
+                 a -> Tree a 0 n -> TreeZip a rc rn 1 n -> TreeZip a rc rn 0 n
+    ZBL   :: forall a (n c rc rn hc :: Num) .
+                 a -> TreeZip a rc rn 0 (n+1) -> Tree a c n -> TreeZip a rc rn hc n
+    ZBR    :: forall a (n c rc rn hc :: Num) .
+                 a -> Tree a c n -> TreeZip a rc rn 0 (n+1) -> TreeZip a rc rn hc n
+  deriving Show
 
 
 plug :: forall a (rc rn c n :: Num) . Tree a c n -> TreeZip a rc rn c n -> Tree a rc rn
@@ -77,14 +83,16 @@ plugBR t (ZBR x l z) = plug t (ZBR x l z)
 
 
 data ColTree :: * -> Num -> * where
-  CT :: forall a (c n :: Num) . Colour c -> Tree a c n -> ColTree a n
+    CT :: forall a (c n :: Num) . Colour c -> Tree a c n -> ColTree a n
+  deriving Show
 
 
 
 data InsProb :: * -> Num -> Num -> * where
-  Level    :: forall a (c ci n :: Num) . Colour ci -> Tree a ci n -> InsProb a c n
-  PanicRB  :: forall a (n :: Num) . a -> Tree a 1 n -> Tree a 0 n -> InsProb a 1 n
-  PanicBR  :: forall a (n :: Num) . a -> Tree a 0 n -> Tree a 1 n -> InsProb a 1 n
+    Level    :: forall a (c ci n :: Num) . Colour ci -> Tree a ci n -> InsProb a c n
+    PanicRB  :: forall a (n :: Num) . a -> Tree a 1 n -> Tree a 0 n -> InsProb a 1 n
+    PanicBR  :: forall a (n :: Num) . a -> Tree a 0 n -> Tree a 1 n -> InsProb a 1 n
+  deriving Show
 
 solveIns :: forall a (c n rc rn :: Num) . 
              InsProb a c n -> TreeZip a rc rn c n -> ColTree a rn
@@ -255,7 +263,8 @@ delete cmp x {n} t = del cmp x {n} t Root
 
 
 data RBT :: * -> * where
-  RBT :: forall a . pi (n :: Nat) . Tree a 0 n -> RBT a
+    RBT :: forall a . pi (n :: Nat) . Tree a 0 n -> RBT a
+  deriving Show
 
 emptyRBT = RBT {0} E
 
@@ -265,3 +274,6 @@ ctToRBT {n} (CT Red t)   = RBT {n+1} (r2b t)
 
 insertRBT cmp x (RBT {n} t) = ctToRBT {n} (ins cmp x t Root)
 deleteRBT cmp x (RBT {n} t) = delete cmp x {n} t
+
+insertRBT' = insertRBT compare
+deleteRBT' = deleteRBT compare
