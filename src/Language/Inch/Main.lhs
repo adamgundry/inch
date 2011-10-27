@@ -13,8 +13,10 @@
 > import Language.Inch.Erase
 
 
+> help :: String -> String
 > help me = "Usage: " ++ me ++ " [original file] [input file] [output file]"
 
+> main :: IO ()
 > main = do
 >     args <- getArgs
 >     me <- getProgName
@@ -25,20 +27,20 @@
 >                 Right (y, z)  -> do
 >                     writeFile (replaceExtension original ".inch") y
 >                     writeFile output z
->                 Left s   -> putStrLn (me ++ " " ++ s) >> exitFailure
+>                 Left x   -> putStrLn (me ++ " " ++ x) >> exitFailure
 >         _ -> putStrLn $ help me
 
-
+> modHeader :: Maybe String -> String
 > modHeader Nothing = ""
 > modHeader (Just m) = "module " ++ m ++ " where\n"
 
 > preprocess :: String -> String -> Either String (String, String)
 > preprocess fn s = case parseModule fn s of
->     Right mod -> case runStateT (checkModule mod) initialState of
->         Right (mod', st) -> case evalStateT (eraseModule mod') st of
->             Right mod'' -> Right (sigs p, renderMe (fog mod''))
+>     Right md -> case runStateT (checkModule md) initialState of
+>         Right (md', st) -> case evalStateT (eraseModule md') st of
+>             Right md'' -> Right (sigs p, renderMe (fog md''))
 >                 where
->                     Mod _ _ p = mod''
+>                     Mod _ _ p = md''
 >                     sigs    = renderMe . map fog . filter dataOrSigDecl
 >                     dataOrSigDecl (SigDecl _ _)       = True
 >                     dataOrSigDecl (DataDecl _ _ _ _)  = True

@@ -119,9 +119,9 @@
 >     hetEq (Bind b x k t)  (Bind b' x' k' t')  yes no | b == b' && x == x' = hetEq k k' (hetEq t t' yes no) no
 >     hetEq (Qual p t)      (Qual p' t')        yes no | p == p'    = hetEq t t' yes no
 >     hetEq Arr             Arr                 yes _  = yes
->     hetEq (TyInt i)       (TyInt j)           yes no  | i == j     = yes
->     hetEq (UnOp o)        (UnOp o')           yes no  | o == o'    = yes
->     hetEq (BinOp o)       (BinOp o')          yes no  | o == o'    = yes
+>     hetEq (TyInt i)       (TyInt j)           yes _  | i == j     = yes
+>     hetEq (UnOp o)        (UnOp o')           yes _  | o == o'    = yes
+>     hetEq (BinOp o)       (BinOp o')          yes _  | o == o'    = yes
 >     hetEq _               _                   _   no = no
 
 > instance Eq (Ty a k) where
@@ -201,7 +201,7 @@
 
 > fogTy' :: (forall l. Var a l -> String) -> [String] -> Ty a k -> SType
 > fogTy' g _   (TyVar v)       = STyVar (g v)
-> fogTy' _ _   (TyCon c k)     = STyCon c
+> fogTy' _ _   (TyCon c _)     = STyCon c
 > fogTy' g xs  (TyApp f s)     = STyApp (fogTy' g xs f) (fogTy' g xs s)
 > fogTy' g xs  (Qual p t)      = SQual (fmap (fogTy' g xs) p) (fogTy' g xs t)
 > fogTy' _ _   Arr             = SArr
@@ -209,14 +209,9 @@
 > fogTy' _ _   (UnOp o)        = SUnOp o
 > fogTy' _ _   (BinOp o)       = SBinOp o
 > fogTy' g xs  (Bind b x k t)  =
->     SBind b y (fogKind k) (fogTy' (wkn g) (y:xs) t)
+>     SBind b y (fogKind k) (fogTy' (wkF g y) (y:xs) t)
 >   where
 >     y = alphaConv x xs
-
->     wkn :: (forall l'. Var a l' -> String) -> Var (a, k) l -> String
->     wkn g (BVar Top)      = y
->     wkn g (BVar (Pop x))  = g (BVar x)
->     wkn g (FVar a k)      = g (FVar a k)
 
 > fogPred :: Predicate -> SPredicate
 > fogPred = fogPred' fogVar []
@@ -236,8 +231,8 @@
 
 > getTyKind :: Type k -> Kind k
 > getTyKind (TyVar v)        = varKind v
-> getTyKind (TyCon c k)      = k
-> getTyKind (TyApp f s)      = case getTyKind f of _ :-> k -> k
+> getTyKind (TyCon _ k)      = k
+> getTyKind (TyApp f _)      = kindCod (getTyKind f)
 > getTyKind (TyInt _)        = KNum
 > getTyKind (UnOp _)         = KNum :-> KNum
 > getTyKind (BinOp _)        = KNum :-> KNum :-> KNum
@@ -285,14 +280,14 @@
 
 > renameTy :: (forall k. Var a k -> Var b k) -> Ty a l -> Ty b l
 > renameTy g (TyVar v)       = TyVar (g v)
-> renameTy g (TyCon c k)     = TyCon c k
+> renameTy _ (TyCon c k)     = TyCon c k
 > renameTy g (TyApp f s)     = TyApp (renameTy g f) (renameTy g s)
 > renameTy g (Bind b x k t)  = Bind b x k (renameTy (wkRenaming g) t)
 > renameTy g (Qual p t)      = Qual (fmap (renameTy g) p) (renameTy g t)
-> renameTy g Arr             = Arr
-> renameTy g (TyInt i)       = TyInt i
-> renameTy g (UnOp o)        = UnOp o
-> renameTy g (BinOp o)       = BinOp o
+> renameTy _ Arr             = Arr
+> renameTy _ (TyInt i)       = TyInt i
+> renameTy _ (UnOp o)        = UnOp o
+> renameTy _ (BinOp o)       = BinOp o
 
 > bindTy :: Var a k -> Ty a l -> Ty (a, k) l
 > bindTy v = renameTy (bindVar v)
@@ -308,19 +303,19 @@
 
 > wkSubst :: (Var a k -> Ty b k) -> Var (a, l) k -> Ty (b, l) k
 > wkSubst g (FVar a k)      = wkTy (g (FVar a k))
-> wkSubst g (BVar Top)      = TyVar (BVar Top)
+> wkSubst _ (BVar Top)      = TyVar (BVar Top)
 > wkSubst g (BVar (Pop x))  = wkTy (g (BVar x))
 
 > substTy :: (forall k . Var a k -> Ty b k) -> Ty a l -> Ty b l
 > substTy g (TyVar v)       = g v
-> substTy g (TyCon c k)     = TyCon c k
+> substTy _ (TyCon c k)     = TyCon c k
 > substTy g (TyApp f s)     = TyApp (substTy g f) (substTy g s)
 > substTy g (Bind b x k t)  = Bind b x k (substTy (wkSubst g) t)
 > substTy g (Qual p t)      = Qual (fmap (substTy g) p) (substTy g t)
-> substTy g Arr             = Arr
-> substTy g (TyInt i)       = TyInt i
-> substTy g (UnOp o)        = UnOp o
-> substTy g (BinOp o)       = BinOp o
+> substTy _ Arr             = Arr
+> substTy _ (TyInt i)       = TyInt i
+> substTy _ (UnOp o)        = UnOp o
+> substTy _ (BinOp o)       = BinOp o
 
 > replaceTy :: forall a k l. Var a k -> Ty a k -> Ty a l -> Ty a l
 > replaceTy a u = substTy f
@@ -344,8 +339,8 @@
 >     (TyInt 0, TyApp (TyApp (BinOp Minus) n') m')  -> mkP c m' n'
 >     (m', n')                                      -> mkP c m' n'
 >   where
->     mkP LE m (TyApp (TyApp (BinOp Minus) m') (TyInt 1)) = P LS m n
->     mkP c m n = P c m n
+>     mkP LE x (TyApp (TyApp (BinOp Minus) y) (TyInt 1)) = P LS x y
+>     mkP c' x y = P c' x y
 > simplifyPred (p :=> q) = simplifyPred p :=> simplifyPred q
 
 > simplifyNum :: Ty a KNum -> Ty a KNum
@@ -357,14 +352,14 @@
 >                                                         | otherwise  -> n' + TyInt (k+l)
 >     (Plus,   n',       m')       -> n' + m'
 >     (Times,  TyInt k,     TyInt l)     -> TyInt (k*l)
->     (Times,  TyInt 0,     m')          -> TyInt 0
+>     (Times,  TyInt 0,     _)          -> TyInt 0
 >     (Times,  TyInt 1,     m')          -> m'
 >     (Times,  TyInt (-1),  m')          -> negate m'
->     (Times,  n',          TyInt 0)     -> TyInt 0
+>     (Times,  _,           TyInt 0)     -> TyInt 0
 >     (Times,  n',          TyInt 1)     -> n'
 >     (Times,  n',          TyInt (-1))  -> negate n'
 >     (Times,  n',          m')          -> n' * m'
->     (o,      n',          m')          -> TyApp (TyApp (BinOp o) n') m'
+>     (_,      n',          m')          -> TyApp (TyApp (BinOp o) n') m'
 > simplifyNum t = t
 
 
@@ -392,9 +387,9 @@
 > elemsTy :: [Var a k] -> Ty a l -> Bool
 > elemsTy as (TyVar b)       = any (b =?=) as
 > elemsTy as (TyApp f s)     = elemsTy as f || elemsTy as s
-> elemsTy as (Bind b x k t)  = elemsTy (map wkVar as) t
+> elemsTy as (Bind _ _ _ t)  = elemsTy (map wkVar as) t
 > elemsTy as (Qual p t)      = elemsPred as p || elemsTy as t 
-> elemsTy as _               = False
+> elemsTy _  _               = False
 
 > elemTy :: Var a k -> Ty a l -> Bool
 > elemTy a t = elemsTy [a] t
@@ -402,7 +397,7 @@
 > elemTarget :: Var a k -> Ty a l -> Bool
 > elemTarget a (TyApp (TyApp Arr _) ty)  = elemTarget a ty
 > elemTarget a (Qual _ ty)               = elemTarget a ty
-> elemTarget a (Bind Pi x k ty)          = elemTarget (wkVar a) ty
+> elemTarget a (Bind Pi _ _ ty)          = elemTarget (wkVar a) ty
 > elemTarget a t                         = elemTy a t
 
 > elemsPred :: [Var a k] -> Pred (Ty a KNum) -> Bool
@@ -416,11 +411,11 @@
         
 > instance a ~ b => FV (Ty a k) b where
 >     fvFoldMap f (TyVar a)       = f a
->     fvFoldMap f (TyCon _ _)     = M.mempty
+>     fvFoldMap _ (TyCon _ _)     = M.mempty
 >     fvFoldMap f (TyApp t u)     = fvFoldMap f t <.> fvFoldMap f u
 >     fvFoldMap f (Bind _ _ _ t)  = fvFoldMap (wkF f M.mempty) t
 >     fvFoldMap f (Qual p t)      = fvFoldMap f p <.> fvFoldMap f t
->     fvFoldMap f Arr             = M.mempty
->     fvFoldMap f (TyInt _)       = M.mempty
->     fvFoldMap f (UnOp _)        = M.mempty
->     fvFoldMap f (BinOp _)       = M.mempty
+>     fvFoldMap _ Arr             = M.mempty
+>     fvFoldMap _ (TyInt _)       = M.mempty
+>     fvFoldMap _ (UnOp _)        = M.mempty
+>     fvFoldMap _ (BinOp _)       = M.mempty

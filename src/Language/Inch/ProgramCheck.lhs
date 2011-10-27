@@ -37,7 +37,7 @@
 >     return $ Mod mh is ds'
 >   where
 >     makeTyCon :: SDeclaration () -> Contextual ()
->     makeTyCon (DataDecl t k _ ds) = inLocation (text $ "in data type " ++ t) $
+>     makeTyCon (DataDecl t k _ _) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
@@ -46,9 +46,9 @@
 
 > checkDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkDecl (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $ 
->   unEx (kindKind k) $ \ k -> do
->     cs    <- traverse (checkConstructor t) cs
->     return [DataDecl t k cs ds]
+>   unEx (kindKind k) $ \ k' -> do
+>     cs'    <- traverse (checkConstructor t) cs
+>     return [DataDecl t k' cs' ds]
 > checkDecl d = do
 >   assertContextEmpty 
 >   ds <- checkInferFunDecl d
@@ -72,10 +72,10 @@
 > goGadtMangle :: Type KSet -> Contextual (Type KSet)
 > goGadtMangle ty = do
 >     (ty', vts) <- runWriterT $ makeEqGadtMangle [] ty
->     return $ foldr bindVar ty' (map fst vts)
+>     return $ foldr bindVarWrap ty' (map fst vts)
 >   where
->     bindVar :: Var () KNum -> Type KSet -> Type KSet
->     bindVar a = Bind All (fogVar a) KNum . bindTy a
+>     bindVarWrap :: Var () KNum -> Type KSet -> Type KSet
+>     bindVarWrap a = Bind All (fogVar a) KNum . bindTy a
 
 > makeEqGadtMangle :: [Ex (Var ())] -> Type KSet ->
 >     ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type KSet)
@@ -86,7 +86,7 @@
 >   where
 >     makeEq :: (Var () KNum, Maybe TypeNum) -> Type KSet -> Type KSet
 >     makeEq (a, Just n)   = Qual (TyVar a %==% n)
->     makeEq (a, Nothing)  = id
+>     makeEq (_, Nothing)  = id
 
 > gadtMangle :: [Ex (Var ())] -> Type k ->
 >     ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type k)
@@ -102,7 +102,7 @@
 > gadtMangle as (TyApp (TyApp Arr s) t) =
 >     TyApp (TyApp Arr s) <$> gadtMangle as t
 
-> gadtMangle as (TyApp f s) = help as (TyApp f s)
+> gadtMangle xs (TyApp f s) = help xs (TyApp f s)
 >   where
 >     isAllBound :: [Ex (Var ())] -> Type k -> Either String [Ex (Var ())]
 >     isAllBound as (TyVar a)
@@ -112,10 +112,11 @@
 
 >     help :: [Ex (Var ())] -> Type k ->
 >                 ContextualWriter [(Var () KNum, Maybe TypeNum)] (Type k)
->     help as (TyCon c k) = pure $ TyCon c k
->     help as (TyApp f s) = do
->         (s', as') <- warp as s
->         TyApp <$> help as' f <*> pure s'
+>     help _  (TyCon c k) = pure $ TyCon c k
+>     help as (TyApp g t) = do
+>         (t', as') <- warp as t
+>         TyApp <$> help as' g <*> pure t'
+>     help _ t = error $ "gadtMangle.help: malformed type " ++ show t
 
 >     warp :: [Ex (Var ())] -> Type k ->
 >                 ContextualWriter [(Var () KNum, Maybe TypeNum)]
@@ -128,4 +129,4 @@
 >             return (TyVar a, as)
 >         (Left _, _) -> erk "Non-numeric GADT"
 
-> gadtMangle as t = pure t
+> gadtMangle _ t = pure t

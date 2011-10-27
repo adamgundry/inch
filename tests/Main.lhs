@@ -35,14 +35,14 @@
 
 > roundTrip :: String -> Either String String
 > roundTrip s = case parseModule "roundTrip" s of
->     Right mod  ->
->         let s' = renderMe mod in
+>     Right md  ->
+>         let s' = renderMe md in
 >         case parseModule "roundTrip2" s' of
->             Right mod'
->               | mod == mod'  -> Right $ renderMe mod'
+>             Right md'
+>               | md == md'  -> Right $ renderMe md'
 >               | otherwise      -> Left $ "Round trip mismatch:"
->                     ++ "\n" ++ s' ++ "\n" ++ renderMe mod'
->                     ++ "\n" ++ show mod ++ "\n" ++ show mod'
+>                     ++ "\n" ++ s' ++ "\n" ++ renderMe md'
+>                     ++ "\n" ++ show md ++ "\n" ++ show md'
 >                     -- ++ "\n" ++ show prog ++ "\n" ++ show prog'
 >             Left err -> Left $ "Round trip re-parse:\n"
 >                                    ++ s' ++ "\n" ++ show err
@@ -50,27 +50,27 @@
 
 > parseCheck :: (String, Bool) -> Either String String
 > parseCheck (s, b) = case parseModule "parseCheck" s of
->     Right mod   -> case evalStateT (checkModule mod) initialState of
->         Right mod'
+>     Right md   -> case evalStateT (checkModule md) initialState of
+>         Right md'
 >             | b          -> Right $ "Accepted good program:\n"
->                                     ++ renderMe (fog mod') ++ "\n"
+>                                     ++ renderMe (fog md') ++ "\n"
 >             | otherwise  -> Left $ "Accepted bad program:\n"
->                                     ++ renderMe (fog mod') ++ "\n"
+>                                     ++ renderMe (fog md') ++ "\n"
 >         Left err
 >             | b          -> Left $ "Rejected good program:\n"
->                             ++ renderMe mod ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ renderMe md ++ "\n" ++ renderMe err ++ "\n"
 >             | otherwise  -> Right $ "Rejected bad program:\n"
->                             ++ renderMe mod ++ "\n" ++ renderMe err ++ "\n"
+>                             ++ renderMe md ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
 > eraseCheck :: String -> Either String String
 > eraseCheck s = case parseModule "eraseCheck" s of
->     Right mod   -> case runStateT (checkModule mod) initialState of
->         Right (mod', st) -> case evalStateT (eraseModule mod') st of
->             Right mod'' -> case evalStateT (checkModule (fog mod'')) initialState of
->                 Right mod''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog mod''')) of
->                     Right mod'''' -> Right $ "Erased program:\n" ++ renderMe mod''''
->                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog mod''') ++ "\n" ++ show err
+>     Right md   -> case runStateT (checkModule md) initialState of
+>         Right (md', st) -> case evalStateT (eraseModule md') st of
+>             Right md'' -> case evalStateT (checkModule (fog md'')) initialState of
+>                 Right md''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog md''')) of
+>                     Right md'''' -> Right $ "Erased program:\n" ++ renderMe md''''
+>                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog md''') ++ "\n" ++ show err
 >                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
 

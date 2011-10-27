@@ -109,8 +109,10 @@
 > kindKind SKNum       = Ex KNum
 > kindKind SKNat       = Ex KNum
 > kindKind (k :--> l)  = case (kindKind k, kindKind l) of
->                            (Ex k, Ex l) -> Ex (k :-> l)
+>                            (Ex k', Ex l') -> Ex (k' :-> l')
 
+> kindCod :: Kind (k :-> l) -> Kind l
+> kindCod (_ :-> l) = l
 
 
 
@@ -207,12 +209,12 @@
 
 > wkF :: (forall k . Var a k -> t) -> t -> Var (a, l) k' -> t
 > wkF f _ (FVar a k)      = f (FVar a k)
-> wkF f t (BVar Top)      = t
+> wkF _ t (BVar Top)      = t
 > wkF f _ (BVar (Pop y))  = f (BVar y)
 
 
 > withBVar :: (BVar a k -> BVar b k) -> Var a k -> Var b k
-> withBVar f (FVar a k)  = FVar a k
+> withBVar _ (FVar a k)  = FVar a k
 > withBVar f (BVar x)    = BVar (f x)
 
 > wkVar :: Var a k -> Var (a, l) k
@@ -220,7 +222,7 @@
 
 > wkRenaming :: (Var a k -> Var b k) -> Var (a, l) k -> Var (b, l) k
 > wkRenaming g (FVar a k)      = wkVar . g $ FVar a k
-> wkRenaming g (BVar Top)      = BVar Top
+> wkRenaming _ (BVar Top)      = BVar Top
 > wkRenaming g (BVar (Pop x))  = wkVar . g $ BVar x
 
 > bindVar :: Var a k -> Var a l -> Var (a, k) l
@@ -228,8 +230,8 @@
 
 > unbindVar :: Var a k -> Var (a, k) l -> Var a l 
 > unbindVar v (BVar Top)      = v
-> unbindVar v (BVar (Pop x))  = BVar x
-> unbindVar v (FVar a k)      = FVar a k
+> unbindVar _ (BVar (Pop x))  = BVar x
+> unbindVar _ (FVar a k)      = FVar a k
 
 > wkClosedVar :: Var () k -> Var a k
 > wkClosedVar (FVar a k)  = FVar a k

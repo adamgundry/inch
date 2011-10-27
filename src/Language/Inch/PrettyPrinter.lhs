@@ -46,6 +46,7 @@
 > renderMe :: Pretty a => a -> String
 > renderMe x = renderStyle style{ribbonsPerLine=1.2, lineLength=80} (prettyHigh x)
 
+> (<++>) :: Doc -> Doc -> Doc
 > d1 <++> d2 = sep [d1, nest 2 d2]
 > infix 2 <++>
 
@@ -129,7 +130,7 @@
 > prettyQual ps t = wrapDoc ArrSize $
 >     prettyPreds (trail ps) <+> text "=>" <++> pretty t ArrSize
 >   where
->     prettyPreds ps = hsep (punctuate (text ",") (map prettyHigh ps))
+>     prettyPreds xs = hsep (punctuate (text ",") (map prettyHigh xs))
 
 
 > instance Pretty (STerm a) where
@@ -163,7 +164,7 @@
 
 
 > parenCommaList :: Doc -> [String] -> Doc
-> parenCommaList d [] = empty
+> parenCommaList _ [] = empty
 > parenCommaList d xs = d <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
@@ -194,7 +195,8 @@
 >             vcat (map prettyHigh cs) $$ derivingClause ds
 >       where
 >         derivingClause []  = empty
->         derivingClause ds  = text "deriving" <+> parens (hsep (punctuate  (text ",") (map text ds)))
+>         derivingClause xs  = text "deriving" <+>
+>                                parens (hsep (punctuate  (text ",") (map text xs)))
 >     pretty (FunDecl n ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
 >     pretty (SigDecl n ty) _ = text n <+> text "::" <+> prettyHigh ty
 
@@ -224,8 +226,8 @@
 
 
 > instance Pretty (SPatternList a b) where
->     pretty P0 z = empty
->     pretty (p :! ps) z = pretty p z <+> pretty ps z
+>     pretty P0         _  = empty
+>     pretty (p :! ps)  z  = pretty p z <+> pretty ps z
 
 > instance Pretty (SPattern a b) where
 >     pretty (PatVar x)    = const $ text x
@@ -262,6 +264,11 @@
 >     pretty bs _ = fsep $ punctuate (text ",") $ map prettyHigh $ Data.Foldable.foldr (:) [] bs
 
 
+> fsepPretty :: Pretty a => [a] -> Doc
 > fsepPretty xs  = fsep . punctuate (text ",") . map prettyHigh $ xs
+
+> vcatSpacePretty :: Pretty a => [a] -> Doc
 > vcatSpacePretty xs  = vcat . intersperse (text " ") . map prettyHigh $ xs
+
+> vcatPretty :: Pretty a => [a] -> Doc
 > vcatPretty xs  = vcat . map prettyHigh $ xs

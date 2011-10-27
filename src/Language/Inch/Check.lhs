@@ -7,6 +7,7 @@
 > import Control.Monad
 > import Data.Monoid
 > import Data.Foldable
+> import Control.Monad.State
 
 > import Language.Inch.BwdFwd
 > import Language.Inch.Context
@@ -20,9 +21,10 @@
 
 Set this to True in order to verify the context regularly:
 
+> paranoid :: Bool
 > paranoid = False
 
-
+> traceContext :: MonadState ZipState m => String -> m ()
 > traceContext s = getContext >>= \ g -> mtrace (s ++ "\n" ++ renderMe g)
 
 > defines :: Context -> Var () k -> Bool

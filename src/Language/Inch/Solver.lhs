@@ -67,9 +67,9 @@
 >                         ([Var () KNum], [Predicate], [Predicate])
 >     collectHyps B0 vs hs ps = (vs, hs, ps)
 >     collectHyps (g :< Constraint Given h) vs hs ps = collectHyps g vs (h:hs) ps
->     collectHyps (g :< A e@(a@(FVar _ KNum) := Some d)) vs hs ps =
+>     collectHyps (g :< A (a@(FVar _ KNum) := Some d)) vs hs ps =
 >         collectHyps g vs (subsPreds a d hs) (subsPreds a d ps)
->     collectHyps (g :< A e@(a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
+>     collectHyps (g :< A (a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
 >         collectHyps g (a:vs) hs ps
 >     collectHyps (g :< _) vs hs ps = collectHyps g vs hs ps
 
@@ -124,63 +124,63 @@
 
 >     elimEquations :: [Var () KNum] -> [Predicate] -> Predicate ->
 >                          ([Var () KNum], [Predicate], Predicate)
->     elimEquations xs hs p = help xs [] hs p
+>     elimEquations xs ys q = help [] ys q
 >       where
->         help :: [Var () KNum] -> [Predicate] -> [Predicate] -> Predicate ->
+>         help :: [Predicate] -> [Predicate] -> Predicate ->
 >                     ([Var () KNum], [Predicate], Predicate)
->         help xs ohs []      p = (xs, ohs, p)
->         help xs ohs (h@(P EL m n):hs) p = case solveForAny (normaliseNum (n - m)) of
->             Just (a, t)  -> help xs [] (map (fmap (replaceTy a t')) (hs ++ ohs))
+>         help ohs []      p = (xs, ohs, p)
+>         help ohs (h@(P EL m n):rs) p = case solveForAny (normaliseNum (n - m)) of
+>             Just (a, t)  -> help [] (map (fmap (replaceTy a t')) (rs ++ ohs))
 >                                 (fmap (replaceTy a t') p)
 >               where t' = reifyNum t
->             Nothing      -> help xs (h:ohs) hs p
->         help xs ohs (h:hs) p = help xs (h:ohs) hs p
+>             Nothing      -> help (h:ohs) rs p
+>         help ohs (h:rs) p = help (h:ohs) rs p
 
 
 > toFormula :: [Var () KNum] -> [NormalPredicate] -> NormalPredicate -> P.Formula
-> toFormula vs hs p = 
+> toFormula xs ys px = 
 
 <  trace (unlines ["toFormula", "[" ++ intercalate "," (map fogSysVar vs) ++ "]","[" ++ intercalate "," (map (renderMe . fogSysPred . reifyPred) hs) ++ "]","(" ++ renderMe (fogSysPred $ reifyPred p) ++ ")"]) $
 
->   case trivialPred p of
+>   case trivialPred px of
 >     Just True   -> TRUE
 >     Just False  -> FALSE
->     Nothing -- | null hs && isSimple p  -> FALSE
->             | p `elem` hs            -> TRUE
->     Nothing     -> let r = convert vs []
+>     Nothing -- | null ys && isSimple p  -> FALSE
+>             | px `elem` ys            -> TRUE
+>     Nothing     -> let r = convert xs []
 >                    in {- trace ("result: " ++ show r) -} r
 >                   
 >   where
 >     convert :: [Var () KNum] -> [(Var () KNum, P.Term)] -> P.Formula
->     convert []      axs = gogo axs hs Map.empty $ \ hs' mts' ->
->                              predToFormula False axs p mts' $ \ p' mts'' ->
+>     convert []      axs = gogo axs ys Map.empty $ \ hs' mts' ->
+>                              predToFormula axs px mts' $ \ p' _ ->
 >                                  hs' :=>: p'
 >     convert (v:vs)  axs = P.Forall (\ t -> convert vs ((v, t) : axs))
                 
 >     gogo :: [(Var () KNum, P.Term)] -> [NormalPredicate] -> Map Monomial P.Term ->
 >                 (P.Formula -> Map Monomial P.Term -> P.Formula) -> P.Formula
->     gogo axs []      mts f = f TRUE mts
->     gogo axs (h:hs)  mts f = predToFormula True axs h mts $ \ h' mts' ->
+>     gogo _   []      mts f = f TRUE mts
+>     gogo axs (h:hs)  mts f = predToFormula axs h mts $ \ h' mts' ->
 >                                  gogo axs hs mts' (\ x -> f (h' :/\: x))
 
->     predToFormula :: Bool -> [(Var () KNum, P.Term)] -> NormalPredicate ->
+>     predToFormula :: [(Var () KNum, P.Term)] -> NormalPredicate ->
 >                          Map Monomial P.Term ->
 >                          (P.Formula -> Map Monomial P.Term -> P.Formula) -> P.Formula
->     predToFormula hyp axs (P c m n) mts f  = linearise axs m mts $ \ m' mts' ->
+>     predToFormula axs (P c m n) mts f  = linearise axs m mts $ \ m' mts' ->
 >                                                linearise axs n mts' $ \ n' mts'' ->
 >                                                  f (compToFormula c m' n') mts''
->     predToFormula hyp axs (p :=> q) mts f  = predToFormula (error "xyzzy") axs p mts $ 
->         \ p' mts' -> predToFormula hyp axs q mts' $ \ q' mts'' -> f (p' :=>: q') mts''
+>     predToFormula axs (p :=> q) mts f  = predToFormula axs p mts $ 
+>         \ p' mts' -> predToFormula axs q mts' $ \ q' mts'' -> f (p' :=>: q') mts''
 
 >     linearise ::  [(Var () KNum, P.Term)] -> NormalNum ->
 >                     Map Monomial P.Term ->
 >                     (P.Term -> Map Monomial P.Term -> P.Formula) -> P.Formula
->     linearise axs n mts f = help 0 (Map.toList (elimNN n)) mts
+>     linearise axs zs ms f = help 0 (Map.toList (elimNN zs)) ms
 >       where
 >         help :: P.Term -> [(Monomial, Integer)] ->
 >                     Map Monomial P.Term -> P.Formula
 >         help t []            mts = f t mts
->         help t ((ys, k):ks)  mts = case getLinearMono ys of
+>         help t ((fs, k):ks)  mts = case getLinearMono fs of
 >             Just (Left ())           -> help (t + fromInteger k) ks mts
 >             Just (Right (VarFac a))  -> help (t + k .* fromJust (lookup a axs)) ks mts
 >             Just (Right (UnFac o `AppFac` m)) | Just lo <- linUnOp o ->
@@ -192,9 +192,9 @@
 >                      linearise axs n mts' $ \ n' mts'' ->
 >                          P.Exists $ \ y ->
 >                              lo m' n' y :/\: help (t + k .* y) ks mts''        
->             _ -> case Map.lookup ys mts of
+>             _ -> case Map.lookup fs mts of
 >                 Just n   -> help (t + k .* n) ks mts    
->                 Nothing  -> P.Forall (\ y -> help (t + k .* y) ks (Map.insert ys y mts))
+>                 Nothing  -> P.Forall (\ y -> help (t + k .* y) ks (Map.insert fs y mts))
 
 >     linUnOp :: UnOp -> Maybe (P.Term -> P.Term -> P.Formula)
 >     linUnOp Abs = Just $ \ m y -> ((m :=: y) :/\: (m :>=: 0))

@@ -81,6 +81,35 @@
 > throw :: (E.MonadError ErrorData m) => Err -> m a
 > throw e = E.throwError (e, [] :: [Doc])
 
+> missingTyVar, missingNumVar, missingTyCon, missingTmVar, missingTmCon
+>     :: E.MonadError ErrorData m => String -> m a
+> errKindTarget, errKindNotSet, errKindNotArrow
+>     :: E.MonadError ErrorData m => SKind -> m a
+> errKindMismatch
+>     :: E.MonadError ErrorData m => SType ::: SKind -> SKind -> m a
+> errConstructorTarget
+>     :: E.MonadError ErrorData m => SType -> m a
+> errConUnderapplied
+>     :: E.MonadError ErrorData m => TmConName -> Int -> Int -> m a
+> errDuplicateTyCon, errDuplicateTmCon, errDuplicateTmVar
+>      :: E.MonadError ErrorData m => String -> m a
+> errNonNumericVar
+>     :: E.MonadError ErrorData m => Var () k -> m a
+> errCannotUnify
+>     :: E.MonadError ErrorData m => SType -> SType -> m a
+> errUnifyFixed
+>     :: E.MonadError ErrorData m => Var () k -> Type l -> m a
+> errUnifyNumFixed
+>     :: E.MonadError ErrorData m => Var () KNum -> Type KNum -> m a
+> errCannotDeduce
+>     :: E.MonadError ErrorData m => [Predicate] -> [Predicate] -> m a
+> errBadExistential
+>     :: E.MonadError ErrorData m => Var () k -> Type l -> m a
+> errImpossiblePred
+>     :: E.MonadError ErrorData m => Predicate -> m a
+> errBadBindingLevel
+>     :: E.MonadError ErrorData m => Var () KNum -> m a
+
 > missingTyVar a            = throw (MissingTyVar a)
 > missingNumVar a           = throw (MissingNumVar a)
 > missingTyCon a            = throw (MissingTyCon a)

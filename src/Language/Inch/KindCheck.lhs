@@ -18,24 +18,24 @@
 
 > wrapForall :: [String] -> SType -> SType
 > wrapForall _ t@(SBind All _ _ _) = t
-> wrapForall bs t = Set.fold (\ x t -> SBind All x SKSet t) t (collectUnbound bs t)
+> wrapForall xs t = Set.fold (\ x y -> SBind All x SKSet y) t (collectUnbound xs t)
 >   where
 >     collectUnbound :: [String] -> SType -> Set String
 >     collectUnbound bs (STyVar s) | s `elem` bs  = Set.empty
 >                                  | otherwise    = Set.singleton s
->     collectUnbound bs (STyCon _)       = Set.empty
+>     collectUnbound _ (STyCon _)       = Set.empty
 >     collectUnbound bs (STyApp f s)     = collectUnbound bs f `Set.union` collectUnbound bs s
->     collectUnbound bs SArr             = Set.empty
->     collectUnbound bs (STyInt _)       = Set.empty
->     collectUnbound bs (SUnOp _)        = Set.empty
->     collectUnbound bs (SBinOp _)       = Set.empty
->     collectUnbound bs (SBind _ b _ t)  = collectUnbound (b:bs) t
->     collectUnbound bs (SQual p t)      = foldMap (collectUnbound bs) p `Set.union` collectUnbound bs t
+>     collectUnbound _ SArr             = Set.empty
+>     collectUnbound _ (STyInt _)       = Set.empty
+>     collectUnbound _ (SUnOp _)        = Set.empty
+>     collectUnbound _ (SBinOp _)       = Set.empty
+>     collectUnbound bs (SBind _ b _ u)  = collectUnbound (b:bs) u
+>     collectUnbound bs (SQual p u)      = foldMap (collectUnbound bs) p `Set.union` collectUnbound bs u
 
 
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind
 > inferKind b g (STyVar x)   = (\ (Ex v) -> TK (TyVar v) (varKind v)) <$> lookupTyVar b g x
-> inferKind b g (STyCon c)   = (\ (Ex k) -> TK (TyCon c k) k) <$> lookupTyCon c
+> inferKind _ _ (STyCon c)   = (\ (Ex k) -> TK (TyCon c k) k) <$> lookupTyCon c
 > inferKind b g (STyApp f s)  = do
 >     TK f' k  <- inferKind b g f
 >     case k of
@@ -46,10 +46,10 @@
 >                 (errKindMismatch (s ::: fogKind l) (fogKind k1))
 >             
 >         _ -> errKindNotArrow (fogKind k)
-> inferKind b g SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
-> inferKind b g (STyInt i)   = return $ TK (TyInt i) KNum
-> inferKind b g (SUnOp o)    = return $ TK (UnOp o) (KNum :-> KNum)
-> inferKind b g (SBinOp o)   = return $ TK (BinOp o) (KNum :-> KNum :-> KNum)
+> inferKind _ _ SArr         = return $ TK Arr (KSet :-> KSet :-> KSet)
+> inferKind _ _ (STyInt i)   = return $ TK (TyInt i) KNum
+> inferKind _ _ (SUnOp o)    = return $ TK (UnOp o) (KNum :-> KNum)
+> inferKind _ _ (SBinOp o)   = return $ TK (BinOp o) (KNum :-> KNum :-> KNum)
 > inferKind b g (SBind c a SKNat t)  = do
 >     v <- freshVar (UserVar All) a KNum
 >     TK ty l <- inferKind b (g :< Ex v) t
@@ -57,11 +57,11 @@
 >         KSet  -> return $ TK (Bind c a KNum (bindTy v (Qual (P LE 0 (TyVar v)) ty))) KSet
 >         _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind b g (SBind c a k t)  = case kindKind k of
->     Ex k -> do
->         v <- freshVar (UserVar All) a k
+>     Ex k' -> do
+>         v <- freshVar (UserVar All) a k'
 >         TK ty l <- inferKind b (g :< Ex v) t
 >         case l of
->             KSet  -> return $ TK (Bind c a k (bindTy v ty)) KSet
+>             KSet  -> return $ TK (Bind c a k' (bindTy v ty)) KSet
 >             _     -> erk "inferKind: forall/pi must have kind *"
 > inferKind b g (SQual p t) = do
 >     p' <- checkPredKind b g p
@@ -70,10 +70,10 @@
 
 > checkNumKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual (Type KNum)
 > checkNumKind b g t = do
->   TK t k <- inferKind b g t
+>   TK t' k <- inferKind b g t
 >   case k of
->     KNum -> return t
->     _ -> erk "checkNumKind: ill-kinded!"
+>     KNum  -> return t'
+>     _     -> erk "checkNumKind: ill-kinded!"
 
 > checkPredKind :: Binder -> Bwd (Ex (Var ())) -> SPredicate -> Contextual Predicate
 > checkPredKind b g = traverse (checkNumKind b g)

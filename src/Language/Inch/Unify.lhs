@@ -62,11 +62,9 @@
 > replace = return . Replace
 
 > ext :: Entry -> Extension -> Contextual ()
-> ext xD (Replace _Xi)  = modifyContext (<>< _Xi)
+> ext _  (Replace _Xi)  = modifyContext (<>< _Xi)
 > ext xD Restore        = modifyContext (:< xD)
 
-
-> var k a = TyVar (FVar a k)
 
 
 > unifyList :: KindI k => [Type k] -> Contextual (Type k)
@@ -156,10 +154,10 @@
 
 > rigidHull as t | KNum <- getTyKind t = makeFlex as t
 
-> rigidHull as (TyVar a)    = return (TyVar a, F0)
-> rigidHull as (TyCon c k)  = return (TyCon c k, F0)
-> rigidHull as Arr          = return (Arr, F0)
-> rigidHull as (BinOp o)    = return (BinOp o, F0)
+> rigidHull _  (TyVar a)    = return (TyVar a, F0)
+> rigidHull _  (TyCon c k)  = return (TyCon c k, F0)
+> rigidHull _  Arr          = return (Arr, F0)
+> rigidHull _  (BinOp o)    = return (BinOp o, F0)
 
 > rigidHull as (TyApp f s)  = do  (f',  xs  )  <- rigidHull as f
 >                                 (s',  ys  )  <- rigidHull as s
@@ -167,8 +165,8 @@
 
 > rigidHull as (Bind b x KNum t) = do
 >     v <- freshVar SysVar "_magical" KNum
->     (t, cs) <- rigidHull (v:as) (unbindTy v t)
->     return (Bind b x KNum (bindTy v t), cs)
+>     (t', cs) <- rigidHull (v:as) (unbindTy v t)
+>     return (Bind b x KNum (bindTy v t'), cs)
 
 > rigidHull as (Bind All x k b) | not (k =?= KNum) = do
 >     v <- freshVar SysVar "_magic" k
@@ -177,9 +175,9 @@
 
 This is wrong, I think:
 
-> rigidHull as (Qual p t) = (\ (t, cs) -> (Qual p t, cs)) <$> rigidHull as t
+> rigidHull as (Qual p t) = (\ (u, cs) -> (Qual p u, cs)) <$> rigidHull as t
 
-> rigidHull as b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
+> rigidHull _ b = erk $ "rigidHull can't cope with " ++ renderMe (fogSysTy b)
 
 
 

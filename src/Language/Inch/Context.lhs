@@ -57,11 +57,11 @@
 
 The |withLayerExtract| function takes two boolean parameters: |stop|
 indicates whether the layer should stop numeric unification
-constraints, and |drop| indicates whether hypotheses should be dropped
+constraints, and |forget| indicates whether hypotheses should be dropped
 when the layer is extracted.
 
 > withLayerExtract :: Bool -> Bool -> TmLayer -> (TmLayer -> a) -> Contextual t -> Contextual (t, a)
-> withLayerExtract stop drop l f m = do
+> withLayerExtract stop forget l f m = do
 >     modifyContext (:< Layer l stop)
 >     t <- m
 >     (g, a) <- extract <$> getContext
@@ -70,13 +70,13 @@ when the layer is extracted.
 >   where
 >     extract (g :< Layer l' z) | matchLayer l l'  = (g, f l')
 >                               | otherwise        = error $ "withLayerExtract: wrong layer in " ++ renderMe (g :< Layer l' z) ++ " (looking for " ++ renderMe l ++ ")"
->     extract (g :< Constraint Given _) | drop = extract g
+>     extract (g :< Constraint Given _) | forget = extract g
 >     extract (g :< e)                         = (g' :< e, a)
 >       where (g', a) = extract g
 >     extract B0 = error $ "withLayerExtract: ran out of context"
 
 > withLayer :: Bool -> Bool -> TmLayer -> Contextual t -> Contextual t
-> withLayer stop drop l m = fst <$> withLayerExtract stop drop l (const ()) m
+> withLayer stop forget l m = fst <$> withLayerExtract stop forget l (const ()) m
 
 
 
@@ -89,7 +89,7 @@ when the layer is extracted.
 
 > instance FV (TyDef k) () where
 >     fvFoldMap f (Some t)  = fvFoldMap f t
->     fvFoldMap f _         = mempty
+>     fvFoldMap _ _         = mempty
 
 > instance Pretty (TyDef k) where
 >   pretty Hole      _ = text "?"
@@ -157,58 +157,66 @@ when the layer is extracted.
 
 Initial state
 
+> tyInteger, tyBool, tyOrdering, tyUnit, tyChar, tyString :: Ty a KSet
 > tyInteger     = TyCon "Integer" KSet
 > tyBool        = TyCon "Bool" KSet
 > tyOrdering    = TyCon "Ordering" KSet
-> tyMaybe       = TyApp (TyCon "Maybe" (KSet :-> KSet))
-> tyEither a b  = TyApp (TyApp (TyCon "Either" (KSet :-> KSet :-> KSet)) a) b
-> tyList        = TyApp (TyCon listTypeName (KSet :-> KSet))
 > tyUnit        = TyCon unitTypeName KSet
-> tyTuple       = TyApp . TyApp (TyCon tupleTypeName (KSet :-> KSet :-> KSet))
 > tyChar        = TyCon "Char" KSet
 > tyString      = tyList tyChar
 
+> tyMaybe, tyList :: Ty a KSet -> Ty a KSet
+> tyMaybe       = TyApp (TyCon "Maybe" (KSet :-> KSet))
+> tyList        = TyApp (TyCon listTypeName (KSet :-> KSet))
+
+> tyEither, tyTuple :: Ty a KSet -> Ty a KSet -> Ty a KSet
+> tyEither a b  = TyApp (TyApp (TyCon "Either" (KSet :-> KSet :-> KSet)) a) b
+> tyTuple       = TyApp . TyApp (TyCon tupleTypeName (KSet :-> KSet :-> KSet))
+
+
+> initialState :: ZipState
 > initialState = St 0 B0 initTyCons initTmCons initBindings
-> initTyCons = Map.fromList $
->   ("Bool",        Ex KSet) :
->   ("Integer",     Ex KSet) :
->   ("String",      Ex KSet) :
->   ("Maybe",       Ex (KSet :-> KSet)) :
->   ("Ordering",    Ex KSet) :
->   ("Either",      Ex (KSet :-> KSet :-> KSet)) :
->   (listTypeName,  Ex (KSet :-> KSet)) :
->   (unitTypeName,  Ex KSet) :
->   (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
->   ("Char",        Ex KSet) :
->   []
-> initTmCons = Map.fromList $
->   ("True",     tyBool) :
->   ("False",    tyBool) :
->   ("Nothing",  Bind All "a" KSet (tyMaybe (TyVar (BVar Top)))) :
->   ("Just",     Bind All "a" KSet
->                    (TyVar (BVar Top) --> (tyMaybe (TyVar (BVar Top))))) :
->   ("LT",       tyOrdering) :
->   ("EQ",       tyOrdering) :
->   ("GT",       tyOrdering) :
->   ("Left",     Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
->   ("Right",    Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar Top) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
->   (listNilName,   Bind All "a" KSet (tyList (TyVar (BVar Top)))) :
->   (listConsName,  Bind All "a" KSet (TyVar (BVar Top) --> tyList (TyVar (BVar Top)) --> tyList (TyVar (BVar Top)))) :
->   (unitConsName,  tyUnit) :
->   (tupleConsName, Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top) --> tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
->   []
-> initBindings = Map.fromList $
->   ("undefined",  (Just (Bind All "a" KSet (TyVar (BVar Top))), True)) :
->   ("id",         (Just (Bind All "a" KSet 
->                           (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
->   ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
->   ("otherwise",  (Just tyBool, True)) :
->   ("not",        (Just (tyBool --> tyBool), True)) :
->   ("error",      (Just (Bind All "a" KSet (tyString --> TyVar (BVar Top))), True)) :
->   ("fst",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar (Pop Top))))), True)) :
->   ("snd",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar Top)))), True)) :
->   ("unsafeCoerce",  (Just (Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top)))), True)) :
->   []
+>   where
+>     initTyCons = Map.fromList $
+>       ("Bool",        Ex KSet) :
+>       ("Integer",     Ex KSet) :
+>       ("String",      Ex KSet) :
+>       ("Maybe",       Ex (KSet :-> KSet)) :
+>       ("Ordering",    Ex KSet) :
+>       ("Either",      Ex (KSet :-> KSet :-> KSet)) :
+>       (listTypeName,  Ex (KSet :-> KSet)) :
+>       (unitTypeName,  Ex KSet) :
+>       (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
+>       ("Char",        Ex KSet) :
+>       []
+>     initTmCons = Map.fromList $
+>       ("True",     tyBool) :
+>       ("False",    tyBool) :
+>       ("Nothing",  Bind All "a" KSet (tyMaybe (TyVar (BVar Top)))) :
+>       ("Just",     Bind All "a" KSet
+>                        (TyVar (BVar Top) --> (tyMaybe (TyVar (BVar Top))))) :
+>       ("LT",       tyOrdering) :
+>       ("EQ",       tyOrdering) :
+>       ("GT",       tyOrdering) :
+>       ("Left",     Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
+>       ("Right",    Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar Top) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
+>       (listNilName,   Bind All "a" KSet (tyList (TyVar (BVar Top)))) :
+>       (listConsName,  Bind All "a" KSet (TyVar (BVar Top) --> tyList (TyVar (BVar Top)) --> tyList (TyVar (BVar Top)))) :
+>       (unitConsName,  tyUnit) :
+>       (tupleConsName, Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top) --> tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
+>       []
+>     initBindings = Map.fromList $
+>       ("undefined",  (Just (Bind All "a" KSet (TyVar (BVar Top))), True)) :
+>       ("id",         (Just (Bind All "a" KSet 
+>                               (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
+>       ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
+>       ("otherwise",  (Just tyBool, True)) :
+>       ("not",        (Just (tyBool --> tyBool), True)) :
+>       ("error",      (Just (Bind All "a" KSet (tyString --> TyVar (BVar Top))), True)) :
+>       ("fst",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar (Pop Top))))), True)) :
+>       ("snd",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar Top)))), True)) :
+>       ("unsafeCoerce",  (Just (Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top)))), True)) :
+>       []
 
 
 
@@ -305,6 +313,8 @@ Bindings
 >     Just (Nothing, _)  -> erk "Mutual recursion requires explicit signatures"
 >     Nothing            -> missingTmVar x
 
+> insertBindingIn :: MonadError ErrorData m =>
+>                    String -> a -> Map.Map String a -> m (Map.Map String a)
 > insertBindingIn x ty bs = do
 >     when (Map.member x bs) $ errDuplicateTmVar x
 >     return $ Map.insert x ty bs
@@ -328,13 +338,12 @@ Bindings
 > updateTopBinding x ty = modifyTopBindings (return . Map.insert x ty)
 
 
-
-
-
+> lookupBinding :: (MonadError ErrorData m, MonadState ZipState m, Alternative m) =>
+>                      TmName -> m (Term () ::: Sigma, Bool)
 > lookupBinding x = help =<< getContext
 >   where
 >     help B0                               = lookupTopBinding x
->     help (g :< Layer (LetBindings bs) _)  = lookupBindingIn x bs
+>     help (_ :< Layer (LetBindings bs) _)  = lookupBindingIn x bs
 >     help (g :< _)                         = help g
 
 > modifyBindings :: (Bindings -> Contextual Bindings) -> Contextual ()
@@ -347,6 +356,7 @@ Bindings
 >         putContext $ (g :< Layer (LetBindings bs') z) <><< h
 >     help (g :< e) h = help g (e:h)
 
+> insertBinding, updateBinding :: TmName -> (Maybe Sigma, Bool) -> Contextual ()
 > insertBinding x ty = modifyBindings $ insertBindingIn x ty
 > updateBinding x ty = modifyBindings $ return . Map.insert x ty
 
@@ -405,7 +415,7 @@ Bindings
 > lookupTyVar b B0 x = getContext >>= seek
 >   where
 >     seek B0 = missingTyVar x
->     seek (g :< A (a := _)) | varNameEq a x = checkBinder b a >> return (Ex a)
+>     seek (_ :< A (a := _)) | varNameEq a x = checkBinder b a >> return (Ex a)
 >     seek (g :< _) = seek g
 
 > checkBinder :: (MonadState ZipState m, MonadError ErrorData m) =>
@@ -422,7 +432,7 @@ Bindings
 > lookupTmVar x = getContext >>= seek
 >   where
 >     seek B0 = fst <$> lookupTopBinding x
->     seek (g :< Layer (LamBody (y ::: ty)) _)
+>     seek (_ :< Layer (LamBody (y ::: ty)) _)
 >         | x == y = return $ TmVar y ::: ty
 >     seek (g :< Layer (LetBody bs) _)   = (fst <$> lookupBindingIn x bs) <|> seek g
 >     seek (g :< Layer (LetBindings bs) _)  = (fst <$> lookupBindingIn x bs) <|> seek g

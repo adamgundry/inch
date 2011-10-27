@@ -74,8 +74,8 @@
 >     hetEq (VarFac a)    (VarFac b)    yes no = hetEq a b yes no
 >     hetEq (AppFac f m)  (AppFac g n)  yes no | m == n = hetEq f g yes no
 >     hetEq (AptFac f s)  (AptFac g t)  yes no = hetEq f g (hetEq s t yes no) no
->     hetEq (UnFac o)     (UnFac o')    yes no | o == o' = yes
->     hetEq (BinFac o)    (BinFac o')   yes no | o == o' = yes
+>     hetEq (UnFac o)     (UnFac o')    yes _ | o == o' = yes
+>     hetEq (BinFac o)    (BinFac o')   yes _ | o == o' = yes
 >     hetEq _             _             _   no = no
 
 > instance Eq (Fac a k) where
@@ -105,8 +105,8 @@
 >     fvFoldMap f (VarFac a)    = f a
 >     fvFoldMap f (AppFac t m)  = fvFoldMap f t <.> fvFoldMap f m
 >     fvFoldMap f (AptFac t s)  = fvFoldMap f t <.> fvFoldMap f s
->     fvFoldMap f (UnFac _)     = mempty
->     fvFoldMap f (BinFac _)    = mempty
+>     fvFoldMap _ (UnFac _)     = mempty
+>     fvFoldMap _ (BinFac _)    = mempty
 
 > singleFac :: Fac a KNum -> NormNum a
 > singleFac x = singleMono (Map.singleton x 1)
@@ -178,7 +178,7 @@
 >         isMono         = m == monoVar a
 >         t              = NN . dropZeroes $ Map.map q zs
 >         q x            = x `quot` (-k)
->         n `divides` m  = m `mod` n == 0
+>         x `divides` y  = y `mod` x == 0
 >     _ -> Stuck
 
 > maybeSolveFor :: Var () KNum -> NormalNum -> Maybe NormalNum
@@ -279,7 +279,7 @@
 >     factorise (TyApp f s)  = case getTyKind s of
 >                                  KNum  -> factorise f `AppFac` normaliseNum s
 >                                  _     -> factorise f `AptFac` s
->     factorise t = error $ "normaliseNum: can't factorise " ++ show t
+>     factorise x = error $ "normaliseNum: can't factorise " ++ show x
 >
 >     facToNum :: Factor KNum -> NormalNum
 >     facToNum (UnFac o `AppFac` m)              = nunOp o m
@@ -312,7 +312,7 @@
 >             foo (x, k) t | Map.null x  = t * (m ^ k)
 >                          | otherwise   = t * (singleFac (BinFac Pow `AppFac` m `AppFac` singleMono x) ^ k)
 
->         (o,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
+>         (_,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
 >         (Plus,   _,        _)       -> NN $ unionMaps (elimNN m) (elimNN n)
 >         (Minus,  _,        _)       -> NN $ unionMaps (elimNN m) (Map.map negate $ elimNN n)
 >         (Times,  Just i,   _)       -> i *~ n

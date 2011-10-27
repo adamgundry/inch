@@ -25,9 +25,9 @@
 
 
 > willErase :: Kind k -> Bool
-> willErase KSet = False
-> willErase KNum = True
-> willErase (k :-> l) = willErase l
+> willErase KSet       = False
+> willErase KNum       = True
+> willErase (_ :-> l)  = willErase l
 
 > eraseType :: Type k -> Contextual (Ex Kind, TyKind)
 > eraseType (TyVar (FVar a k))    = 
@@ -43,20 +43,20 @@
 >         (Ex k, TK f' kf) <- eraseType f
 >         case (k, kf) of
 >             (k' :-> l, _) | willErase k'  -> return (Ex l, TK f' kf)
->             (k' :-> l, k'' :-> l'')    -> do
+>             (_ :-> l, k'' :-> l'')    -> do
 >                 (_, TK s' ks) <- eraseType s
 >                 hetEq k'' ks (return (Ex l, TK (TyApp f' s') l''))
 >                             (erk "Kind mismatch")
 >             _ -> error "eraseType: ill-kinded application"
 > eraseType Arr = return $ (Ex (KSet :-> KSet :-> KSet),
 >                           TK Arr (KSet :-> KSet :-> KSet))
-> eraseType (Bind Pi x KNum t)   = do
+> eraseType (Bind Pi _ KNum t)   = do
 >     (Ex KSet, TK t' KSet) <- eraseType $ unbindTy (error "eraseType: erk") t
 >     return (Ex KSet, TK (insertNumArrow t') KSet)
 >   where
 >     insertNumArrow :: Ty a KSet -> Ty a KSet
->     insertNumArrow (Bind All x k t) = Bind All x k (insertNumArrow t)
->     insertNumArrow t = tyInteger --> t
+>     insertNumArrow (Bind All x k t') = Bind All x k (insertNumArrow t')
+>     insertNumArrow t' = tyInteger --> t'
 > eraseType (Bind All x k t)        = 
 >     case eraseKind k of
 >         Just (Ex k') -> do
@@ -64,13 +64,14 @@
 >             (ek, TK t' KSet) <- eraseType (unbindTy an t)
 >             return (ek, TK (Bind All x k' (bindTy (FVar (varName an) k') t')) KSet)
 >         Nothing -> eraseType $ unbindTy (error "eraseType: erk") t
-> eraseType (Qual p t) = eraseType t
+> eraseType (Qual _ t) = eraseType t
 
 > eraseType t = error $ "eraseType: illegal type " ++ show t
 
+> eraseToSet :: Type k -> Contextual (Type KSet)
 > eraseToSet t = do
->     (_, TK t KSet) <- eraseType t
->     return t
+>     (_, TK t' KSet) <- eraseType t
+>     return t'
 
 
 > eraseTm :: Term () -> Contextual (Term ())
@@ -91,9 +92,9 @@
 > eraseTm (Let ds t)   = Let <$> traverse eraseDecl ds <*> eraseTm t
 > eraseTm (Case t as)  = Case <$> eraseTm t <*> traverse eraseCaseAlt as
 > eraseTm (t :? ty)    = do
->     t <- eraseTm t
->     ty <- eraseToSet ty
->     return $ t :? ty
+>     t' <- eraseTm t
+>     ty' <- eraseToSet ty
+>     return $ t' :? ty'
 
 > numToTm :: Type KNum -> Term ()
 > numToTm (TyVar x)  = TmVar . fogVar $ x
@@ -160,8 +161,8 @@
 > eraseDecl (DataDecl s k cs ds) =
 >     case eraseKind k of
 >         Just (Ex k') -> do
->             cs <- traverse eraseCon cs
->             return $ DataDecl s k' cs ds
+>             cs' <- traverse eraseCon cs
+>             return $ DataDecl s k' cs' ds
 >         Nothing -> error $ "eraseType: failed to erase kind " ++ show k
 > eraseDecl (FunDecl x ps) =
 >     FunDecl x <$> traverse eraseAlt ps

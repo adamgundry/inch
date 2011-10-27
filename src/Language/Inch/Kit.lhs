@@ -30,8 +30,8 @@
 
 
 > hetElem :: HetEq t => t a -> [t b] -> Bool
-> hetElem x [] = False
-> hetElem x (y:ys) = x =?= y || hetElem x ys
+> hetElem _ []      = False
+> hetElem x (y:ys)  = x =?= y || hetElem x ys
 
 > class HetOrd t where
 >     (<?=) :: t a -> t b -> Bool
@@ -57,7 +57,7 @@
 >             | otherwise  = return b
 
 > wk :: Applicative f => (a -> f b) -> (S a -> f (S b))
-> wk g Z      = pure Z
+> wk _ Z      = pure Z
 > wk g (S a)  = fmap S (g a)
 
 
@@ -65,8 +65,8 @@ Really we want g to be a pointed functor!
 
 > wkwk :: (Applicative f, Functor g) =>
 >     (S b -> g (S b)) -> (a -> f (g b)) -> (S a -> f (g (S b)))
-> wkwk p g Z      = pure $ p Z
-> wkwk p g (S a)  = fmap S <$> g a
+> wkwk p _ Z      = pure $ p Z
+> wkwk _ g (S a)  = fmap S <$> g a
 
 
 > data a :=   b  = a :=   b

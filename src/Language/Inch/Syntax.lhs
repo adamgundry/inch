@@ -16,13 +16,16 @@
 > import Language.Inch.Type
 
 
+> listTypeName, listNilName, listConsName :: String
 > listTypeName  = "([])"
 > listNilName   = "[]"
 > listConsName  = "(:)"
 
+> unitTypeName, unitConsName :: String
 > unitTypeName = "()"
 > unitConsName = "()"
 
+> tupleTypeName, tupleConsName :: String
 > tupleTypeName = "(,)"
 > tupleConsName = "(,)"
 
@@ -89,15 +92,10 @@
 > replaceTypes :: TravTypes t => Var () k -> Type k -> t OK a -> t OK a
 > replaceTypes a t = mapTypes (replaceTy (wkClosedVar a) (wkClosedTy t))
 
-> {-
-> elemsTypes :: TravTypes t => [Var () k] -> t OK a -> Bool
-> elemsTypes as t = getAny $ getConst $ travTypes (Const . Any . (as <<?)) t
-
-> elemTypes :: TravTypes t => Var () k -> t OK a -> Bool
-> elemTypes a t = elemsTypes [a] t
-> -}
-
+> bindTm :: TravTypes t => Var a k -> t OK a -> t OK (a, k)
 > bindTm v = renameTypes (bindVar v)
+
+> unbindTm :: TravTypes t => Var c k -> t OK (c, k) -> t OK c
 > unbindTm v = renameTypes (unbindVar v)
 
 > fog :: TravTypes t => t OK () -> t RAW ()
@@ -201,13 +199,13 @@
 >     travTypes g (Let ds t)   = Let <$> traverse (travTypes g) ds
 >                                    <*> travTypes g t
 >     travTypes g (t :? ty)    = (:?) <$> travTypes g t <*> g ty
->     travTypes g t            = pure t
+>     travTypes _ t            = pure t
 
->     fogTypes g (TmVar x)     = TmVar x
->     fogTypes g (TmCon c)     = TmCon c
->     fogTypes g (TmInt k)     = TmInt k
->     fogTypes g (CharLit c)   = CharLit c
->     fogTypes g (StrLit s)    = StrLit s
+>     fogTypes _ (TmVar x)     = TmVar x
+>     fogTypes _ (TmCon c)     = TmCon c
+>     fogTypes _ (TmInt k)     = TmInt k
+>     fogTypes _ (CharLit c)   = CharLit c
+>     fogTypes _ (StrLit s)    = StrLit s
 >     fogTypes g (TmApp f s)   = TmApp (fogTypes g f) (fogTypes g s)
 >     fogTypes g (TmBrace n)   = TmBrace (fogTy' g [] n)
 >     fogTypes g (Lam x b)     = Lam x (fogTypes g b)
@@ -216,15 +214,15 @@
 >                                    (fogTypes g t)
 >     fogTypes g (Case t as)   = Case (fogTypes g t) (map (fogTypes g) as)
 >     fogTypes g (t :? ty)     = fogTypes g t :? fogTy' g [] ty
->     fogTypes g (TmUnOp o)    = TmUnOp o
->     fogTypes g (TmBinOp o)   = TmBinOp o
->     fogTypes g (TmComp c)    = TmComp c
+>     fogTypes _ (TmUnOp o)    = TmUnOp o
+>     fogTypes _ (TmBinOp o)   = TmBinOp o
+>     fogTypes _ (TmComp c)    = TmComp c
 
->     renameTypes g (TmVar x)     = TmVar x
->     renameTypes g (TmCon c)     = TmCon c
->     renameTypes g (TmInt k)     = TmInt k
->     renameTypes g (CharLit c)   = CharLit c
->     renameTypes g (StrLit s)    = StrLit s
+>     renameTypes _ (TmVar x)     = TmVar x
+>     renameTypes _ (TmCon c)     = TmCon c
+>     renameTypes _ (TmInt k)     = TmInt k
+>     renameTypes _ (CharLit c)   = CharLit c
+>     renameTypes _ (StrLit s)    = StrLit s
 >     renameTypes g (TmApp f s)   = TmApp (renameTypes g f) (renameTypes g s)
 >     renameTypes g (TmBrace n)   = TmBrace (renameTy g n)
 >     renameTypes g (Lam x b)     = Lam x (renameTypes g b)
@@ -233,19 +231,20 @@
 >                                    (renameTypes g t)
 >     renameTypes g (Case t as)   = Case (renameTypes g t) (map (renameTypes g) as)
 >     renameTypes g (t :? ty)     = renameTypes g t :? renameTy g ty
->     renameTypes g (TmUnOp o)    = TmUnOp o
->     renameTypes g (TmBinOp o)   = TmBinOp o
->     renameTypes g (TmComp c)    = TmComp c
+>     renameTypes _ (TmUnOp o)    = TmUnOp o
+>     renameTypes _ (TmBinOp o)   = TmBinOp o
+>     renameTypes _ (TmComp c)    = TmComp c
 
 > instance a ~ b => FV (Tm OK a) b where
 >     fvFoldMap g (TmApp f s)   = fvFoldMap g f <.> fvFoldMap g s
 >     fvFoldMap g (TmBrace n)   = fvFoldMap g n
->     fvFoldMap g (Lam x b)     = fvFoldMap g b
->     fvFoldMap g (NumLam a b)  = fvFoldMap (wkF g mempty) b 
+>     fvFoldMap g (Lam _ b)     = fvFoldMap g b
+>     fvFoldMap g (NumLam _ b)  = fvFoldMap (wkF g mempty) b 
 >     fvFoldMap g (Let ds t)    = fvFoldMap g ds <.> fvFoldMap g t
 >     fvFoldMap g (t :? ty)     = fvFoldMap g t <.> fvFoldMap g ty
->     fvFoldMap g _             = mempty
+>     fvFoldMap _ _             = mempty
 
+> tmBinOp :: BinOp -> Tm s a -> Tm s a -> Tm s a
 > tmBinOp t m n = TmBinOp t `TmApp` m `TmApp` n
 
 
@@ -262,19 +261,19 @@
 > instance TravTypes Decl where
 
 >     travTypes g (DataDecl x k cs ds) =
->         DataDecl x k <$> traverse (\ (x ::: t) -> (x :::) <$> g t) cs <*> pure ds
+>         DataDecl x k <$> traverse (\ (y ::: t) -> (y :::) <$> g t) cs <*> pure ds
 >     travTypes g (FunDecl x ps) =
 >         FunDecl x <$> traverse (travTypes g) ps
 >     travTypes g (SigDecl x ty) = SigDecl x <$> g ty
 
 >     fogTypes g (DataDecl x k cs ds) = DataDecl x (fogKind k)
->         (map (\ (x ::: t) -> x ::: fogTy' g [] t) cs)
+>         (map (\ (y ::: t) -> y ::: fogTy' g [] t) cs)
 >         ds
 >     fogTypes g (FunDecl x ps)  = FunDecl x (map (fogTypes g) ps)
 >     fogTypes g (SigDecl x ty)  = SigDecl x (fogTy' g [] ty)
 
 >     renameTypes g (DataDecl x k cs ds) = DataDecl x k
->         (map (\ (x ::: t) -> x ::: renameTy g t) cs)
+>         (map (\ (y ::: t) -> y ::: renameTy g t) cs)
 >         ds
 >     renameTypes g (FunDecl x ps)  = FunDecl x (map (renameTypes g) ps)
 >     renameTypes g (SigDecl x ty)  = SigDecl x (renameTy g ty) 
@@ -327,8 +326,9 @@
 >                    Var b k -> Var d k
 > extRenaming _         ecd       g (FVar a k)      = extVar ecd $ g (FVar a k)
 > extRenaming E0        E0        g (BVar v)        = g (BVar v)
-> extRenaming (EC _)    (EC _)    g (BVar Top)      = BVar Top
+> extRenaming (EC _)    (EC _)    _ (BVar Top)      = BVar Top
 > extRenaming (EC eab)  (EC ecd)  g (BVar (Pop v))  = wkVar $ extRenaming eab ecd g (BVar v)
+> extRenaming _ _ _ _ = error "extRenaming: invariant violation"
 
 > extExt :: Ext a b x -> (forall d y . Ext c d y -> p) -> p
 > extExt E0       q = q E0
@@ -447,7 +447,7 @@
 >             Var a k -> Ext a b x -> VarSuffix a b -> t OK a b ->
 >              (forall d . Ext (a, k) d x -> VarSuffix a d ->
 >                  t OK (a, k) d -> p) -> p
-> bindUn v ex vs t q = renameTypes2 (bindVar v) ex t $ \ ex' t' -> q ex' (error "bindUn") t'
+> bindUn v ex _ t q = renameTypes2 (bindVar v) ex t $ \ ex' t' -> q ex' (error "bindUn") t'
 
 
 
@@ -460,9 +460,9 @@
 > infixr 5 :!
 
 > instance HetEq (PatList RAW a) where
->     hetEq P0 P0 t f = t
->     hetEq (x :! xs) (y :! ys) t f = hetEq x y (hetEq xs ys t f) f
->     hetEq _ _ t f = f
+>     hetEq P0         P0         t _ = t
+>     hetEq (x :! xs)  (y :! ys)  t f = hetEq x y (hetEq xs ys t f) f
+>     hetEq _          _          _ f = f
 
 > instance TravTypes2 PatList where
 >     fogTypes2 g P0         = (P0, g)
@@ -470,13 +470,14 @@
 >       where  (p', g')    = fogTypes2 g p
 >              (ps', g'')  = fogTypes2 g' ps
 
->     renameTypes2 g E0 P0 q         = q E0 P0
->     renameTypes2 g eac (p :! ps) q  = extPat p $ \ eab ->
+>     renameTypes2 _ E0 P0 q         = q E0 P0
+>     renameTypes2 g _ (p :! ps) q  = extPat p $ \ eab ->
 >       extPatList ps $ \ ebc ->
 >         renameTypes2 g eab p $ \ eab' p' ->
 >             renameTypes2 (extRenaming eab eab' g) ebc ps $ \ ebc' ps' ->
 >                 extComp eab' ebc' $ \ eac' ->
 >                     q (unsafeCoerce eac') (p' :! ps')
+>     renameTypes2 _ (EC _) P0 _ = error "renameTypes2: impossible"
 
 > instance FV2 PatList a where
 >     fvFoldMap2 f P0 = (mempty, f)
@@ -501,14 +502,14 @@
 > deriving instance Show (Pat s a b)
 
 > instance HetEq (Pat RAW a) where
->     hetEq (PatVar x)      (PatVar y) t f      | x == y  = t
->     hetEq (PatCon c xs)   (PatCon d ys) t f   | c == d  = hetEq xs ys t f
->     hetEq PatIgnore       PatIgnore t f                 = t
->     hetEq (PatBrace _ j)  (PatBrace _ k) t f  | j == k  = t
->     hetEq (PatBraceK j)   (PatBraceK k) t f   | j == k  = t
->     hetEq (PatIntLit i)   (PatIntLit j) t f   | i == j  = t
->     hetEq (PatNPlusK n k) (PatNPlusK n' k') t f | n == n' && k == k' = t
->     hetEq _ _ _ f = f
+>     hetEq (PatVar x)       (PatVar y)         t _  | x == y  = t
+>     hetEq (PatCon c xs)    (PatCon d ys)      t f  | c == d  = hetEq xs ys t f
+>     hetEq PatIgnore        PatIgnore          t _  = t
+>     hetEq (PatBrace _ j)   (PatBrace _ k)     t _  | j == k  = t
+>     hetEq (PatBraceK j)    (PatBraceK k)      t _  | j == k  = t
+>     hetEq (PatIntLit i)    (PatIntLit j)      t _  | i == j  = t
+>     hetEq (PatNPlusK n k)  (PatNPlusK n' k')  t _  | n == n' && k == k' = t
+>     hetEq _                _                  _ f  = f
 
 > instance TravTypes2 Pat where
 >     fogTypes2 g (PatVar x)      = (PatVar x, g)
@@ -520,14 +521,15 @@
 >     fogTypes2 g (PatIntLit i)   = (PatIntLit i, g)
 >     fogTypes2 g (PatNPlusK n k) = (PatNPlusK n k, g)
 
->     renameTypes2 g E0       (PatVar x)      q = q E0 (PatVar x)
+>     renameTypes2 _ E0       (PatVar x)      q = q E0 (PatVar x)
 >     renameTypes2 g ex       (PatCon x ps)   q = renameTypes2 g ex ps
 >                                                     (\ ex' ps' -> q ex' (PatCon x ps'))
->     renameTypes2 g E0       PatIgnore       q = q E0 PatIgnore
->     renameTypes2 g (EC E0)  (PatBrace x k)  q = q (EC E0) (PatBrace x k)
->     renameTypes2 g E0       (PatBraceK k)   q = q E0 (PatBraceK k)
->     renameTypes2 g E0       (PatIntLit i)   q = q E0 (PatIntLit i)
->     renameTypes2 g E0       (PatNPlusK n k) q = q E0 (PatNPlusK n k)
+>     renameTypes2 _ E0       PatIgnore       q = q E0 PatIgnore
+>     renameTypes2 _ (EC E0)  (PatBrace x k)  q = q (EC E0) (PatBrace x k)
+>     renameTypes2 _ E0       (PatBraceK k)   q = q E0 (PatBraceK k)
+>     renameTypes2 _ E0       (PatIntLit i)   q = q E0 (PatIntLit i)
+>     renameTypes2 _ E0       (PatNPlusK n k) q = q E0 (PatNPlusK n k)
+>     renameTypes2 _ _        _               _ = error "renameTypes2: impossible"
 
 > instance FV2 Pat a where
 >     fvFoldMap2 f (PatVar _)      = (mempty, f)

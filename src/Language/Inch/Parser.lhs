@@ -1,3 +1,5 @@
+> {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+
 > module Language.Inch.Parser (parseModule) where
 
 > import Control.Applicative
@@ -35,21 +37,21 @@
 > natural        = IT.natural lexer
 > integer        = IT.integer lexer
 > symbol         = IT.symbol lexer
-> lexeme         = IT.lexeme lexer
 > whiteSpace     = IT.whiteSpace lexer
 > parens         = IT.parens lexer
 > braces         = IT.braces lexer
-> angles         = IT.angles lexer
 > brackets       = IT.brackets lexer
-> semi           = IT.semi lexer
-> comma          = IT.comma lexer
-> colon          = IT.colon lexer
 > dot            = IT.dot lexer
-> semiSep        = IT.semiSep lexer
-> semiSep1       = IT.semiSep1 lexer
 > commaSep       = IT.commaSep lexer
 > commaSep1      = IT.commaSep1 lexer
 
+< lexeme         = IT.lexeme lexer
+< angles         = IT.angles lexer
+< semi           = IT.semi lexer
+< comma          = IT.comma lexer
+< colon          = IT.colon lexer
+< semiSep        = IT.semiSep lexer
+< semiSep1       = IT.semiSep1 lexer
 
 > backticks p = reservedOp "`" *> p <* reservedOp "`"
 
@@ -67,19 +69,20 @@
 > isVar :: String -> Bool
 > isVar ('_':_:_)  = True
 > isVar (x:_)      = isLower x
+> isVar []         = error "isVar: empty"
 
 > isVarOp :: String -> Bool
 > isVarOp (':':_)  = False
 > isVarOp _        = True
 
-> identLike var desc = try $ do
+> identLike v desc = try $ do
 >     s <- identifier <?> desc
->     when (var /= isVar s) $ fail $ "expected " ++ desc
+>     when (v /= isVar s) $ fail $ "expected " ++ desc
 >     return s
 
-> opLike var desc = try $ do
+> opLike v desc = try $ do
 >     s <- operator <?> desc
->     when (var /= isVarOp s) $ fail $ "expected " ++ desc
+>     when (v /= isVarOp s) $ fail $ "expected " ++ desc
 >     return s
 
 
@@ -92,7 +95,8 @@
 > con     = conid <|> try (parens consym)
 > varop   = varsym <|> backticks varid
 > conop   = consym <|> backticks conid
-> op      = varop <|> conop
+
+< op      = varop <|> conop
 
 > gcon    =    reservedOp "()" *> return "()"
 >         <|>  reservedOp "[]" *> return "[]"
@@ -120,7 +124,6 @@ Types
 >              <|> try (reservedOp "()" >> return unitTypeName)
 > numVarName = identLike True "numeric type variable"
 > tyVar      = STyVar <$> tyVarName
-> numVar     = STyVar <$> numVarName
 > tyCon      = STyCon <$> tyConName
 > tyExp      = tyAll <|> tyPi <|> tyQual <|> tyExpArr
 > tyAll      = tyQuant "forall" (SBind All)
@@ -164,7 +167,8 @@ Types
 > binary   name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
 > sbinary  name fun assoc = Infix (do{ specialOp name; return fun }) assoc
 > prefix   name fun       = Prefix (do{ reservedOp name; return fun })
-> postfix  name fun       = Postfix (do{ reservedOp name; return fun })
+
+< postfix  name fun       = Postfix (do{ reservedOp name; return fun })
 
 
 > tyQuant q f = do
@@ -312,8 +316,10 @@ Modules
 >     joinFun :: [SDeclaration ()] -> SDeclaration ()
 >     joinFun [d] = d
 >     joinFun fs@(FunDecl x _ : _) = FunDecl x (join (map altsOf fs))
+>     joinFun _ = error "joinFun: impossible"
 
 >     altsOf (FunDecl _ as) = as
+>     altsOf _ = error "altsOf: impossible"
 
 > dataDecl = I.lineFold $ do
 >     try (reserved "data")
@@ -411,9 +417,3 @@ Modules
 >     return $ case ma of
 >         Just a   -> rawCoerce2 $ PatBrace a k
 >         Nothing  -> PatBraceK k
-
-
-> signature = I.lineFold $ do
->     s <- try $ var <* doubleColon
->     t <- tyExp
->     return (s, t)
