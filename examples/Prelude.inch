@@ -1,0 +1,88 @@
+subtract :: Integer -> (Integer -> Integer)
+even             :: Integer -> Bool
+odd              :: Integer -> Bool
+gcd              :: Integer -> Integer -> Integer
+lcm              :: Integer -> Integer -> Integer
+id :: a -> a
+const :: a -> (b -> a)
+flip :: (a -> (b -> c)) -> (b -> (a -> c))
+data Bool where
+  False :: Bool
+  True :: Bool
+  deriving (Eq, Ord, Enum, Read, Show, Bounded)
+not :: Bool -> Bool
+otherwise :: Bool
+data Maybe :: * -> * where
+  Nothing :: Maybe a
+  Just :: a -> Maybe a
+  deriving (Eq, Ord, Read, Show)
+maybe :: b -> ((a -> b) -> (Maybe a -> b))
+data Either :: * -> * -> * where
+  Left :: a -> Either a b
+  Right :: b -> Either a b
+  deriving (Eq, Ord, Read, Show)
+either :: (a -> c) -> ((b -> c) -> (Either a b -> c))
+data Ordering where
+  LT :: Ordering
+  EQ :: Ordering
+  GT :: Ordering
+  deriving (Eq, Ord, Enum, Read, Show, Bounded)
+numericEnumFrom :: Integer -> [Integer]
+numericEnumFromThen :: Integer -> (Integer -> [Integer])
+numericEnumFromTo       :: Integer -> Integer -> [Integer]
+numericEnumFromThenTo   :: Integer -> Integer -> Integer -> [Integer]
+fst :: (a, b) -> a
+snd :: (a, b) -> b
+curry :: ((a, b) -> c) -> (a -> (b -> c))
+uncurry :: (a -> (b -> c)) -> ((a, b) -> c)
+until :: (a -> Bool) -> ((a -> a) -> (a -> a))
+asTypeOf :: a -> (a -> a)
+error :: [Char] -> a
+undefined :: a
+map :: (a -> b) -> ([a] -> [b])
+filter :: (a -> Bool) -> ([a] -> [a])
+concat :: [[a]] -> [a]
+concatMap :: (a -> [b]) -> ([a] -> [b])
+head :: [a] -> a
+tail :: [a] -> [a]
+last :: [a] -> a
+init :: [a] -> [a]
+null :: [a] -> Bool
+length :: [a] -> Integer
+foldl :: (a -> (b -> a)) -> (a -> ([b] -> a))
+foldl1 :: (a -> (a -> a)) -> ([a] -> a)
+scanl :: (a -> (b -> a)) -> (a -> ([b] -> [a]))
+scanl1 :: (a -> (a -> a)) -> ([a] -> [a])
+foldr :: (a -> (b -> b)) -> (b -> ([a] -> b))
+foldr1 :: (a -> (a -> a)) -> ([a] -> a)
+scanr             :: (a -> b -> b) -> b -> [a] -> [b]
+scanr1          :: (a -> a -> a) -> [a] -> [a]
+iterate :: (a -> a) -> (a -> [a])
+repeat :: a -> [a]
+replicate :: Integer -> (a -> [a])
+cycle :: [a] -> [a]
+take :: Integer -> ([a] -> [a])
+drop :: Integer -> ([a] -> [a])
+splitAt :: Integer -> ([a] -> ([a], [a]))
+takeWhile :: (a -> Bool) -> ([a] -> [a])
+dropWhile               :: (a -> Bool) -> [a] -> [a]
+span                    :: (a -> Bool) -> [a] -> ([a],[a])
+break                   :: (a -> Bool) -> [a] -> ([a],[a])
+lines            :: [Char] -> [[Char]]
+words            :: [Char] -> [[Char]]
+unlines :: [[Char]] -> [Char]
+unwords :: [[Char]] -> [Char]
+reverse :: [a] -> [a]
+and :: [Bool] -> Bool
+or :: [Bool] -> Bool
+any :: (a -> Bool) -> ([a] -> Bool)
+all :: forall _s . (_s -> Bool) -> ([_s] -> Bool)
+sum :: [Integer] -> Integer
+product :: [Integer] -> Integer
+maximum :: [Integer] -> Integer
+minimum :: [Integer] -> Integer
+zip :: [a] -> ([b] -> [(a, b)])
+zipWith :: (a -> (b -> c)) -> ([a] -> ([b] -> [c]))
+zipWith3 :: (a -> (b -> (c -> d))) -> ([a] -> ([b] -> ([c] -> [d])))
+unzip            :: [(a,b)] -> ([a],[b])
+compare :: Integer -> Integer -> Ordering

@@ -12,11 +12,32 @@
 > import Language.Inch.PrettyPrinter
 > import Language.Inch.ProgramCheck
 > import Language.Inch.Erase
+> import Language.Inch.File (checkFile, readImports)
 
 > main :: IO ()
-> main = do
->   (_, no) <- checks "examples/"
->   if no > 0 then exitFailure else exitSuccess
+> main = checks "examples/"
+
+> checks :: FilePath -> IO ()
+> checks d = do
+>     fns <- sort . filter (".hs" `isSuffixOf`) <$> getDirectoryContents d
+>     mapM_ (check . (d ++)) fns
+
+> check :: FilePath -> IO ()
+> check fn = do
+>     putStrLn $ "TEST " ++ show fn
+>     s <- readFile fn
+>     (md, _) <- checkFile fn s 
+>     putStrLn $ renderMe (fog md)
+
+> erase :: FilePath -> IO ()
+> erase fn = do
+>     s <- readFile fn
+>     (md, st) <- checkFile fn s
+>     case evalStateT (eraseModule md) st of
+>         Right md'  -> putStrLn $ renderMe (fog md')
+>         Left err   -> putStrLn ("erase error:\n" ++ renderMe err) >> exitFailure
+
+
 
 
 > test :: (a -> String) -> (a -> Either String String)
@@ -34,8 +55,12 @@
 
 > roundTripTest, parseCheckTest, eraseCheckTest :: IO ()
 > roundTripTest  = void $ test id roundTrip roundTripTestData 0 0
-> parseCheckTest = void $ test fst parseCheck parseCheckTestData 0 0
-> eraseCheckTest = void $ test id eraseCheck (map fst . filter snd $ parseCheckTestData) 0 0
+> parseCheckTest = do
+>     ds <- readImports "examples/" []
+>     void $ test fst (parseCheck ds) parseCheckTestData 0 0
+> eraseCheckTest = do
+>     ds <- readImports "examples/" []
+>     void $ test id (eraseCheck ds) (map fst . filter snd $ parseCheckTestData) 0 0
 
 > roundTrip :: String -> Either String String
 > roundTrip s = case parseModule "roundTrip" s of
@@ -52,9 +77,9 @@
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> parseCheck :: (String, Bool) -> Either String String
-> parseCheck (s, b) = case parseModule "parseCheck" s of
->     Right md   -> case evalStateT (checkModule md) initialState of
+> parseCheck :: [SDeclaration ()] -> (String, Bool) -> Either String String
+> parseCheck ds (s, b) = case parseModule "parseCheck" s of
+>     Right md   -> case evalStateT (checkModule md ds) initialState of
 >         Right md'
 >             | b          -> Right $ "Accepted good program:\n"
 >                                     ++ renderMe (fog md') ++ "\n"
@@ -67,11 +92,11 @@
 >                             ++ renderMe md ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
-> eraseCheck :: String -> Either String String
-> eraseCheck s = case parseModule "eraseCheck" s of
->     Right md   -> case runStateT (checkModule md) initialState of
+> eraseCheck :: [SDeclaration ()] -> String -> Either String String
+> eraseCheck ds s = case parseModule "eraseCheck" s of
+>     Right md   -> case runStateT (checkModule md ds) initialState of
 >         Right (md', st) -> case evalStateT (eraseModule md') st of
->             Right md'' -> case evalStateT (checkModule (fog md'')) initialState of
+>             Right md'' -> case evalStateT (checkModule (fog md'') []) initialState of
 >                 Right md''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog md''')) of
 >                     Right md'''' -> Right $ "Erased program:\n" ++ renderMe md''''
 >                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog md''') ++ "\n" ++ show err
@@ -81,29 +106,6 @@
 >         Left err -> Right $ "Skipping rejected program:\n"
 >                             ++ s ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
-
-
-> check :: FilePath -> IO ()
-> check fn = do
->     s <- readFile fn
->     void $ test (const fn) parseCheck [(s, True)] 0 0
-
-> checkEx :: IO ()
-> checkEx = check "Example.hs"
-
-> checks :: FilePath -> IO (Int, Int)
-> checks d = do
->     fns <- filter (".hs" `isSuffixOf`) <$> getDirectoryContents d
->     fcs <- zip fns <$> mapM (readFile . (d ++)) fns
->     test fst (\ (_, c) -> parseCheck (c, True)) fcs 0 0
-
-> erase :: FilePath -> IO ()
-> erase fn = do
->     s <- readFile fn
->     void $ test (const fn) eraseCheck [s] 0 0
-
-> eraseEx :: IO ()
-> eraseEx = erase "Example.hs"
 
 
 > roundTripTestData :: [String]
@@ -271,19 +273,19 @@
 >   ("data Foo where Foo :: Foo\ndata Bar where Bar :: Bar\nf :: Bar -> Bar\nf Foo = Foo\nf Bar = Foo", False) :
 >   ("f :: forall a (n :: Num) . n ~ n => a -> a\nf x = x", True) :
 >   ("f :: forall a (n :: Num) . n ~ m => a -> a\nf x = x", False) :
->   (vecDecl ++ "head (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
->   (vecDecl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vecDecl ++ "vhead (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vecDecl ++ "vhead :: forall (n :: Num) a. Vec (1+n) a -> a\nvhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
->   (vecDecl ++ "tail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\ntail (Cons x xs) = xs", True) :
+>   (vecDecl ++ "vtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\nvtail (Cons x xs) = xs", True) :
 >   (vecDecl ++ "lie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
->   (vecDecl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x", True) :
+>   (vecDecl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x", True) :
 >   (vecDecl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x", True) :
 >   (vecDecl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x\nbad = silly (Cons Nil Nil)", False) :
->   (vecDecl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nwrong = head Nil", False) :
->   (vecDecl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nright = head (Cons Nil Nil)", True) :
->   (vecDecl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = tail (tail xs)", True) :
->   (vecDecl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails xs = tail (tail xs)", True) :
+>   (vecDecl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nwrong = vhead Nil", False) :
+>   (vecDecl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nright = vhead (Cons Nil Nil)", True) :
+>   (vecDecl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
+>   (vecDecl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails xs = vtail (vtail xs)", True) :
 >   (vecDecl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
 >   (vecDecl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vecDecl ++ "id2 :: forall a (n m :: Num) . Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
@@ -373,19 +375,19 @@
 >   ("x = 0\ny = x\nx = 1", False) : 
 >   ("x = y\ny :: Integer\ny = x", True) : 
 >   ("x :: forall (a :: * -> *) . a\nx = x", False) : 
->   (vec3Decl ++ "head (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
->   (vec3Decl ++ "head :: forall (n :: Num) a. Vec (1+n) a -> a\nhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
+>   (vec3Decl ++ "vhead (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
+>   (vec3Decl ++ "vhead :: forall (n :: Num) a. Vec (1+n) a -> a\nvhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
->   (vec3Decl ++ "tail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\ntail (Cons x xs) = xs", True) :
+>   (vec3Decl ++ "vtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\nvtail (Cons x xs) = xs", True) :
 >   (vec3Decl ++ "lie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
->   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x", True) :
+>   (vec3Decl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x", True) :
 >   (vec3Decl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x", True) :
 >   (vec3Decl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x\nbad = silly (Cons Nil Nil)", False) :
->   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nwrong = head Nil", False) :
->   (vec3Decl ++ "head :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nhead (Cons x xs) = x\nright = head (Cons Nil Nil)", True) :
->   (vec3Decl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = tail (tail xs)", True) :
->   (vec3Decl ++ "tail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\ntail (Cons x xs) = xs\ntwotails xs = tail (tail xs)", True) :
+>   (vec3Decl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nwrong = vhead Nil", False) :
+>   (vec3Decl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nright = vhead (Cons Nil Nil)", True) :
+>   (vec3Decl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
+>   (vec3Decl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails xs = vtail (vtail xs)", True) :
 >   (vec3Decl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
 >   (vec3Decl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vec3Decl ++ "id2 :: forall a (n m :: Num) . Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
@@ -493,7 +495,7 @@
 >   ("f () = ()\ng (x, y) = (y, x)", True) : 
 >   ("f () = ()\nf (x, y) = (y, x)", False) : 
 >   ("f xs = case xs of\n      [] -> []\n      y:ys -> y : f ys", True) :
->   ("scanl            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl f q xs     =  q : (case xs of\n                            []   -> []\n                            x:ys -> scanl f (f q x) ys\n                        )", True) :
+>   ("scanl'            :: (a -> b -> a) -> a -> [b] -> [a]\nscanl' f q xs     =  q : (case xs of\n                            []   -> []\n                            x:ys -> scanl' f (f q x) ys\n                        )", True) :
 >   ("a = \"hello\"", True) :
 >   ("b w = w : 'o' : 'r' : ['l', 'd']", True) :
 >   ("x = y\n  where y = 3", True) :

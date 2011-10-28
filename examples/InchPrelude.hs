@@ -3,7 +3,7 @@
 
 module InchPrelude where
 
-import Prelude hiding (subtract, const, flip, maybe, either, curry,
+import Prelude hiding (subtract, id, const, flip, maybe, either, curry,
                          uncurry, until, asTypeOf, map, filter,
                          concat, concatMap, head, tail, last, init,
                          null, length, foldl, foldl1, scanl, scanl1,
@@ -11,7 +11,8 @@ import Prelude hiding (subtract, const, flip, maybe, either, curry,
                          take, drop, splitAt, takeWhile, unlines,
                          unwords, reverse, and, or, any, all, sum,
                          product, maximum, minimum, zip, zipWith,
-                         zipWith3)
+                         zipWith3, numericEnumFrom, numericEnumFromThen,
+                         cycle, map, fst, snd, error, undefined)
 
 -- Numeric functions
 
@@ -54,10 +55,8 @@ x ^^ n           =  if n >= 0 then x^n else recip (x^(-n))
 
 -}
 
-
--- built in
-id'               :: a -> a
-id' x             =  x
+id               :: a -> a
+id x             =  x
 
 const            :: a -> b -> a
 const x _        =  x
@@ -165,13 +164,11 @@ data  [a]  =  [] | a : [a]  deriving (Eq, Ord)
 data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
 -}
 
--- built in
-fst'              :: (a,b) -> a
-fst' (x,y)        =  x
+fst              :: (a,b) -> a
+fst (x,y)        =  x
 
--- built in
-snd'              :: (a,b) -> b
-snd' (x,y)        =  y
+snd              :: (a,b) -> b
+snd (x,y)        =  y
 
 curry            :: ((a, b) -> c) -> a -> b -> c
 curry f x y      =  f (x, y)
@@ -187,18 +184,15 @@ until p f x
 asTypeOf         :: a -> a -> a
 asTypeOf         =  const
 
--- built in
-error'            :: [Char] -> a
-error'            =  error
+error            :: [Char] -> a
+error            =  error
 
--- built in
-undefined'        :: a
-undefined'        =  error "Prelude.undefined"
+undefined        :: a
+undefined        =  error "Prelude.undefined"
 
--- built in
-map' :: (a -> b) -> [a] -> [b]
-map' f []     = []
-map' f (x:xs) = f x : map' f xs
+map :: (a -> b) -> [a] -> [b]
+map f []     = []
+map f (x:xs) = f x : map f xs
 
 -- should be (++)
 append :: [a] -> [a] -> [a]

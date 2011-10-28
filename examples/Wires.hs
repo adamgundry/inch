@@ -4,19 +4,7 @@
 
 module Wires where
 
-data Vec :: Num -> * -> * where
-  VNil   :: Vec 0 a
-  VCons  :: forall (n :: Nat) a . a -> Vec n a -> Vec (n+1) a
-  deriving Show
-
-vhead :: forall a (m :: Num) . 0 < m => Vec m a -> a
-vhead (VCons x xs) = x
-
-rev :: forall a (m :: Nat) . Vec m a -> Vec m a
-rev = let revapp :: forall (n k :: Nat) . Vec n a -> Vec k a -> Vec (n+k) a
-          revapp xs VNil = xs
-          revapp xs (VCons y ys) = revapp (VCons y xs) ys
-      in revapp VNil
+import Vectors
 
 data Wire :: Num -> * -> Num -> * -> * where
   Stop  :: Wire 0 a 0 b
@@ -25,7 +13,7 @@ data Wire :: Num -> * -> Num -> * -> * where
   Ask   :: forall (m n :: Nat) a b .
                (a -> Wire m a n b) -> Wire (m+1) a n b
 
-run :: forall (m n :: Num) a b . Wire m a n b -> Vec m a -> Vec n b
+run :: forall (m n :: Num) a b . Wire m a n b -> Vec a m -> Vec b n
 run Stop       VNil          = VNil
 run (Say a p)  xs            = VCons a (run p xs)
 run (Ask f)    (VCons x xs)  = run (f x) xs
@@ -93,7 +81,7 @@ bind (Ask f)   g = Ask (\ x -> bind (f x) g)
 
 
 
-v2i :: forall (n :: Num) . Vec n Bool -> Integer
+v2i :: forall (n :: Num) . Vec Bool n -> Integer
 v2i VNil = 0
 v2i (VCons True xs) = 1 + (2 * (v2i xs))
 v2i (VCons False xs) = 2 * (v2i xs)
@@ -113,12 +101,12 @@ half {n+1}  f = let
 
 -- This needs 2^(x + y)  ~>  2^x * 2^y
 
-toBin' :: pi (m n :: Nat) . n < 2^m => Vec m Bool
+toBin' :: pi (m n :: Nat) . n < 2^m => Vec Bool m
 toBin' {0}   {n} = VNil
 toBin' {m+1} {n} = half {n} (\ {k} {r} -> VCons (odd' {r}) (toBin' {m} {k}))
 
-toBin :: pi (m n :: Nat) . n < 2^m => Vec m Bool
-toBin {m} {n} = rev (toBin' {m} {n})
+toBin :: pi (m n :: Nat) . n < 2^m => Vec Bool m
+toBin {m} {n} = vreverse (toBin' {m} {n})
 
 -- A real implementation of div/mod might be nice
 
@@ -132,7 +120,7 @@ divvy {n}    {d} f | {n >= d} =
 
 test :: forall (n :: Nat) . pi (m :: Nat) . Wire m Bool n Bool ->
             (pi (k :: Nat) . k < 2 ^ m => Integer)
-test {m} p {k} = v2i (rev (run p (toBin {m} {k})))
+test {m} p {k} = v2i (vreverse (run p (toBin {m} {k})))
 
 
 hadd :: Wire 2 Bool 2 Bool
@@ -146,21 +134,21 @@ fadd = pipe (sequ hadd wire)
             (sequ orGate wire))
   
 
-askVec :: forall a . pi (m :: Nat) . Wire m a 1 (Vec m a)
-askVec = let help :: forall a (k :: Nat) . Vec k a -> (pi (m :: Nat) . Wire m a 1 (Vec (m+k) a))
+askVec :: forall a . pi (m :: Nat) . Wire m a 1 (Vec a m)
+askVec = let help :: forall a (k :: Nat) . Vec a k -> (pi (m :: Nat) . Wire m a 1 (Vec a (m+k)))
              help xs {0}   = Say xs Stop
              help xs {m+1} = Ask (\ x -> help (VCons x xs) {m})
          in help VNil
 
-sayVec :: forall a b (k :: Num) . Vec k b -> Wire 0 a k b
+sayVec :: forall a b (k :: Num) . Vec b k -> Wire 0 a k b
 sayVec VNil          = Stop
 sayVec (VCons x xs)  = Say x (sayVec xs)
 
-bundle2 :: forall a. pi (m :: Nat) . Wire (2*m) a 2 (Vec m a)
+bundle2 :: forall a. pi (m :: Nat) . Wire (2*m) a 2 (Vec a m)
 bundle2 {m} = sequ (askVec {m}) (askVec {m})
 
-unbundle2 :: forall a . pi (m :: Nat) . Wire 2 (Vec m a) (2*m) a
-unbundle2 {m} = Ask (\ xs -> Ask (\ ys -> sequ (sayVec (rev xs)) (sayVec (rev ys))))
+unbundle2 :: forall a . pi (m :: Nat) . Wire 2 (Vec a m) (2*m) a
+unbundle2 {m} = Ask (\ xs -> Ask (\ ys -> sequ (sayVec (vreverse xs)) (sayVec (vreverse ys))))
 
 
 fizz = pipe (bundle2 {3}) (unbundle2 {3})
@@ -200,7 +188,7 @@ adder lem {m+1}  = ripple lem {m} (adder lem {m})
 btoc True   = '1'
 btoc False  = '0'
 
-vtol :: forall a (n :: Num) . Vec n a -> [a]
+vtol :: forall a (n :: Num) . Vec a n -> [a]
 vtol VNil          = []
 vtol (VCons x xs)  = x : vtol xs
 

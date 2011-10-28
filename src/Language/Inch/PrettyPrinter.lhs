@@ -177,15 +177,16 @@
 
 
 > instance Pretty Import where
->     pretty (Import q n as imp hid) _ = text "import"
+>     pretty (Import q n as imp) _ = text "import"
 >                                            <+> (if q then text "qualified" else empty)
 >                                            <+> text n
 >                                            <+> (maybe empty (\ s -> text "as" <+> text s) as)
->                                            <+> prettyImp imp
->                                            <+> parenCommaList (text "hiding") hid
->       where
->         prettyImp Nothing   = empty
->         prettyImp (Just xs) = parens (hsep (punctuate (text ",") (map text xs)))
+>                                            <+> prettyHigh imp
+
+> instance Pretty ImpSpec where
+>     pretty ImpAll          _ = empty
+>     pretty (Imp xs)        _ = parens (hsep (punctuate (text ",") (map text xs)))
+>     pretty (ImpHiding xs)  _ = text "hiding" <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
 > instance Pretty (SDeclaration a) where

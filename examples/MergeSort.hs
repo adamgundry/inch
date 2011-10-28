@@ -4,7 +4,7 @@
 
 module MergeSort where
 
-comp f g = \ x -> f (g x)
+comp f g x = f (g x)
 
 data Vec :: Num -> * -> * where
   Nil :: forall a. Vec 0 a

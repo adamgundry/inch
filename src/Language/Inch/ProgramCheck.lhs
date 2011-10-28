@@ -29,10 +29,13 @@
 >         B0  -> return ()
 >         _   -> traceContext "assertContextEmpty" >> erk "context is not empty"
 
-> checkModule :: SModule () -> Contextual (Module ())
-> checkModule (Mod mh is ds) = do
+> checkModule :: SModule () -> [SDeclaration ()] -> Contextual (Module ())
+> checkModule (Mod mh is ds) xs = do
+>     mapM_ makeTyCon xs
+>     mapM_ (makeBinding True) xs
+>     mapM_ checkDecl xs
 >     mapM_ makeTyCon ds
->     mapM_ makeBinding ds
+>     mapM_ (makeBinding False) ds
 >     ds' <- concat <$> traverse checkDecl ds
 >     return $ Mod mh is ds'
 >   where

@@ -26,8 +26,8 @@ k        = \ x y -> x
 s x y z  = x z (y z)
 i        = s k k 
 app f s  = f s
-comp f g = \ x -> f (g x)
 fix f    = f (fix f)
+comp     = \ f g x -> f (g x)
 flp      = \ f x y -> f y x
 
 -- Data types
@@ -507,13 +507,13 @@ listMap f (Cons x xs) = Cons (f x) (listMap f xs)
 listListAlmostMap = functorCompose listMap
 listListMap = listListAlmostMap listMap
 
-append :: forall a. List a -> List a -> List a
-append Nil ys = ys
-append (Cons x xs) ys = Cons x (append xs ys)
+lappend :: forall a. List a -> List a -> List a
+lappend Nil ys = ys
+lappend (Cons x xs) ys = Cons x (lappend xs ys)
 
 listConcat :: forall a. List (List a) -> List a
 listConcat Nil = Nil
-listConcat (Cons xs xss) = append xs (listConcat xss)
+listConcat (Cons xs xss) = lappend xs (listConcat xss)
 
 
 
@@ -588,7 +588,7 @@ runMove plus m =
                                    in (p, Nil)
       help q (Join m1 m2) = let x = help q m1
                                 y = help (fst x) m2
-                            in (fst y, append (snd y) (Cons (fst x) (snd x)))
+                            in (fst y, lappend (snd y) (Cons (fst x) (snd x)))
       x = help (0, 0) m
   in Cons (fst x) (snd x)
 

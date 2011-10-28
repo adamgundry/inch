@@ -178,45 +178,19 @@ Initial state
 > initialState = St 0 B0 initTyCons initTmCons initBindings
 >   where
 >     initTyCons = Map.fromList $
->       ("Bool",        Ex KSet) :
+>       ("Char",        Ex KSet) :
 >       ("Integer",     Ex KSet) :
->       ("String",      Ex KSet) :
->       ("Maybe",       Ex (KSet :-> KSet)) :
->       ("Ordering",    Ex KSet) :
->       ("Either",      Ex (KSet :-> KSet :-> KSet)) :
 >       (listTypeName,  Ex (KSet :-> KSet)) :
 >       (unitTypeName,  Ex KSet) :
 >       (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
->       ("Char",        Ex KSet) :
 >       []
 >     initTmCons = Map.fromList $
->       ("True",     tyBool) :
->       ("False",    tyBool) :
->       ("Nothing",  Bind All "a" KSet (tyMaybe (TyVar (BVar Top)))) :
->       ("Just",     Bind All "a" KSet
->                        (TyVar (BVar Top) --> (tyMaybe (TyVar (BVar Top))))) :
->       ("LT",       tyOrdering) :
->       ("EQ",       tyOrdering) :
->       ("GT",       tyOrdering) :
->       ("Left",     Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
->       ("Right",    Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar Top) --> tyEither (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
 >       (listNilName,   Bind All "a" KSet (tyList (TyVar (BVar Top)))) :
 >       (listConsName,  Bind All "a" KSet (TyVar (BVar Top) --> tyList (TyVar (BVar Top)) --> tyList (TyVar (BVar Top)))) :
 >       (unitConsName,  tyUnit) :
 >       (tupleConsName, Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top) --> tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top))))) :
 >       []
 >     initBindings = Map.fromList $
->       ("undefined",  (Just (Bind All "a" KSet (TyVar (BVar Top))), True)) :
->       ("id",         (Just (Bind All "a" KSet 
->                               (TyVar (BVar Top) --> TyVar (BVar Top))), True)) :
->       ("compare",    (Just (tyInteger --> tyInteger --> tyOrdering), True)) :
->       ("otherwise",  (Just tyBool, True)) :
->       ("not",        (Just (tyBool --> tyBool), True)) :
->       ("error",      (Just (Bind All "a" KSet (tyString --> TyVar (BVar Top))), True)) :
->       ("fst",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar (Pop Top))))), True)) :
->       ("snd",        (Just (Bind All "a" KSet (Bind All "b" KSet (tyTuple (TyVar (BVar (Pop Top))) (TyVar (BVar Top)) --> TyVar (BVar Top)))), True)) :
->       ("unsafeCoerce",  (Just (Bind All "a" KSet (Bind All "b" KSet (TyVar (BVar (Pop Top)) --> TyVar (BVar Top)))), True)) :
->       ("map",        (Just (Bind All "a" KSet (Bind All "b" KSet ((TyVar (BVar (Pop Top)) --> TyVar (BVar Top)) --> tyList (TyVar (BVar (Pop Top))) --> tyList (TyVar (BVar Top))))), True)) :
 >       []
 
 

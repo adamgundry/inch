@@ -148,8 +148,10 @@
 
 
 
-> data Mod s a where
->     Mod :: Maybe (String, [String]) -> [Import] -> [Decl s a] -> Mod s a
+> data Mod s a = Mod { modName :: Maybe (String, [String])
+>                    , modImports :: [Import]
+>                    , modDecls :: [Decl s a]
+>                    }
 
 > deriving instance Show (Mod RAW a)
 > deriving instance Eq (Mod RAW a)
@@ -162,11 +164,12 @@
 > data Import = Import  {  qualified   :: Bool
 >                       ,  importName  :: String
 >                       ,  asName      :: Maybe String
->                       ,  impSpec     :: Maybe [String]
->                       ,  hidingSpec  :: [String]
+>                       ,  impSpec     :: ImpSpec
 >                       }
 >   deriving (Eq, Show)
 
+> data ImpSpec = ImpAll | Imp [String] | ImpHiding [String]
+>   deriving (Eq, Show)
 
 
 > data Tm s a where
@@ -282,6 +285,11 @@
 >     fvFoldMap f (DataDecl _ _ cs _)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
 >     fvFoldMap f (FunDecl _ as)       = fvFoldMap f as
 >     fvFoldMap f (SigDecl _ t)        = fvFoldMap f t
+
+> declName :: Decl s a -> String
+> declName (DataDecl x _ _ _)  = x
+> declName (FunDecl x _)       = x
+> declName (SigDecl x _)       = x
 
 
 > data Grd s a where

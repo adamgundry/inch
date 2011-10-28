@@ -382,18 +382,18 @@ status.
 > checkLocalDecls :: [SDeclaration ()] -> Contextual ([Declaration ()], Bindings)
 > checkLocalDecls ds =
 >     withLayerExtract False False (LetBindings Map.empty) letBindings $ do
->         mapM_ makeBinding ds
+>         mapM_ (makeBinding False) ds
 >         Data.List.concat <$> traverse checkInferFunDecl ds  
 
-> makeBinding :: SDeclaration () -> Contextual ()
-> makeBinding (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
+> makeBinding :: Bool -> SDeclaration () -> Contextual ()
+> makeBinding defd (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
 >     bs <- tyVarNamesInScope
 >     TK ty' k <- inferKind All B0 (wrapForall bs ty)
 >     case k of
->         KSet  -> insertBinding x (Just ty', False)
+>         KSet  -> insertBinding x (Just ty', defd)
 >         _     -> errKindNotSet (fogKind k)
-> makeBinding (FunDecl _ _)       = return ()
-> makeBinding (DataDecl _ _ _ _)  = return ()
+> makeBinding _ (FunDecl _ _)       = return ()
+> makeBinding _ (DataDecl _ _ _ _)  = return ()
 
 > checkInferFunDecl :: SDeclaration () -> Contextual [Declaration ()]
 > checkInferFunDecl (FunDecl s []) =

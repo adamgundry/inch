@@ -1,6 +1,6 @@
 > {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 
-> module Language.Inch.Parser (parseModule) where
+> module Language.Inch.Parser (parseModule, parseInterface) where
 
 > import Control.Applicative
 > import Control.Monad
@@ -22,6 +22,8 @@
 > import Language.Inch.Kind hiding (kind)
 
 > parseModule = I.parse module_
+
+> parseInterface = I.parse interface
 
 > def = haskellDef { identStart = identStart haskellDef <|> char '_' 
 >                  , reservedNames = "_" : reservedNames haskellDef }
@@ -278,13 +280,18 @@ Terms
 >     wrapLam (Right s : ss)  t = NumLam s $ rawCoerce $ wrapLam ss t
 
 
+Interface files
+
+> interface = many (dataDecl <|> sigDecl)
+
+
 Modules
 
 > module_ = do
 >     whiteSpace
 >     _ <- optional (reserved "#line" >> integer >> stringLiteral)
 >     mh <- optional (reserved "module" *>
->                        ((,) <$> modName
+>                        ((,) <$> moduleName
 >                            <*> optionalList (parens (commaSep identifier)))
 >                     <* reserved "where")
 >     is <- many importStmt
@@ -295,13 +302,16 @@ Modules
 > importStmt = do
 >     reserved "import"
 >     q   <- isJust <$> optional (reserved "qualified")
->     n   <- modName
->     as  <- optional (reserved "as" *> modName)
->     im  <- optional (parens (commaSep identifier))
->     ex  <- optionalList (reserved "hiding" *> parens (commaSep identifier))
->     return $ Import q n as im ex
+>     n   <- moduleName
+>     as  <- optional (reserved "as" *> moduleName)
+>     im  <- importSpec
+>     return $ Import q n as im
 
-> modName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
+> importSpec =    Imp <$> parens (commaSep identifier)
+>            <|>  ImpHiding <$> (reserved "hiding" *> parens (commaSep identifier))
+>            <|>  pure ImpAll
+
+> moduleName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
 
 > topdecls  = associate <$> many (dataDecl <|> sigDecl <|> funDecl)
