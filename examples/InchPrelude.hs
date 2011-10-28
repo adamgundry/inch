@@ -3,16 +3,16 @@
 
 module InchPrelude where
 
-import Prelude hiding (subtract, id, const, flip, maybe, either, curry,
-                         uncurry, until, asTypeOf, map, filter,
+import Prelude hiding (subtract, id, const, flip, maybe, either,
+                         curry, uncurry, until, asTypeOf, map, filter,
                          concat, concatMap, head, tail, last, init,
                          null, length, foldl, foldl1, scanl, scanl1,
                          foldr, foldr1, iterate, repeat, replicate,
                          take, drop, splitAt, takeWhile, unlines,
                          unwords, reverse, and, or, any, all, sum,
                          product, maximum, minimum, zip, zipWith,
-                         zipWith3, numericEnumFrom, numericEnumFromThen,
-                         cycle, map, fst, snd, error, undefined)
+                         zipWith3, cycle, map, fst, snd, error,
+                         undefined)
 
 -- Numeric functions
 

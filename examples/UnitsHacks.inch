@@ -1,0 +1,5 @@
+plusRational  :: Rational -> Rational -> Rational
+minusRational :: Rational -> Rational -> Rational
+timesRational :: Rational -> Rational -> Rational
+recipRational :: Rational -> Rational
+powRational   :: Rational -> Integer -> Rational

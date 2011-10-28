@@ -27,10 +27,6 @@ data Ordering where
   EQ :: Ordering
   GT :: Ordering
   deriving (Eq, Ord, Enum, Read, Show, Bounded)
-numericEnumFrom :: Integer -> [Integer]
-numericEnumFromThen :: Integer -> (Integer -> [Integer])
-numericEnumFromTo       :: Integer -> Integer -> [Integer]
-numericEnumFromThenTo   :: Integer -> Integer -> Integer -> [Integer]
 fst :: (a, b) -> a
 snd :: (a, b) -> b
 curry :: ((a, b) -> c) -> (a -> (b -> c))
