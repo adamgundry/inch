@@ -1,27 +1,41 @@
 Name:                inch
 Version:             0.1
-Synopsis:            A type-checker for integer constraints in Haskell
+Synopsis:            A type-checker for Haskell with integer constraints
 Description:         
-    Inch is a type-checker for (a subset of) Haskell extended with
-    integer constraints, allowing you to use numbers at the type level.
-    After successfully type-checking a source file, it outputs an
-    operationally equivalent version with the type-level integers erased,
-    so it can be used as a preprocessor in order to compile programs.
+    Inch is a type-checker for a subset of Haskell (plus some GHC
+    extensions) with the addition of integer constraints. After
+    successfully type-checking a source file, it outputs an
+    operationally equivalent version with the type-level integers
+    erased, so it can be used as a preprocessor in order to compile
+    programs.
 
-Homepage:            http://personal.cis.strath.ac.uk/~adam/inch/
+Homepage:            https://github.com/adamgundry/inch/
+bug-reports:         https://github.com/adamgundry/inch/issues
 License:             BSD3
 License-file:        LICENSE
 Author:              Adam Gundry <adam.gundry@cis.strath.ac.uk>
 Maintainer:          Adam Gundry <adam.gundry@cis.strath.ac.uk>
-Copyright:           Copyright (c) 2011, Adam Gundry
+Copyright:           Copyright (c) 2011 Adam Gundry
 Category:            Language
 Build-type:          Simple
-Extra-source-files:  examples/Vectors.hs
+Extra-source-files:  examples/Prelude.inch
+                         examples/Cost.hs
+                         examples/MergeSort.hs
+                         examples/NonlinearCost.hs
+                         examples/Queue.hs
+                         examples/RedBlack.hs
+                         examples/RedBlackCost.hs
+                         examples/Units.hs
+                         examples/Data.Ratio.inch
+                         examples/UnitsHacks.lhs
+                         examples/UnitsHacks.inch
+                         examples/Vectors.hs
+                         examples/Wires.hs
+
 Cabal-version:       >=1.8
 
 Executable inch
-  ghc-options:       -Wall -fno-warn-missing-signatures
-                         -fno-warn-unused-matches -fno-warn-name-shadowing
+  ghc-options:       -Wall -rtsopts
   hs-source-dirs:    src
   Main-is:           Language/Inch/Main.lhs
   Build-depends:     base == 4.*,
@@ -37,6 +51,7 @@ Executable inch
                          Language.Inch.Context
                          Language.Inch.Erase
                          Language.Inch.Error
+                         Language.Inch.File
                          Language.Inch.KindCheck
                          Language.Inch.Kind
                          Language.Inch.Kit
@@ -61,8 +76,9 @@ Test-Suite test-inch
                          pretty == 1.0.*,
                          mtl == 2.0.*,
                          containers == 0.4.*,
+                         filepath == 1.2.*,
                          directory == 1.1.*
 
 source-repository head
-  type:     darcs
-  location: http://personal.cis.strath.ac.uk/~adam/inch/head/
+  type:     git
+  location: git://github.com/adamgundry/inch.git
