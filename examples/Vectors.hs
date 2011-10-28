@@ -4,8 +4,6 @@
 
 module Vectors where
 
-import Prelude
-
 data Vec :: * -> Nat -> * where
   VNil  :: Vec a 0
   VCons :: forall a (n :: Nat) . a -> Vec a n -> Vec a (n+1)

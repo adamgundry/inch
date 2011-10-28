@@ -3,14 +3,14 @@
 
   Based on section 3 of 
 
-     Christoph Herrmann, Edwin Brady and Kevin Hammond.
-     "Dependently-typed Programming by Composition from Functional
-     Building Blocks."
+    Christoph Herrmann, Edwin Brady and Kevin Hammond. 2011.
+    Dependently-typed Programming by Composition from Functional
+    Building Blocks.
 
-     In Draft Proceedings of the 12th International Symposium on
-     Trends in Functional Programming, TFP 2011.
-     Tech. Rep. SIC-07/11, Dept. Computer Systems and Computing,
-     Universidad Complutense de Madrid
+    In Draft Proceedings of the 12th International Symposium on Trends
+    in Functional Programming (TFP 2011). Tech. Rep. SIC-07/11,
+    Dept. Computer Systems and Computing, Universidad Complutense de
+    Madrid.
 -}
 
 {-# OPTIONS_GHC -F -pgmF inch #-}

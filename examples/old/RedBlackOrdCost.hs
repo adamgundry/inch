@@ -1,49 +1,10 @@
 {-# OPTIONS_GHC -F -pgmF inch #-}
-
-{-# LANGUAGE GADTs, RankNTypes, KindSignatures, ScopedTypeVariables, NPlusKPatterns #-}
+{-# LANGUAGE RankNTypes, GADTs, KindSignatures, ScopedTypeVariables,
+             NPlusKPatterns #-}
 
 module RedBlackOrdCost where
 
--- Abstraction barrier
-
-data Cost :: Num -> * -> * where
-  Hide :: forall (n :: Nat) a . a -> Cost n a
-
-force :: forall (n :: Nat) a . Cost n a -> a
-force (Hide a) = a
-
-returnW :: forall (n :: Nat) a . a -> Cost n a
-returnW = Hide
-
-bind :: forall (m n :: Nat) a b . Cost m a ->
-            (a -> Cost n b) -> Cost (m+n) b
-bind (Hide x) f = Hide (force (f x))
-
-weaken :: forall (n :: Nat) a . pi (m :: Nat) . Cost n a -> Cost (m + n) a
-weaken {m} (Hide a) = Hide a
-
-magicweak :: forall (m n :: Nat) a . m <= n => Cost m a -> Cost n a
-magicweak (Hide a) = Hide a
-
--- End of abstraction barrier
-
-
-ret :: forall a . a -> Cost 0 a
-ret = returnW
-
-return1 :: forall a . a -> Cost 1 a
-return1 = returnW
-
-join :: forall (m n :: Nat) a . Cost m (Cost n a) -> Cost (m + n) a
-join m = bind m id
-
-tick :: forall (n :: Nat) a . Cost n a -> Cost (n + 1) a
-tick = weaken {1}
-
-fmp :: forall (n :: Nat) a b . (a -> b) -> Cost n a -> Cost n b
-fmp f x = bind x (\ x -> ret (f x))
-
-
+import Cost
 
 
 data Colour :: Num -> * where
@@ -114,7 +75,7 @@ data TreeZip :: Num -> Num -> Num -> Num -> Num -> Num -> Num -> Num -> Num -> *
 
 plug ::  forall (rlo rhi lo hi rc rn c n d :: Num) . Tree lo hi c n ->
              TreeZip rlo rhi rc rn lo hi c n d -> Cost (d + 1) (Tree rlo rhi rc rn)
-plug t Root           = tick (ret t)
+plug t Root           = tick (returnCost t)
 plug t (ZRL {x} z r)  = tick (plug (TR {x} t r) z)
 plug t (ZRR {x} l z)  = tick (plug (TR {x} l t) z)
 plug t (ZBL {x} z r)  = tick (plug (TB {x} t r) z)
@@ -140,9 +101,9 @@ search {x} _ fe fn =
     help z (TR {y} l r) | {x < y} = tick (helpB (ZRL {y} z r) l)
     help z (TR {y} l r) | {x ~ y} = tick (returnW (fn z (TR {y} l r)))
     help z (TR {y} l r) | {x > y} = tick (helpB (ZRR {y} l z) r)
-    help z (TB {y} l r) | {x < y} = tick (weaken {1} (help (ZBL {y} z r) l))
+    help z (TB {y} l r) | {x < y} = tick (weakenBy {1} (help (ZBL {y} z r) l))
     help z (TB {y} l r) | {x ~ y} = tick (returnW (fn z (TB {y} l r)))
-    help z (TB {y} l r) | {x > y} = tick (weaken {1} (help (ZBR {y} l z) r))
+    help z (TB {y} l r) | {x > y} = tick (weakenBy {1} (help (ZBR {y} l z) r))
 
     helpB :: forall (lo hi :: Num)(n d :: Nat) . ((2 * n) + d) <= (2 * rn), lo < x, x < hi =>
                 TreeZip rlo rhi 0 rn lo hi 0 n d -> Tree lo hi 0 n -> Cost (1 + 2 * n) p
@@ -178,7 +139,7 @@ data InsProb :: Num -> Num -> Num -> Num -> * where
 solveIns :: forall (rlo rhi lo hi c rc :: Num)(rn n d :: Nat) . 
                 InsProb lo hi c n -> TreeZip rlo rhi rc rn lo hi c n d ->
                     Cost (d + 1) (ColTree rlo rhi rn)
-solveIns (Level c t)      Root         = tick (ret (CT c t))
+solveIns (Level c t)      Root         = tick (returnCost (CT c t))
 
 solveIns (Level Red t)    (ZRL {x} z r)  = tick (solveIns (PanicRB {x} t r) z)
 solveIns (Level Red t)    (ZRR {x} l z)  = tick (solveIns (PanicBR {x} l t) z)
@@ -207,8 +168,8 @@ ins cmp x t =
   let
     f :: forall (x :: Nat) . x <= (2 * n) => TreeZip a 0 n 0 0 x ->
              Cost (2 * n + 2) (ColTree a n)
-    f z = undefined -- tick (magicweak (solveIns (Level Red (TR x E E)) z))
-  in tick (join (search cmp
+    f z = undefined -- tick (weaken (solveIns (Level Red (TR x E E)) z))
+  in tick (joinCost (search cmp
     f
     (\ z zz -> tick (returnW (CT Black t)))
     x
@@ -238,9 +199,9 @@ search2 {x} =
     help z (TR {y} l r) | {x < y} = tick (helpB (ZRL {y} z r) l)
     help z (TR {y} l r) | {x ~ y} = tick (returnW (Yep z (TR {y} l r)))
     help z (TR {y} l r) | {x > y} = tick (helpB (ZRR {y} l z) r)
-    help z (TB {y} l r) | {x < y} = tick (weaken {1} (help (ZBL {y} z r) l))
+    help z (TB {y} l r) | {x < y} = tick (weakenBy {1} (help (ZBL {y} z r) l))
     help z (TB {y} l r) | {x ~ y} = tick (returnW (Yep z (TB {y} l r)))
-    help z (TB {y} l r) | {x > y} = tick (weaken {1} (help (ZBR {y} l z) r))
+    help z (TB {y} l r) | {x > y} = tick (weakenBy {1} (help (ZBR {y} l z) r))
 
     helpB :: forall (lo hi :: Num)(n d :: Nat) .
                  ((2 * n) + d) <= (2 * rn), lo < x, x < hi =>
@@ -258,9 +219,9 @@ ins :: forall (l h :: Num)(n :: Nat) . pi (x :: Num) . l < x, x < h =>
 ins {x} t = 
   let 
     f :: SearchResult x l h n -> Cost (2 * n + 3) (ColTree l h n)
-    f (Nope z)   = tick (magicweak (solveIns (Level Red (TR {x} E E)) z))
+    f (Nope z)   = tick (weaken (solveIns (Level Red (TR {x} E E)) z))
     f (Yep _ _)  = tick (returnW (CT Black t))
-  in tick (bind (search2 {x} t) f)
+  in tick (bindCost (search2 {x} t) f)
 
 
 
@@ -286,27 +247,27 @@ solveDel :: forall (rlo rhi lo hi :: Num)(rn n d :: Nat) . Tree lo hi 0 n ->
                     Cost (d + 1) (RBT rlo rhi)
 solveDel t Root = tick (returnW (RBT t))
 
-solveDel t (ZRL {x} z (TB {y} (TR {lx} ll lr) r)) = tick (fmp RBT (plug (TR {lx} (TB {x} t ll) (TB {y} lr r)) z))
-solveDel t (ZRL {x} z (TB {y} l (TR {rx} rl rr))) = tick (fmp RBT (plug (TR {y} (TB {x} t l) (TB {rx} rl rr)) z))
+solveDel t (ZRL {x} z (TB {y} (TR {lx} ll lr) r)) = tick (mapCost RBT (plug (TR {lx} (TB {x} t ll) (TB {y} lr r)) z))
+solveDel t (ZRL {x} z (TB {y} l (TR {rx} rl rr))) = tick (mapCost RBT (plug (TR {y} (TB {x} t l) (TB {rx} rl rr)) z))
 
 -- Arrgh: these are one line in Agda because we can pattern match on the colours being black
-solveDel t (ZRL {x} z (TB {y} E E))                = tick (fmp RBT (plugBR (TB {x} t (TR {y} E E)) z))
-solveDel t (ZRL {x} z (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)))  = tick (fmp RBT (plugBR (TB {x} t (TR {y} (TB {lx} ll lr) (TB {rx} rl rr))) z))
+solveDel t (ZRL {x} z (TB {y} E E))                = tick (mapCost RBT (plugBR (TB {x} t (TR {y} E E)) z))
+solveDel t (ZRL {x} z (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)))  = tick (mapCost RBT (plugBR (TB {x} t (TR {y} (TB {lx} ll lr) (TB {rx} rl rr))) z))
 
 
-solveDel t (ZRR {x} (TB {y} (TR {lx} ll lr) r) z)  = tick (fmp RBT (plug (TR {y} (TB {lx} ll lr) (TB {x} r t)) z))
-solveDel t (ZRR {x} (TB {y} l (TR {rx} rl rr)) z)  = tick (fmp RBT (plug (TR {rx} (TB {y} l rl) (TB {x} rr t)) z))
-
--- Arrgh
-solveDel t (ZRR {x} (TB {y} E E) z)              = tick (fmp RBT (plugBR (TB {y} E (TR {x} E t)) z))
-solveDel t (ZRR {x} (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)) z)  = tick (fmp RBT (plugBR (TB {y} (TB {lx} ll lr) (TR {x} (TB {rx} rl rr) t)) z))
-
+solveDel t (ZRR {x} (TB {y} (TR {lx} ll lr) r) z)  = tick (mapCost RBT (plug (TR {y} (TB {lx} ll lr) (TB {x} r t)) z))
+solveDel t (ZRR {x} (TB {y} l (TR {rx} rl rr)) z)  = tick (mapCost RBT (plug (TR {rx} (TB {y} l rl) (TB {x} rr t)) z))
 
 -- Arrgh
-solveDel t (ZBL {x} z (TR {y} (TB {lx} E lr) r))  = tick (fmp RBT (plug (TB {y} (TB {lx} (TR {x} t E) lr) r) z))
-solveDel t (ZBL {x} z (TR {y} (TB {lx} (TB {llx} lll llr) lr) r))  = tick (fmp RBT (plug (TB {y} (TB {lx} (TR {x} t (TB {llx} lll llr)) lr) r) z))
+solveDel t (ZRR {x} (TB {y} E E) z)              = tick (mapCost RBT (plugBR (TB {y} E (TR {x} E t)) z))
+solveDel t (ZRR {x} (TB {y} (TB {lx} ll lr) (TB {rx} rl rr)) z)  = tick (mapCost RBT (plugBR (TB {y} (TB {lx} ll lr) (TR {x} (TB {rx} rl rr) t)) z))
 
-solveDel t (ZBL {x} z (TR {y} (TB {lx} (TR {llx} lll llr) lr) r))  = tick (fmp RBT (plug (TB {llx} (TB {x} t lll) (TR {y} (TB {lx} llr lr) r)) z))
+
+-- Arrgh
+solveDel t (ZBL {x} z (TR {y} (TB {lx} E lr) r))  = tick (mapCost RBT (plug (TB {y} (TB {lx} (TR {x} t E) lr) r) z))
+solveDel t (ZBL {x} z (TR {y} (TB {lx} (TB {llx} lll llr) lr) r))  = tick (mapCost RBT (plug (TB {y} (TB {lx} (TR {x} t (TB {llx} lll llr)) lr) r) z))
+
+solveDel t (ZBL {x} z (TR {y} (TB {lx} (TR {llx} lll llr) lr) r))  = tick (mapCost RBT (plug (TB {llx} (TB {x} t lll) (TR {y} (TB {lx} llr lr) r)) z))
 
 -- Arrgh
 solveDel t (ZBL {x} z (TB {y} E r)) = tick (solveDel (TB {y} (TR {x} t E) r) z)
@@ -316,14 +277,14 @@ solveDel t (ZBL {x} z (TB {y} (TB {lx} ll lr) r))  = tick (solveDel (TB {y} (TR 
 solveDel t (ZBL {x} z (TB {y} (TR {lx} ll lr) E))  = tick (solveDel (TB {lx} (TR {x} t ll) (TR {y} lr E)) z)
 solveDel t (ZBL {x} z (TB {y} (TR {lx} ll lr) (TB {rx} rl rr)))  = tick (solveDel (TB {lx} (TR {x} t ll) (TR {y} lr (TB {rx} rl rr))) z)
 
-solveDel t (ZBL {x} z (TB {y} (TR {lx} ll lr) (TR {rx} rl rr))) = tick (fmp RBT (plug (TB {lx} (TB {x} t ll) (TB {y} lr (TR {rx} rl rr))) z))
+solveDel t (ZBL {x} z (TB {y} (TR {lx} ll lr) (TR {rx} rl rr))) = tick (mapCost RBT (plug (TB {lx} (TB {x} t ll) (TB {y} lr (TR {rx} rl rr))) z))
 
 
 -- Arrgh
-solveDel t (ZBR {x} (TR {y} l (TB {rx} rl E)) z) = tick (fmp RBT (plug (TB {y} l (TB {rx} rl (TR {x} E t))) z))
-solveDel t (ZBR {x} (TR {y} l (TB {rx} rl (TB {rrx} rrl rrr))) z)  = tick (fmp RBT (plug (TB {y} l (TB {rx} rl (TR {x} (TB {rrx} rrl rrr) t))) z))
+solveDel t (ZBR {x} (TR {y} l (TB {rx} rl E)) z) = tick (mapCost RBT (plug (TB {y} l (TB {rx} rl (TR {x} E t))) z))
+solveDel t (ZBR {x} (TR {y} l (TB {rx} rl (TB {rrx} rrl rrr))) z)  = tick (mapCost RBT (plug (TB {y} l (TB {rx} rl (TR {x} (TB {rrx} rrl rrr) t))) z))
 
-solveDel t (ZBR {x} (TR {y} l (TB {rx} rl (TR {rrx} rrl rrr))) z)  = tick (fmp RBT (plug (TB {rrx} (TR {y} l (TB {rx} rl rrl)) (TB {x} rrr t)) z))
+solveDel t (ZBR {x} (TR {y} l (TB {rx} rl (TR {rrx} rrl rrr))) z)  = tick (mapCost RBT (plug (TB {rrx} (TR {y} l (TB {rx} rl rrl)) (TB {x} rrr t)) z))
 
 -- Arrgh
 solveDel t (ZBR {x} (TB {y} l E) z)  = tick (solveDel (TB {y} l (TR {x} E t)) z)
@@ -333,23 +294,23 @@ solveDel t (ZBR {x} (TB {y} l (TB {lx} ll lr)) z)  = tick (solveDel (TB {y} l (T
 solveDel t (ZBR {x} (TB {y} E (TR {rx} rl rr)) z)  = tick (solveDel (TB {rx} (TR {y} E rl) (TR {x} rr t)) z)
 solveDel t (ZBR {x} (TB {y} (TB {lx} ll lr) (TR {rx} rl rr)) z)  = tick (solveDel (TB {rx} (TR {y} (TB {lx} ll lr) rl) (TR {x} rr t)) z)
 
-solveDel t (ZBR {x} (TB {y} (TR {lx} ll lr) (TR {rx} rl rr)) z) = tick (fmp RBT (plug (TB {y} (TB {lx} ll lr) (TB {rx} rl (TR {x} rr t))) z))
+solveDel t (ZBR {x} (TB {y} (TR {lx} ll lr) (TR {rx} rl rr)) z) = tick (mapCost RBT (plug (TB {y} (TB {lx} ll lr) (TB {rx} rl (TR {x} rr t))) z))
 
 
 findMin :: forall (rlo rhi lo hi c :: Num)(rn n d :: Nat) . Tree lo hi c (n+1) ->
                (pi (k :: Num) . lo < k => TreeZip rlo rhi 0 rn k hi c (n+1) d) ->
                    Cost (3 * n + d + 4) (RBT rlo rhi)
-findMin (TR {x} (TB {y} E E) r)                    f = tick (magicweak (solveDel E (ZRL {x} (f {y}) r)))
-findMin (TR {x} (TB {y} E (TR {lx} ll lr)) r)      f = tick (magicweak (fmp RBT (plug (TB {lx} ll lr) (ZRL {x} (f {y}) r))))
+findMin (TR {x} (TB {y} E E) r)                    f = tick (weaken (solveDel E (ZRL {x} (f {y}) r)))
+findMin (TR {x} (TB {y} E (TR {lx} ll lr)) r)      f = tick (weaken (mapCost RBT (plug (TB {lx} ll lr) (ZRL {x} (f {y}) r))))
 
-findMin (TR {x} (TB {y} (TR {k} E E) lr) r)          f = tick (magicweak (fmp RBT (plug E (ZBL {y} (ZRL {x} (f {k}) r) lr))))
+findMin (TR {x} (TB {y} (TR {k} E E) lr) r)          f = tick (weaken (mapCost RBT (plug E (ZBL {y} (ZRL {x} (f {k}) r) lr))))
 
-findMin (TB {x} (TR {y} E E) r)                    f = tick (magicweak (fmp RBT (plug E (ZBL {x} (f {y}) r))))
-findMin (TB {x} E (TR {lx} ll lr))                 f = tick (magicweak (fmp RBT (plug (TB {lx} ll lr) (f {x}))))
-findMin (TB {x} E E)                               f = tick (magicweak (solveDel E (f {x})))
+findMin (TB {x} (TR {y} E E) r)                    f = tick (weaken (mapCost RBT (plug E (ZBL {x} (f {y}) r))))
+findMin (TB {x} E (TR {lx} ll lr))                 f = tick (weaken (mapCost RBT (plug (TB {lx} ll lr) (f {x}))))
+findMin (TB {x} E E)                               f = tick (weaken (solveDel E (f {x})))
 
 findMin (TR {x} (TB {y} (TB {llx} lll llr) lr) r)  f = tick (findMin (TB {llx} lll llr) (\ {k} -> ZBL {y} (ZRL {x} (f {k}) r) lr))
-findMin (TB {x} (TB {lx} ll lr) r)                 f = tick (weaken {1} (findMin (TB {lx} ll lr)  (\ {k} -> ZBL {x} (f {k}) r)))
+findMin (TB {x} (TB {lx} ll lr) r)                 f = tick (weakenBy {1} (findMin (TB {lx} ll lr)  (\ {k} -> ZBL {x} (f {k}) r)))
 
 
 
@@ -361,15 +322,15 @@ wkTree (TB {x} l r) = TB {x} l (wkTree r)
 delFocus :: forall (rlo rhi lo hi c :: Num)(rn n d :: Nat) . Tree lo hi c n ->
                 TreeZip rlo rhi 0 rn lo hi c n d ->
                     Cost (3 * n + d + 3) (RBT rlo rhi)
-delFocus (TR {x} E E)                        z = tick (weaken {1} (fmp RBT (plugBR E z)))
+delFocus (TR {x} E E)                        z = tick (weakenBy {1} (mapCost RBT (plugBR E z)))
 delFocus (TR {x} l (TB {rx} rl rr))          z = tick (findMin (TB {rx} rl rr) (\ {k} -> ZRR {k} (wkTree l) z))
-delFocus E                                   z = tick (magicweak (fmp RBT (plug E z)))
-delFocus (TB {x} E E)                        z = tick (magicweak (solveDel E z))
-delFocus (TB {x} (TR {y} E E) E)             z = tick (magicweak (fmp RBT (plug (TB {y} E E) z)))
-delFocus (TB {x} E (TR {y} E E))             z = tick (magicweak (fmp RBT (plug (TB {y} E E) z)))
-delFocus (TB {x} (TR {k} E E) (TR {y} E E))  z = tick (magicweak (fmp RBT (plug (TB {k} E (TR {y} E E)) z)))
-delFocus (TB {x} l (TB {rx} rl rr))          z = tick (weaken {3} (findMin (TB {rx} rl rr) (\ {k} -> ZBR {k} (wkTree l) z)))
-delFocus (TB {x} (TB {lx} ll lr)  r)         z = tick (weaken {3} (findMin r (\ {k} -> ZBR {k} (wkTree (TB {lx} ll lr)) z)))
+delFocus E                                   z = tick (weaken (mapCost RBT (plug E z)))
+delFocus (TB {x} E E)                        z = tick (weaken (solveDel E z))
+delFocus (TB {x} (TR {y} E E) E)             z = tick (weaken (mapCost RBT (plug (TB {y} E E) z)))
+delFocus (TB {x} E (TR {y} E E))             z = tick (weaken (mapCost RBT (plug (TB {y} E E) z)))
+delFocus (TB {x} (TR {k} E E) (TR {y} E E))  z = tick (weaken (mapCost RBT (plug (TB {k} E (TR {y} E E)) z)))
+delFocus (TB {x} l (TB {rx} rl rr))          z = tick (weakenBy {3} (findMin (TB {rx} rl rr) (\ {k} -> ZBR {k} (wkTree l) z)))
+delFocus (TB {x} (TB {lx} ll lr)  r)         z = tick (weakenBy {3} (findMin r (\ {k} -> ZBR {k} (wkTree (TB {lx} ll lr)) z)))
 
 
 
@@ -382,8 +343,8 @@ del {x} t =
   let 
     f :: SearchResult x lo hi n -> Cost (3 * n + 4) (RBT lo hi)
     f (Nope _)   = tick (returnW (RBT t))
-    f (Yep z t)  = tick (magicweak (delFocus t z))
-  in tick (bind (search2 {x} t) f)
+    f (Yep z t)  = tick (weaken (delFocus t z))
+  in tick (bindCost (search2 {x} t) f)
 
 delete :: forall (lo hi :: Num) . pi (x :: Num) . lo < x, x < hi =>
               RBT lo hi -> RBT lo hi

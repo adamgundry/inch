@@ -85,4 +85,12 @@ zip :: [a] -> ([b] -> [(a, b)])
 zipWith :: (a -> (b -> c)) -> ([a] -> ([b] -> [c]))
 zipWith3 :: (a -> (b -> (c -> d))) -> ([a] -> ([b] -> ([c] -> [d])))
 unzip            :: [(a,b)] -> ([a],[b])
+-- Here's a bunch of things from typeclasses specialised to Integer
 compare :: Integer -> Integer -> Ordering
+div :: Integer -> Integer -> Integer
+mod :: Integer -> Integer -> Integer
+quot :: Integer -> Integer -> Integer
+rem :: Integer -> Integer -> Integer
+quotRem :: Integer -> Integer -> (Integer, Integer)
+divMod :: Integer -> Integer -> (Integer, Integer)
+show :: Integer -> [Char]
