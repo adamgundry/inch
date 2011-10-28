@@ -5,7 +5,6 @@
 > import Prelude hiding (catch)
 > import Control.Exception
 > import Control.Monad.State
-> import System.Environment
 > import System.Exit
 > import System.FilePath
 > import System.IO

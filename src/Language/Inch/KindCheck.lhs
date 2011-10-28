@@ -52,17 +52,13 @@
 > inferKind _ _ (SBinOp o)   = return $ TK (BinOp o) (KNum :-> KNum :-> KNum)
 > inferKind b g (SBind c a SKNat t)  = do
 >     v <- freshVar (UserVar All) a KNum
->     TK ty l <- inferKind b (g :< Ex v) t
->     case l of
->         KSet  -> return $ TK (Bind c a KNum (bindTy v (Qual (P LE 0 (TyVar v)) ty))) KSet
->         _     -> erk "inferKind: forall/pi must have kind *"
+>     ty <- checkKindSet b (g :< Ex v) t
+>     return $ TK (Bind c a KNum (bindTy v (Qual (P LE 0 (TyVar v)) ty))) KSet
 > inferKind b g (SBind c a k t)  = case kindKind k of
 >     Ex k' -> do
 >         v <- freshVar (UserVar All) a k'
->         TK ty l <- inferKind b (g :< Ex v) t
->         case l of
->             KSet  -> return $ TK (Bind c a k' (bindTy v ty)) KSet
->             _     -> erk "inferKind: forall/pi must have kind *"
+>         ty <- checkKindSet b (g :< Ex v) t
+>         return $ TK (Bind c a k' (bindTy v ty)) KSet
 > inferKind b g (SQual p t) = do
 >     p' <- checkPredKind b g p
 >     TK t' KSet <- inferKind b g t
@@ -73,9 +69,16 @@
 >   TK t' k <- inferKind b g t
 >   case k of
 >     KNum  -> return t'
->     _     -> erk "checkNumKind: ill-kinded!"
+>     _     -> errKindMismatch (fogTy t' ::: fogKind k) SKNum
 
 > checkPredKind :: Binder -> Bwd (Ex (Var ())) -> SPredicate -> Contextual Predicate
 > checkPredKind b g = traverse (checkNumKind b g)
 
 
+
+> checkKindSet :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual (Type KSet)
+> checkKindSet b g t = do
+>     TK t' k <- inferKind b g t
+>     case k of
+>         KSet  -> return t'
+>         _     -> errKindNotSet (fogKind k)

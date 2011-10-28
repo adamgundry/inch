@@ -3,19 +3,11 @@
 > module Main where
 
 > import Prelude hiding (catch)
-> import Control.Exception
-> import Control.Monad.State
 > import System.Environment
-> import System.Exit
 > import System.FilePath
-> import System.IO
 
-> import Language.Inch.Context
 > import Language.Inch.Syntax
-> import Language.Inch.Parser
 > import Language.Inch.PrettyPrinter
-> import Language.Inch.ProgramCheck
-> import Language.Inch.Erase
 > import Language.Inch.File
 
 

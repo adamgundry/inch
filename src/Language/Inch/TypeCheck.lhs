@@ -324,9 +324,9 @@ status.
 >     return $ Let ds' t' ::: ty
 
 > checkInfer mty (t :? xty) = do
->     TK sc KSet  <- inferKind All B0 xty
->     t'           <- checkSigma sc t
->     r           <- instSigma sc mty
+>     sc  <- checkKindSet All B0 xty
+>     t'  <- checkSigma sc t
+>     r   <- instSigma sc mty
 >     return $ (t' :? sc) ::: r
 
 > checkInfer (Just r) (Case t as) = do
@@ -337,7 +337,7 @@ status.
 > checkInfer Nothing (Case t as) = do
 >     t' ::: ty    <- inferRho t
 >     as' ::: tys  <- unzipAsc <$> traverse (inferCaseAlt ty) as
->     r           <- unifyList tys
+>     r            <- unifyList tys
 >     return (Case t' as' ::: r)
 
 > checkInfer _ (TmBrace _) = erk "Braces aren't cool"
