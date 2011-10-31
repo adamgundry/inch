@@ -1,4 +1,4 @@
 data Rational where
 numerator :: Rational -> Integer
 denominator :: Rational -> Integer
-fromInteger :: Integer -> Rational
+(%) :: Integer -> Integer -> Rational

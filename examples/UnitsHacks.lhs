@@ -18,4 +18,4 @@ should just bite the bullet and implement typeclasses.
 > recipRational = recip
 
 > powRational :: Rational -> Integer -> Rational
-> powRational = (^)
+> powRational = (^^)
