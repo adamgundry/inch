@@ -1,5 +1,5 @@
 Name:                inch
-Version:             0.1
+Version:             0.1.0
 Synopsis:            A type-checker for Haskell with integer constraints
 Description:         
     Inch is a type-checker for a subset of Haskell (plus some GHC
@@ -18,19 +18,21 @@ Maintainer:          Adam Gundry <adam.gundry@cis.strath.ac.uk>
 Copyright:           Copyright (c) 2011 Adam Gundry
 Category:            Language
 Build-type:          Simple
-Extra-source-files:  examples/Prelude.inch
-                         examples/Cost.hs
-                         examples/MergeSort.hs
-                         examples/NonlinearCost.hs
-                         examples/Queue.hs
-                         examples/RedBlack.hs
-                         examples/RedBlackCost.hs
-                         examples/Units.hs
-                         examples/Data.Ratio.inch
-                         examples/UnitsHacks.lhs
-                         examples/UnitsHacks.inch
-                         examples/Vectors.hs
-                         examples/Wires.hs
+Extra-source-files:  README.md
+                     examples/Cost.hs
+                     examples/MergeSort.hs
+                     examples/NonlinearCost.hs
+                     examples/Queue.hs
+                     examples/RedBlack.hs
+                     examples/RedBlackCost.hs
+                     examples/Units.hs
+                     examples/Data.Ratio.inch
+                     examples/UnitsHacks.lhs
+                     examples/UnitsHacks.inch
+                     examples/Vectors.hs
+                     examples/Wires.hs
+data-dir:            data
+data-files:          *.inch
 
 Cabal-version:       >=1.8
 
@@ -41,7 +43,7 @@ Executable inch
   Build-depends:     base == 4.*,
                          IndentParser == 0.2.*,
                          parsec == 3.1.*,
-                         presburger == 0.3.*,
+                         presburger == 0.4.*,
                          pretty == 1.0.*,
                          mtl == 2.0.*,
                          containers == 0.4.*,
@@ -72,7 +74,7 @@ Test-Suite test-inch
     build-depends:   base == 4.3.*,
                          IndentParser == 0.2.*,
                          parsec == 3.1.*,
-                         presburger == 0.3.*,
+                         presburger == 0.4.*,
                          pretty == 1.0.*,
                          mtl == 2.0.*,
                          containers == 0.4.*,

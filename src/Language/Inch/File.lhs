@@ -9,6 +9,8 @@
 > import System.FilePath
 > import System.IO
 
+> import Paths_inch (getDataFileName)
+
 > import Language.Inch.Context
 > import Language.Inch.Syntax
 > import Language.Inch.Parser
@@ -46,13 +48,14 @@
 
 > readImport :: FilePath -> Import -> IO [SDeclaration ()]
 > readImport dir im = do
->     s <- catch (readFile fn) $ \ (_ :: IOException) ->
->              hPutStrLn stderr ("Could not load " ++ fn) >> return ""
->     case parseInterface fn s of
+>     s <- catch (readFile (combine dir inchFile)) $ \ (_ :: IOException) ->
+>              catch (readFile =<< getDataFileName inchFile) $ \ (_ :: IOException) ->
+>                  hPutStrLn stderr ("Could not load " ++ inchFile) >> return ""
+>     case parseInterface inchFile s of
 >         Right ds  -> return $ filter (included . declName) ds
 >         Left err  -> putStrLn ("interface parse error:\n" ++ show err) >> exitFailure
 >   where
->     fn = combine dir (importName im ++ ".inch")
+>     inchFile = importName im ++ ".inch"
 >     included x = case impSpec im of
 >         ImpAll        -> True
 >         Imp ys        -> x `elem` ys
