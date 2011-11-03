@@ -1,15 +1,40 @@
-subtract :: Integer -> (Integer -> Integer)
+(==) :: a -> a -> Bool
+(/=) :: a -> a -> Bool
+compare :: Integer -> Integer -> Ordering
+div :: Integer -> Integer -> Integer
+mod :: Integer -> Integer -> Integer
+quot :: Integer -> Integer -> Integer
+rem :: Integer -> Integer -> Integer
+quotRem :: Integer -> Integer -> (Integer, Integer)
+divMod :: Integer -> Integer -> (Integer, Integer)
+subtract         :: Integer -> (Integer -> Integer)
 even             :: Integer -> Bool
 odd              :: Integer -> Bool
 gcd              :: Integer -> Integer -> Integer
 lcm              :: Integer -> Integer -> Integer
-id :: a -> a
-const :: a -> (b -> a)
-flip :: (a -> (b -> c)) -> (b -> (a -> c))
+fmap             :: forall (f :: * -> *) a b . (a -> b) -> f a -> f b
+(>>=)            :: forall (m :: * -> *) a b . m a -> (a -> m b) -> m b  
+(>>)             :: forall (m :: * -> *) a b . m a -> m b -> m b  
+return           :: forall (m :: * -> *) a . a -> m a  
+fail             :: forall (m :: * -> *) a . [Char] -> m a  
+sequence         :: forall (m :: * -> *) a . [m a] -> m [a]  
+sequence_        :: forall (m :: * -> *) a . [m a] -> m ()
+mapM             :: forall (m :: * -> *) a b . (a -> m b) -> [a] -> m [b]  
+mapM_            :: forall (m :: * -> *) a b . (a -> m b) -> [a] -> m ()  
+(=<<)            :: forall (m :: * -> *) a b . (a -> m b) -> m a -> m b  
+id               :: a -> a
+const            :: a -> (b -> a)
+(.)              :: (b -> c) -> (a -> b) -> a -> c  
+flip             :: (a -> (b -> c)) -> (b -> (a -> c))
+seq              :: a -> b -> b
+($) :: (a -> b) -> a -> b  
+($!) :: (a -> b) -> a -> b  
 data Bool where
   False :: Bool
   True :: Bool
   deriving (Eq, Ord, Enum, Read, Show, Bounded)
+(&&)             :: Bool -> Bool -> Bool  
+(||)             :: Bool -> Bool -> Bool  
 not :: Bool -> Bool
 otherwise :: Bool
 data Maybe :: * -> * where
@@ -36,6 +61,7 @@ asTypeOf :: a -> (a -> a)
 error :: [Char] -> a
 undefined :: a
 map :: (a -> b) -> ([a] -> [b])
+(++) :: [a] -> [a] -> [a]
 filter :: (a -> Bool) -> ([a] -> [a])
 concat :: [[a]] -> [a]
 concatMap :: (a -> [b]) -> ([a] -> [b])
@@ -45,6 +71,7 @@ last :: [a] -> a
 init :: [a] -> [a]
 null :: [a] -> Bool
 length :: [a] -> Integer
+(!!) :: [a] -> Integer -> a
 foldl :: (a -> (b -> a)) -> (a -> ([b] -> a))
 foldl1 :: (a -> (a -> a)) -> ([a] -> a)
 scanl :: (a -> (b -> a)) -> (a -> ([b] -> [a]))
@@ -72,7 +99,10 @@ reverse :: [a] -> [a]
 and :: [Bool] -> Bool
 or :: [Bool] -> Bool
 any :: (a -> Bool) -> ([a] -> Bool)
-all :: forall _s . (_s -> Bool) -> ([_s] -> Bool)
+all :: (a -> Bool) -> ([a] -> Bool)
+elem :: a -> [a] -> Bool
+notElem :: a -> [a] -> Bool
+lookup :: a -> [(a, b)] -> Maybe b
 sum :: [Integer] -> Integer
 product :: [Integer] -> Integer
 maximum :: [Integer] -> Integer
@@ -81,12 +111,22 @@ zip :: [a] -> ([b] -> [(a, b)])
 zipWith :: (a -> (b -> c)) -> ([a] -> ([b] -> [c]))
 zipWith3 :: (a -> (b -> (c -> d))) -> ([a] -> ([b] -> ([c] -> [d])))
 unzip            :: [(a,b)] -> ([a],[b])
--- Here's a bunch of things from typeclasses specialised to Integer
-compare :: Integer -> Integer -> Ordering
-div :: Integer -> Integer -> Integer
-mod :: Integer -> Integer -> Integer
-quot :: Integer -> Integer -> Integer
-rem :: Integer -> Integer -> Integer
-quotRem :: Integer -> Integer -> (Integer, Integer)
-divMod :: Integer -> Integer -> (Integer, Integer)
-show :: Integer -> [Char]
+show :: a -> [Char]
+read :: [Char] -> a
+data IO :: * -> * where
+data IOError where
+ioError    ::  IOError -> IO a  
+userError  ::  [Char] -> IOError  
+catch      ::  IO a -> (IOError -> IO a) -> IO a  
+putChar    :: Char -> IO ()  
+putStr     :: [Char] -> IO ()  
+putStrLn   :: [Char] -> IO ()  
+getChar    :: IO Char  
+getLine    :: IO [Char]  
+getContents :: IO [Char]  
+interact    ::  ([Char] -> [Char]) -> IO ()  
+readFile   :: [Char] -> IO [Char]
+writeFile  :: [Char] -> [Char] -> IO ()  
+appendFile :: [Char] -> [Char] -> IO ()  
+readIO :: [Char] -> IO a
+readLn :: IO a

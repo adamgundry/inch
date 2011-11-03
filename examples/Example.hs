@@ -3,18 +3,24 @@
              NPlusKPatterns #-}
 
 {-
-Things that would be nice:
+Haskell features that would be nice:
+* Type synonyms
+* Type classes
 * Pattern-matching let and lambda bindings
 * Mutually recursive binding groups
-* Higher-order unification
-* Type synonyms
+* Kind inference
+* Infix operators
+
 * GHC LINE pragmas that make some kind of sense
+* Coverage checking: incomplete and redundant pattern matches
+
+New things to think about:
+* Constraint kinds
+* Lifting types to kinds
+* Higher-order unification
 * Sigma-types
 * Type-level lambda
 * Type application in user syntax
-* Kind inference
-* Infix operators
-* Coverage checking
 -}
 
 module Example where

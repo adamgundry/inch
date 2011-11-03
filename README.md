@@ -25,6 +25,7 @@ Features
 
 * Powerful type inference using a novel approach to equational unification (though type signatures are needed for GADT pattern matches and polymorphic recursion)
 
+
 Example
 -------
 
@@ -103,7 +104,7 @@ Known limitations
 
 * Lots of Haskell features are unsupported, notably type synonyms (!), newtypes, records, type classes, ...
 
-* The parser is somewhat idiosyncratic; look at the examples to figure out what syntax it accepts. Data types must be defined in GADT syntax, using a kind signature rather than a list of variables. Only a small fixed selection of infix operators is available, and parsing them is unreliable.
+* The parser is somewhat idiosyncratic; look at the examples to figure out what syntax it accepts. Data types must be defined in GADT syntax, using a kind signature rather than a list of variables. Parsing of infix operators is almost but not entirely nonexistent. 
 
 * Modules are poorly supported. A `.inch` file is generated when preprocessing a module, listing the identifiers it defines, and this file is looked up when the module is imported. Because preprocessing happens in reverse dependency order, manual intervention may be required to generate `.inch` files before they are needed.
 
@@ -123,9 +124,10 @@ Outstanding issues
 
 * Constraint solving is based on normalisation and a solver for Presburger arithmetic, so only linear constraints are guaranteed to be solved. Hard constraints can be dealt with by invoking higher-rank functions that add facts to the context, but a better characterisation of solvable constraints would be nice.
 
-* At the moment, `Nat` is just `Integer` (with a positivity constraint added when it is used in a type signature). Kind polymorphism and subkinding might allow more precise kinds to be given to arithmetic operations, but the exact design is unclear. 
+* At the moment, `Nat` is just `Integer` (with a positivity constraint added when it is used in a type signature). Kind polymorphism and subkinding might allow more precise kinds to be given to arithmetic operations, including a correct kind for exponentiation. 
 
 * `n+k`-patterns provide quite a nice syntax for defining dependent numeric functions, but they have been deprecated and removed from Haskell 2010, so perhaps an alternative should be found.
+
 
 Related work
 ------------
@@ -135,6 +137,7 @@ Iavor Diatchki is working on [TypeNats](http://hackage.haskell.org/trac/ghc/wiki
 Conor McBride's [Strathclyde Haskell Enhancement](http://personal.cis.strath.ac.uk/~conor/pub/she/) is a preprocessor that supports Π-types and allows lifting algebraic data types (but not numeric types) to kinds. SHE inspired the braces syntax used in `inch`. These ideas (and more, including kind polymorphism) are being implemented in GHC: see [Giving Haskell a Promotion](https://research.microsoft.com/en-us/people/dimitris/fc-kind-poly.pdf) by Brent Yorgey, Stephanie Weirich, Julien Cretin, Simon Peyton Jones and Dimitrios Vytiniotis. 
 
 See also Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/DML/DML.html) and its successor [ATS](http://www.ats-lang.org/), which support type-level Presburger arithmetic.
+
 
 Contact
 -------
