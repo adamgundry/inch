@@ -35,12 +35,12 @@
 >     collectEqualities B0 = return B0
 >     collectEqualities (g :< Layer l True)  = return $ g :< Layer l True
 >     collectEqualities (g :< Layer l False) = (:< Layer l False) <$> collectEqualities g
->     collectEqualities (g :< Constraint Wanted (P EL m n)) = tell [(m, n)]
+>     collectEqualities (g :< Constraint Wanted (TyComp EL `TyApp` m `TyApp` n)) = tell [(m, n)]
 >         >> collectEqualities g
 >     collectEqualities (g :< e) = (:< e) <$> collectEqualities g
 
 
-> trySolveConstraints :: Contextual ([Predicate], [Predicate])
+> trySolveConstraints :: Contextual ([Type KConstraint], [Type KConstraint])
 > trySolveConstraints = do
 >     g <- getContext
 >     let (g', vs, hs, ps) = collect g [] [] []
@@ -48,35 +48,32 @@
 >     let qs = simplifyConstraints vs hs ps
 >     return (hs, qs)
 >   where
->     collect :: Context -> [Var () KNum] -> [Predicate] -> [Predicate] ->
->                    (Context, [Var () KNum], [Predicate], [Predicate])
+>     collect :: Context -> [Ex (Var ())] -> [Type KConstraint] -> [Type KConstraint] ->
+>                    (Context, [Ex (Var ())], [Type KConstraint], [Type KConstraint])
 >     collect B0 vs hs ps = (B0, vs, hs, ps)
 >     collect (g :< Constraint Wanted p)  vs hs ps = collect g vs hs (p:ps)
 >     collect (g :< Constraint Given h)   vs hs ps =
 >         collect g vs (h:hs) ps <:< Constraint Given h
->     collect (g :< A e@(a@(FVar _ KNum) := Some d)) vs hs ps =
->         collect g vs (subsPreds a d hs) (subsPreds a d ps) <:< A e
->     collect (g :< A e@(a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
->         collect g (a:vs) hs ps <:< A e
+>     collect (g :< A e@(a := Some d)) vs hs ps =
+>         collect g vs (map (replaceTy a d) hs) (map (replaceTy a d) ps) <:< A e
+>     collect (g :< A e@(a := _)) vs hs ps | a <? (hs, ps) =
+>         collect g (Ex a:vs) hs ps <:< A e
 >     collect (g :< Layer l True)   vs hs ps = (g :< Layer l True, vs', hs', ps')
 >         where (vs', hs', ps') = collectHyps g vs hs ps
 >     collect (g :< Layer l False)  vs hs ps = collect g vs hs ps <:< Layer l False
 >     collect (g :< e) vs hs ps = collect g vs hs ps <:< e
 >
->     collectHyps ::  Context -> [Var () KNum] -> [Predicate] -> [Predicate] ->
->                         ([Var () KNum], [Predicate], [Predicate])
+>     collectHyps ::  Context -> [Ex (Var ())] -> [Type KConstraint] -> [Type KConstraint] ->
+>                         ([Ex (Var ())], [Type KConstraint], [Type KConstraint])
 >     collectHyps B0 vs hs ps = (vs, hs, ps)
 >     collectHyps (g :< Constraint Given h) vs hs ps = collectHyps g vs (h:hs) ps
->     collectHyps (g :< A (a@(FVar _ KNum) := Some d)) vs hs ps =
->         collectHyps g vs (subsPreds a d hs) (subsPreds a d ps)
->     collectHyps (g :< A (a@(FVar _ KNum) := _)) vs hs ps | a <? (hs, ps) =
->         collectHyps g (a:vs) hs ps
+>     collectHyps (g :< A (a := Some d)) vs hs ps =
+>         collectHyps g vs (map (replaceTy a d) hs) (map (replaceTy a d) ps)
+>     collectHyps (g :< A (a := _)) vs hs ps | a <? (hs, ps) =
+>         collectHyps g (Ex a:vs) hs ps
 >     collectHyps (g :< _) vs hs ps = collectHyps g vs hs ps
 
 >     (g, a, b, c) <:< e = (g :< e, a, b, c)
-
->     subsPreds :: Var () KNum -> Type KNum -> [Predicate] -> [Predicate]
->     subsPreds a n = map (fmap (replaceTy a n))
 
 > solveConstraints :: Contextual ()
 > solveConstraints = do
@@ -88,52 +85,60 @@
 > solveOrSuspend :: Contextual ()
 > solveOrSuspend = want . snd =<< trySolveConstraints
 >   where
->     want :: [Predicate] -> Contextual ()
+>     want :: [Type KConstraint] -> Contextual ()
 >     want [] = return ()
 >     want (p:ps)
->         | nonsense p  = errImpossiblePred p
+>         | nonsense p  = errImpossible p
 >         | otherwise   = modifyContext (:< Constraint Wanted p)
 >                                 >> want ps
 >
->     nonsense :: Predicate -> Bool
->     nonsense = maybe False not . trivialPred . normalisePred
+>     nonsense :: Type KConstraint -> Bool
+>     nonsense t = maybe False not $ 
+>                  trivialPred . normalisePred =<< constraintToPred t
 
 
-> simplifyConstraints :: [Var () KNum] -> [Predicate] -> [Predicate] -> [Predicate]
+> simplifyConstraints :: [Ex (Var ())] -> [Type KConstraint] ->
+>                            [Type KConstraint] -> [Type KConstraint]
 > simplifyConstraints vs hs ps = filter (not . checkPred) (nub ps)
 >   where
 >     -- Compute the transitive dependency closure of the variables that occur in p.
 >     -- We have to keep iterating until we reach a fixed point. This
 >     -- will produce the minimum set of variables and hypotheses on
 >     -- which the solution of p can depend.
->     iterDeps :: ([Var () KNum], [Predicate]) -> ([Var () KNum], [Predicate]) ->
->                   ([Var () KNum], [Predicate]) -> ([Var () KNum], [Predicate])
+>     iterDeps :: ([Ex (Var ())], [Type KConstraint]) ->
+>                     ([Ex (Var ())], [Type KConstraint]) ->
+>                         ([Ex (Var ())], [Type KConstraint]) ->
+>                             ([Ex (Var ())], [Type KConstraint])
 >     iterDeps old             ([], [])         _                = old
 >     iterDeps (oldVs, oldHs)  (newVs, newHs)  (poolVs, poolHs)  =
 >         iterDeps (oldVs ++ newVs, oldHs ++ newHs) (newVs', newHs') (poolVs', poolHs')
 >       where
->         (newVs', poolVs') = partition (<? newHs) poolVs
+>         (newVs', poolVs') = partition (\ (Ex v) -> v <? newHs) poolVs
 >         (newHs', poolHs') = partition (newVs <<?) poolHs
 >
->     checkPred :: Predicate -> Bool
->     checkPred p = P.check . toFormula xs' (map normalisePred phs') . normalisePred $ p'
+>     checkPred :: Type KConstraint -> Bool
+>     checkPred p = p' `elem` phs' || case constraintToPred p' of
+>                      Just p'' -> P.check . toFormula xs'' phs'' . normalisePred $ p''
+>                      Nothing -> False
 >       where
->         (pvs, pool)  = partition (<? p) vs
+>         (pvs, pool)  = partition (\ (Ex v) -> v <? p) vs
 >         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, hs)
 >         (xs', phs', p')   = elimEquations xs phs p 
+>         phs'' = map normalisePred . catMaybes . map constraintToPred $ phs'
+>         xs'' = catMaybes $ map (\ (Ex v) -> fixNum v) xs'
 
->     elimEquations :: [Var () KNum] -> [Predicate] -> Predicate ->
->                          ([Var () KNum], [Predicate], Predicate)
+>     elimEquations :: [Ex (Var ())] -> [Type KConstraint] -> Type KConstraint ->
+>                          ([Ex (Var ())], [Type KConstraint], Type KConstraint)
 >     elimEquations xs ys q = help [] ys q
 >       where
->         help :: [Predicate] -> [Predicate] -> Predicate ->
->                     ([Var () KNum], [Predicate], Predicate)
+>         help :: [Type KConstraint] -> [Type KConstraint] -> Type KConstraint ->
+>                     ([Ex (Var ())], [Type KConstraint], Type KConstraint)
 >         help ohs []      p = (xs, ohs, p)
->         help ohs (h@(P EL m n):rs) p = case solveForAny (normaliseNum (n - m)) of
->             Just (a, t)  -> help [] (map (fmap (replaceTy a t')) (rs ++ ohs))
->                                 (fmap (replaceTy a t') p)
->               where t' = reifyNum t
->             Nothing      -> help (h:ohs) rs p
+>         help ohs (h@(TyComp EL `TyApp` m `TyApp` n):rs) p = 
+>             case solveForAny (normaliseNum (n - m)) of
+>                 Nothing      -> help (h:ohs) rs p
+>                 Just (a, t)  -> help [] (map (replaceTy a t') (rs ++ ohs)) (replaceTy a t' p)
+>                     where t' = reifyNum t
 >         help ohs (h:rs) p = help (h:ohs) rs p
 
 

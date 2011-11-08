@@ -191,7 +191,7 @@
 
 > partitionNum :: [Var () KNum] -> NormalNum -> (NormalNum, NormalNum)
 > partitionNum vs (NN xs) = (NN ls, NN rs)
->   where (ls, rs) = Map.partitionWithKey (const . (vs <<?)) xs
+>   where (ls, rs) = Map.partitionWithKey (const . (map Ex vs <<?)) xs
 
 > {-
 > getLinear :: NormNum a -> Maybe (Integer, [(NVar a, Integer)])

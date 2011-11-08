@@ -111,10 +111,11 @@
 Kinds
 
 > kind       = kindBit `chainr1` kindArrow
-> kindBit    = setKind <|> try numKind <|> natKind <|> parens kind
+> kindBit    = setKind <|> try numKind <|> natKind <|> constraintKind <|> parens kind
 > setKind    = symbol "*" >> return SKSet
 > numKind    = (symbol "Integer" <|> symbol "Num") >> return SKNum
 > natKind    = symbol "Nat" >> return SKNat
+> constraintKind = symbol "Constraint" >> return SKConstraint
 > kindArrow  = reservedOp "->" >> return (:-->)
 
 
@@ -131,20 +132,27 @@ Types
 > tyAll      = tyQuant "forall" (SBind All)
 > tyPi       = tyQuant "pi" (SBind Pi)
 > tyExpArr   = tyBit `chainr1` tyArrow
-> tyArrow    = reservedOp "->" >> return (--->)
+> tyArrow    = reservedOp "->" *> return (--->)
+>            <|> reservedOp "=>" *> return SQual
 
 > tyBit = buildExpressionParser
->     [
->         [prefix "-" negate],
->         [binary "^" (sbinOp Pow) AssocLeft],
->         [binary "*" (*) AssocLeft],    
->         [binary "+" (+) AssocLeft, sbinary "-" (-) AssocLeft]
+>     [  [prefix "-" negate]
+>     ,  [binary "^" (sbinOp Pow) AssocLeft]
+>     ,  [binary "*" (*) AssocLeft]
+>     ,  [binary "+" (+) AssocLeft, sbinary "-" (-) AssocLeft]
+>     ,  [  binary "<"  (styPred LS) AssocNone
+>        ,  binary "<=" (styPred LE) AssocNone
+>        ,  binary ">"  (styPred GR) AssocNone
+>        ,  binary ">=" (styPred GE) AssocNone
+>        ,  binary "~"  (styPred EL) AssocNone
+>        ] 
 >     ]
 >     (tyAtom `chainl1` pure STyApp)
 
 > tyAtom     =    STyInt <$> try natural
 >            <|>  SBinOp <$> prefixBinOp
 >            <|>  SUnOp <$> prefixUnOp
+>            <|>  STyComp <$> prefixComparator
 >            <|>  tyVar
 >            <|>  tyCon
 >            <|>  parens ((reservedOp "->" *> pure SArr) <|> fmap (foldr1 (STyApp . STyApp (STyCon tupleTypeName))) (commaSep1 tyExp))
@@ -187,26 +195,20 @@ Types
 >                <|>  (\ a -> ([a] , SKSet)) <$> tyVarName
 
 > tyQual = do
->     ps <- try (predicates <* reservedOp "=>")
+>     ps <- try (constraints <* reservedOp "=>")
 >     t <- tyExp
 >     return $ foldr SQual t ps
+
+> constraints = commaSep1 constraint
+> constraint = tyBit
 
 > predicates = commaSep1 predicate
 
 > predicate = do
->     n   <- tyBit
->     op  <- predOp
->     m   <- tyBit
->     return $ op n m
-
-> predOp = eqPred <|> lPred <|> lePred <|> gPred <|> gePred
-
-> eqPred  = reservedOp  "~"   *> pure (%==%)
-> lPred   = specialOp   "<"   *> pure (%<%)
-> lePred  = specialOp   "<="  *> pure (%<=%)
-> gPred   = specialOp   ">"   *> pure (%>%)
-> gePred  = specialOp   ">="  *> pure (%>=%)
-
+>     c <- constraint
+>     case sConstraintToPred c of
+>         Just p   -> return p
+>         Nothing  -> fail "expected testable predicate"
 
 
 

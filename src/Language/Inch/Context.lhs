@@ -9,6 +9,7 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import qualified Data.Map as Map
+> import Data.Foldable
 > import Text.PrettyPrint.HughesPJ
 
 > import Language.Inch.BwdFwd
@@ -39,6 +40,16 @@
 >   show (LamBody (x ::: _))     = "LamBody " ++ x
 >   show (LetBindings _)         = "LetBindings"
 >   show (LetBody _)             = "LetBody"
+
+> instance FV TmLayer () where
+>     fvFoldMap f (PatternTop (_ ::: s))  = fvFoldMap f s
+>     fvFoldMap _ CaseTop                 = mempty
+>     fvFoldMap _ FunTop                  = mempty
+>     fvFoldMap _ GenMark                 = mempty
+>     fvFoldMap _ GuardTop                = mempty
+>     fvFoldMap f (LamBody (_ ::: t))     = fvFoldMap f t
+>     fvFoldMap f (LetBindings bs)        = foldMap (foldMap (fvFoldMap f)) (map fst . Map.elems $ bs)
+>     fvFoldMap f (LetBody bs)            = foldMap (foldMap (fvFoldMap f)) (map fst . Map.elems $ bs)
 
 > instance Pretty TmLayer where
 >   pretty l = const $ text $ show l
@@ -107,6 +118,11 @@ when the layer is extracted.
 >     pretty (a := d) _ = prettySysVar a <+> text ":="
 >       <+> prettyHigh d <+> text ":" <+> prettyHigh (fogKind (varKind a))
 
+> replaceTyEntry :: Var () k -> Type k -> Entry -> Entry
+> replaceTyEntry a t (A (b := Some d)) = A (b := Some (replaceTy a t d))
+> replaceTyEntry _ _ (A a) = A a
+> replaceTyEntry a@(FVar _ KNum) t (Constraint s p) = Constraint s (replaceTy a t p)
+> replaceTyEntry _ _ x = x
 
 > data AnyTyEntry where
 >     TE :: TyEntry k -> AnyTyEntry
@@ -123,15 +139,20 @@ when the layer is extracted.
 > data Entry where
 >     A           :: TyEntry k -> Entry
 >     Layer       :: TmLayer -> Bool -> Entry
->     Constraint  :: CStatus -> Predicate -> Entry
+>     Constraint  :: CStatus -> Type KConstraint -> Entry
+
+> instance FV Entry () where
+>     fvFoldMap f (A t)             = fvFoldMap f t
+>     fvFoldMap f (Layer l _)       = fvFoldMap f l
+>     fvFoldMap f (Constraint _ c)  = fvFoldMap f c
 
 > instance Pretty Entry where
 >   pretty (A a)                  _ = prettyHigh a
 >   pretty (Layer l _)            _ = prettyHigh l
 >   pretty (Constraint Given p)   _ =
->       braces (prettyHigh $ fogSysPred p) <> text "!!"
+>       braces (prettyHigh $ fogSysTy p) <> text "!!"
 >   pretty (Constraint Wanted p)  _ =
->       braces (prettyHigh $ fogSysPred p) <> text "??"
+>       braces (prettyHigh $ fogSysTy p) <> text "??"
 
 
 

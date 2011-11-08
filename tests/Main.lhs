@@ -220,6 +220,8 @@
 >   "(&&&) :: Bool -> Bool -> Bool\nTrue &&& x = x\nFalse &&& _ = False" :
 >   "f :: _a -> _a\nf x = x" :
 >   "x = (case xs of\n    [] -> []\n    (:) x ys -> scanl f (f q x) ys)" :
+>   "f :: forall (c :: Constraint) . c => Integer\nf = f" :
+>   "f :: Dict ((<=) 2 3) -> Dict (2 <= 3)\nf x = x" :
 >   []
 
 
@@ -511,4 +513,7 @@
 >   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo = foo", True) :
 >   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\ngoo = foo", True) :
 >   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo x = x\ngoo :: forall a (i :: Integer)(n :: Nat) . 0 <= i - n => Vec i a -> Vec i a\ngoo = foo", True) :
+>   ("foo :: forall (f :: Num -> Num -> Num) a (p :: Num -> *) . (forall (m n :: Num) a . p m -> p n -> (f m n ~ f n m => a) -> a) -> (f 1 3 ~ f 3 1 => a) -> a\nfoo comm x = comm (undefined :: p 1) (undefined :: p 3) x", True) :
+>   ("f :: forall (p :: Constraint -> *)(c :: Constraint) . c => p c -> Integer\nf = f", True) :
+>   ("f :: forall (p :: Constraint -> *) . p (2 + 3 <= 7)\nf = f", True) :
 >   []

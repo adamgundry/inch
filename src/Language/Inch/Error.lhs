@@ -30,9 +30,9 @@
 >     CannotUnify        :: SType -> SType -> Err
 >     UnifyFixed         :: Ex (Var ()) -> Ex (Ty ()) -> Err
 >     UnifyNumFixed      :: Var () KNum -> Ty () KNum -> Err
->     CannotDeduce       :: [Predicate] -> [Predicate] -> Err
+>     CannotDeduce       :: [Type KConstraint] -> [Type KConstraint] -> Err
 >     BadExistential     :: Ex (Var ()) -> Ex (Ty ()) -> Err
->     ImpossiblePred     :: Predicate -> Err
+>     Impossible         :: Type KConstraint -> Err
 >     BadBindingLevel    :: Var () KNum -> Err
 >     Fail               :: String -> Err
 
@@ -59,20 +59,20 @@
 >     pretty (UnifyFixed (Ex a) (Ex t))  _ = text "Cannot unify fixed variable" <+> prettySysVar a <+> text "with" <+> prettyHigh (fogSysTy t)
 >     pretty (UnifyNumFixed a n)         _ = text "Cannot modify fixed variable" <+> prettySysVar a <+> text "to unify" <+> prettyHigh (fogSysTy n) <+> text "with 0"
 >     pretty (CannotDeduce [] qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysTy $ nub $ map simplifyPred qs)
 >                                                 ,  text "in empty context"
 >                                                 ]
 >     pretty (CannotDeduce hs qs)        _ = sep  [  text "Could not deduce"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred qs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysTy $ nub $ map simplifyPred qs)
 >                                                 ,  text "from hypotheses"
->                                                 ,  nest 2 (fsepPretty $ map fogSysPred $ nub $ map simplifyPred hs)
+>                                                 ,  nest 2 (fsepPretty $ map fogSysTy $ nub $ map simplifyPred hs)
 >                                                 ]
 >     pretty (BadExistential (Ex a) (Ex t))  _ = sep  [  text "Illegal existential"
 >                                                        <+> prettySysVar a
 >                                                 ,  text "when generalising type"
 >                                                 ,  nest 2 (prettyHigh $ fogSysTy t)
 >                                                 ]
->     pretty (ImpossiblePred p) _ = text "Impossible constraint " <+> prettyHigh (fogSysPred p)
+>     pretty (Impossible p) _ = text "Impossible constraint " <+> prettyHigh (fogSysTy p)
 >     pretty (BadBindingLevel a) _ = text "Forall-bound variable"
 >                                        <+> prettyVar a
 >                                        <+> text "used where pi-bound variable required"
@@ -102,11 +102,11 @@
 > errUnifyNumFixed
 >     :: E.MonadError ErrorData m => Var () KNum -> Type KNum -> m a
 > errCannotDeduce
->     :: E.MonadError ErrorData m => [Predicate] -> [Predicate] -> m a
+>     :: E.MonadError ErrorData m => [Type KConstraint] -> [Type KConstraint] -> m a
 > errBadExistential
 >     :: E.MonadError ErrorData m => Var () k -> Type l -> m a
-> errImpossiblePred
->     :: E.MonadError ErrorData m => Predicate -> m a
+> errImpossible
+>     :: E.MonadError ErrorData m => Type KConstraint -> m a
 > errBadBindingLevel
 >     :: E.MonadError ErrorData m => Var () KNum -> m a
 
@@ -130,7 +130,7 @@
 > errUnifyNumFixed a n      = throw (UnifyNumFixed a n)
 > errCannotDeduce hs qs     = throw (CannotDeduce hs qs)
 > errBadExistential a t     = throw (BadExistential (Ex a) (Ex t))
-> errImpossiblePred p       = throw (ImpossiblePred p)
+> errImpossible p           = throw (Impossible p)
 > errBadBindingLevel a      = throw (BadBindingLevel a)                            
 
 

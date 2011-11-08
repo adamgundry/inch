@@ -50,11 +50,13 @@
 
 > data KSet
 > data KNum
+> data KConstraint
 > data k :-> l
 
 > data Kind k where
 >     KSet   :: Kind KSet
 >     KNum   :: Kind KNum
+>     KConstraint :: Kind KConstraint
 >     (:->)  :: Kind k -> Kind l -> Kind (k :-> l)
 > infixr 5 :->
 
@@ -63,6 +65,7 @@
 > instance HetEq Kind where
 >     hetEq KSet KSet yes _ = yes
 >     hetEq KNum KNum yes _ = yes
+>     hetEq KConstraint KConstraint yes _ = yes
 >     hetEq (k :-> k') (l :-> l') yes no = hetEq k l (hetEq k' l' yes no) no
 >     hetEq _ _ _ no = no
 
@@ -71,6 +74,8 @@
 >     _     <?=  KSet            = False
 >     KNum  <?=  _               = True
 >     _     <?=  KNum            = False
+>     KConstraint <?= _            = True
+>     _           <?= KConstraint  = False
 >     (k :-> k') <?= (l :-> l')  = k <?= k' && l <?= l'
 
 > class KindI t where
@@ -89,6 +94,7 @@
 >     SKSet   :: SKind
 >     SKNum   :: SKind
 >     SKNat   :: SKind
+>     SKConstraint :: SKind
 >     (:-->)  :: SKind -> SKind -> SKind
 >   deriving (Eq, Show)
 > infixr 5 :-->
@@ -97,17 +103,20 @@
 > targetsSet :: Kind k -> Bool
 > targetsSet KSet       = True
 > targetsSet KNum       = False
+> targetsSet KConstraint = False
 > targetsSet (_ :-> k)  = targetsSet k 
 
 > fogKind :: Kind k -> SKind
 > fogKind KSet       = SKSet
 > fogKind KNum       = SKNum
+> fogKind KConstraint = SKConstraint
 > fogKind (k :-> l)  = fogKind k :--> fogKind l
 
 > kindKind :: SKind -> Ex Kind
 > kindKind SKSet       = Ex KSet
 > kindKind SKNum       = Ex KNum
 > kindKind SKNat       = Ex KNum
+> kindKind SKConstraint = Ex KConstraint
 > kindKind (k :--> l)  = case (kindKind k, kindKind l) of
 >                            (Ex k', Ex l') -> Ex (k' :-> l')
 
@@ -237,15 +246,21 @@
 > wkClosedVar (FVar a k)  = FVar a k
 > wkClosedVar (BVar b)    = impossibleBVar b
 
+> fixKind :: Kind k -> Var () l -> Maybe (Var () k)
+> fixKind k v = hetEq k (varKind v) (Just v) Nothing
+
+> fixNum :: Var () l -> Maybe (Var () KNum)
+> fixNum = fixKind KNum  
+
 
 > class FV t a where
 >     fvFoldMap :: Monoid m => (forall k . Var a k -> m) -> t -> m
 
-> (<<?) :: FV t a => [Var a k] -> t -> Bool
+> (<<?) :: FV t a => [Ex (Var a)] -> t -> Bool
 > as <<? t = getAny $ fvFoldMap (Any . (`hetElem` as)) t
 
 > (<?) :: FV t a => Var a k -> t -> Bool
-> a <? t = [a] <<? t
+> a <? t = [Ex a] <<? t
 
 > vars :: FV t a => t -> [Ex (Var a)]
 > vars = fvFoldMap (\ x -> [Ex x])

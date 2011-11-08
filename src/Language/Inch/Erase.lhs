@@ -17,6 +17,7 @@
 > eraseKind :: Kind k -> Maybe (Ex Kind)
 > eraseKind KSet       = Just $ Ex KSet
 > eraseKind KNum       = Nothing
+> eraseKind KConstraint = Just $ Ex KConstraint
 > eraseKind (k :-> l)  =
 >     case (eraseKind k, eraseKind l) of
 >         (_,             Nothing)       -> Nothing
@@ -27,6 +28,7 @@
 > willErase :: Kind k -> Bool
 > willErase KSet       = False
 > willErase KNum       = True
+> willErase KConstraint = False
 > willErase (_ :-> l)  = willErase l
 
 > eraseType :: Type k -> Contextual (Ex Kind, TyKind)

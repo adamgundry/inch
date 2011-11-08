@@ -61,6 +61,7 @@
 >     pretty SKSet       = const $ text "*"
 >     pretty SKNum       = const $ text "Integer"
 >     pretty SKNat       = const $ text "Nat"
+>     pretty SKConstraint = const $ text "Constraint"
 >     pretty (k :--> l)  = wrapDoc AppSize $
 >         pretty k ArgSize <+> text "->" <+> pretty l AppSize
 
@@ -104,18 +105,20 @@
 >                                   integer k
 >     pretty (SBinOp o)       = pretty o
 >     pretty (SUnOp o)        = pretty o
+>     pretty (STyComp c)      = const . parens $ prettyHigh c
  
 > infixName :: SType -> Maybe String
 > infixName SArr                       = Just "->"
 > infixName (SBinOp o) | binOpInfix o  = Just (binOpString o)
 > infixName (STyCon ('(':s))           = Just (init s)
+> infixName (STyComp c)                = Just (show (prettyHigh c))
 > infixName _                          = Nothing
 
 
 > prettyBind :: Binder -> Bwd (String, SKind) ->
 >     SType -> Size -> Doc
 > prettyBind b bs (SBind b' a k t) | b == b' = prettyBind b (bs :< (a, k)) t
-> prettyBind b (bs :< (a, SKNum)) (SQual (P LE 0 (STyVar a')) t) | a == a' = prettyBind b (bs :< (a, SKNat)) t
+> -- prettyBind b (bs :< (a, SKNum)) (SQual (P LE 0 (STyVar a')) t) | a == a' = prettyBind b (bs :< (a, SKNat)) t
 > prettyBind b bs t = wrapDoc LamSize $ prettyHigh b
 >         <+> prettyBits (trail bs)
 >         <+> text "." <++> pretty t ArrSize
@@ -125,7 +128,7 @@
 >     prettyBits ((a, k) : aks) = parens (text a <+> text "::" <+> prettyHigh k) <+> prettyBits aks
 
 
-> prettyQual :: Bwd SPredicate -> SType -> Size -> Doc
+> prettyQual :: Bwd SType -> SType -> Size -> Doc
 > prettyQual ps (SQual p t) = prettyQual (ps :< p) t
 > prettyQual ps t = wrapDoc ArrSize $
 >     prettyPreds (trail ps) <+> text "=>" <++> pretty t ArrSize

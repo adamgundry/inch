@@ -37,7 +37,7 @@
 >             modifyContext (:< xD)
 >         B0 -> erk $ "onTop: ran out of context"
 
-> onTopNum ::  (Predicate, Contextual ()) ->
+> onTopNum ::  (Type KConstraint, Contextual ()) ->
 >                  (TyEntry KNum -> Contextual Extension) ->
 >                  Contextual ()
 > onTopNum (p, m) f = do
@@ -52,7 +52,7 @@
 >             m
 >             modifyContext (:< Constraint Wanted p)
 >         _ -> onTopNum (p, m) f >> modifyContext (:< xD)
->     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysPred p)) $
+>     B0 -> inLocation (text "when solving" <+> prettyHigh (fogSysTy p)) $
 >               erk $ "onTopNum: ran out of context"
 
 > restore :: Contextual Extension
@@ -116,8 +116,9 @@
 >         (unifyTypes f1 f2 >> unifyTypes s1 s2)
 >         (erk "Mismatched kinds")
 
-> unifyTypes (UnOp o)       (UnOp o')  | o == o' = return ()
-> unifyTypes (BinOp o)      (BinOp o') | o == o' = return ()
+> unifyTypes (UnOp o)       (UnOp o')    | o == o' = return ()
+> unifyTypes (BinOp o)      (BinOp o')   | o == o' = return ()
+> unifyTypes (TyComp c)     (TyComp c')  | c == c' = return ()
 
 > unifyTypes (TyVar alpha)  tau            = startSolve alpha tau
 > unifyTypes tau            (TyVar alpha)  = startSolve alpha tau
@@ -157,7 +158,9 @@
 > rigidHull _  (TyVar a)    = return (TyVar a, F0)
 > rigidHull _  (TyCon c k)  = return (TyCon c k, F0)
 > rigidHull _  Arr          = return (Arr, F0)
+> rigidHull _  (UnOp o)     = return (UnOp o, F0)
 > rigidHull _  (BinOp o)    = return (BinOp o, F0)
+> rigidHull _  (TyComp c)   = return (TyComp c, F0)
 
 > rigidHull as (TyApp f s)  = do  (f',  xs  )  <- rigidHull as f
 >                                 (s',  ys  )  <- rigidHull as s
@@ -224,13 +227,13 @@ This is wrong, I think:
 > unifyNum m          n = unifyZero F0 (normaliseNum (m - n))
 
 > constrainZero :: NormalNum -> Contextual ()
-> constrainZero e = modifyContext (:< Constraint Wanted (reifyNum e %==% 0))
+> constrainZero e = modifyContext (:< Constraint Wanted (tyPred EL (reifyNum e) 0))
 
 > unifyZero :: Suffix -> NormalNum -> Contextual ()
 > unifyZero _Psi e = case getConstant e of
 >   Just k  | k == 0     -> return ()
 >           | otherwise  -> errCannotUnify (fogTy (reifyNum e)) (STyInt 0)
->   Nothing              -> onTopNum (reifyNum e %==% 0, modifyContext (<>< _Psi)) $
+>   Nothing              -> onTopNum (tyPred EL (reifyNum e) 0, modifyContext (<>< _Psi)) $
 >     \ (a := d) ->
 >       case (d, solveFor a e) of
 >         (Some t,  _)           -> do  modifyContext (<>< _Psi)

@@ -37,7 +37,7 @@ forall-binders with fresh variables to produce a rho-type, and writes
 a list of predicates found.
 
 > inst :: VarState -> (forall k. TyDef k) -> Type l ->
->             ContextualWriter [Predicate] (Type l)
+>             ContextualWriter [Type KConstraint] (Type l)
 > inst vs d (TyApp (TyApp Arr a) t) =
 >     TyApp (TyApp Arr a) <$> inst vs d t
 > inst vs d (Bind All x k t) = do
@@ -84,15 +84,17 @@ status.
 >     help _      B0                     = error "existentialise: ran out of context"
 
 
-> generalise :: (FV (t OK ()) (), TravTypes t) => Type KSet -> [t OK ()] -> Contextual (Type KSet, [t OK ()])
+> generalise :: (FV (t OK ()) (), TravTypes t) => Type KSet -> [t OK ()] ->
+>                   Contextual (Type KSet, [t OK ()])
 > generalise u qs = do
 >     g <- getContext
 >     (g', tps) <- help g (u, qs) []
 >     putContext g'
 >     return tps
 >   where
->     help :: (FV (t OK ()) (), TravTypes t) =>  Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
->                 Contextual (Context, (Type KSet, [t OK ()]))
+>     help :: (FV (t OK ()) (), TravTypes t) =>  Context ->
+>                 (Type KSet, [t OK ()]) -> [Type KConstraint] ->
+>                     Contextual (Context, (Type KSet, [t OK ()]))
 >     help (g :< Layer l True)   tps _ = return (g :< Layer l True, tps)
 >     help (g :< Layer l False)  tps hs = (<:< Layer l False) <$> help g tps hs 
 
@@ -120,14 +122,16 @@ status.
 >     (g, x) <:< e = (g :< e, x)
 
 
->     replaceHelp :: (FV (t OK ()) (), TravTypes t) => Context -> (Type KSet, [t OK ()]) -> [Predicate] ->
->         Var () l -> Type l -> Contextual (Context, (Type KSet, [t OK ()]))
+>     replaceHelp :: (FV (t OK ()) (), TravTypes t) => Context ->
+>                        (Type KSet, [t OK ()]) -> [Type KConstraint] ->
+>                            Var () l -> Type l ->
+>                                Contextual (Context, (Type KSet, [t OK ()]))
 >     replaceHelp g (t, ps) hs a d =
->         help g (replaceTy a d t, map (replaceTypes a d) ps) (map (fmap (replaceTy a d)) hs)
+>         help g (replaceTy a d t, map (replaceTypes a d) ps) (map (replaceTy a d) hs)
 
->     solveForLots :: Var () KNum -> [Predicate] -> Maybe NormalNum
+>     solveForLots :: Var () KNum -> [Type KConstraint] -> Maybe NormalNum
 >     solveForLots a = getFirst . foldMap (First . maybeSolveFor a) . mapMaybe f
->       where  f (P EL m n)  = Just (normaliseNum (m - n))
+>       where  f (TyComp EL `TyApp` m `TyApp` n)  = Just (normaliseNum (m - n))
 >              f _           = Nothing
 
 
@@ -190,8 +194,7 @@ status.
 >     getNames (g :< _)                = getNames g
 >     getNames B0                      = error "getNames: ran out of context"
 
->     help :: [Ex (Var ())] -> Context -> [Either AnyTyEntry Predicate] ->
->                 Contextual Context
+>     help :: [Ex (Var ())] -> Context -> [Entry] -> Contextual Context
 >     help [] (g :< Layer GenMark _) h  = return $ g <><| h
 >     help as (_ :< Layer GenMark _) _  = erk $ "checkSigma help: failed to squish "
 >                                         ++ intercalate "," (map (\ x -> unEx x fogSysVar) as)
@@ -201,40 +204,34 @@ status.
 >         Nothing  -> traceContext "noooooooooo" >> (erk $ "checkSigma help: fixed variable "
 >                                 ++ renderMe (fogSysVar a)
 >                                 ++ " occurred illegally in "
->                                 ++ intercalate ", " (map (either show (renderMe . fogSysPred)) h))
->     help as (g :< A (a := Some d)) h = help as g (map (rep a d) h)
->     help as (g :< A a) h                   = help as g (Left (TE a) : h)
->     help as (g :< Constraint Wanted p) h   = help as g (Right p : h) 
+>                                 ++ show (fsepPretty h))
+>     help as (g :< A (a := Some d)) h = help as g (fmap (replaceTyEntry a d) h)
+>     help as (g :< A a) h                   = help as g (A a : h)
+>     help as (g :< Constraint Wanted p) h   = help as g (Constraint Wanted p : h) 
 >     help as (g :< Constraint Given p) h    = help as g (map (abstract p) h)
 >     help _  B0 _ = error "checkSigma help: ran out of context"
 
->     abstract _ (Left x)   = Left x
->     abstract p (Right q)  = Right (p :=> q)
+>     abstract p  (Constraint s q)  = Constraint s (Qual p q)
+>     abstract _  x                 = x
 
->     suppress :: Var () k -> [Either AnyTyEntry Predicate] -> Maybe [Either AnyTyEntry Predicate]
+>     (<><|) :: Context -> [Entry] -> Context
+>     g <><| [] = g
+>     g <><| (x:xs) = (g :< x) <><| xs
+
+>     suppress :: Var () k -> [Entry] -> Maybe [Entry]
 >     suppress _ [] = return []
->     suppress a (x:xs) | not (a <? x) = (x :) <$> suppress a xs
->     suppress a@(FVar _ KNum) (Right p:es) = suppressPred a p >>= \ p' -> (Right p' :) <$> suppress a es
+>     suppress a (x : xs) | not (a <? x) = (x :) <$> suppress a xs
+>     suppress a@(FVar _ KNum) (Constraint Wanted p : es) = suppressPred a p >>=
+>         \ p' -> (Constraint Wanted p' :) <$> suppress a es
 >     suppress _ _ = Nothing
 
->     suppressPred :: Var () KNum -> Predicate -> Maybe Predicate
->     suppressPred a (p :=> q) | a <? p     = suppressPred a q
->                              | otherwise  = (p :=>) <$> suppressPred a q
+>     suppressPred :: Var () KNum -> Type KConstraint -> Maybe (Type KConstraint)
+>     suppressPred a (Qual p q) | a <? p     = suppressPred a q
+>                               | otherwise  = Qual p <$> suppressPred a q
 >     suppressPred a p | a <? p     = Nothing
 >                      | otherwise  = Just p
 
->     g <><| h = g <><< map toEnt h
->     toEnt (Left (TE a)) = A a
->     toEnt (Right p)  = Constraint Wanted p
 
->     rep :: Var () k -> Type k -> Either AnyTyEntry Predicate
->                -> Either AnyTyEntry Predicate
->     rep a t (Left (TE (b := Some d))) =
->         Left (TE (b := Some (replaceTy a t d)))
->     rep _ _ (Left x) = Left x
->     rep a@(FVar _ KNum) t (Right p) =
->         Right (fmap (replaceTy a t) p)
->     rep _ _ (Right p) = Right p
 
 
 > checkInfer :: Maybe Rho -> STerm () -> Contextual (Term () ::: Rho)
@@ -500,7 +497,7 @@ status.
 >   where
 >     learnPred p = do
 >       p' <- checkPredKind Pi B0 p
->       modifyContext (:< Constraint Given p')
+>       modifyContext (:< Constraint Given (predToConstraint p'))
 >       return p'
 > checkGuard (ExpGuard ts)   = ExpGuard <$> traverse (checkRho tyBool) ts
 
@@ -581,7 +578,7 @@ status.
 >                       else Exists
 >     am <- fresh (UserVar Pi) a KNum d
 >     modifyContext (:< A (b := Some (TyVar am + TyInt k)))
->     modifyContext (:< Constraint Given (0 %<=% TyVar am))
+>     modifyContext (:< Constraint Given (tyPred LE 0 (TyVar am)))
 >     aty      <- instS (UserVar All) Given Fixed t'
 >     checkPat top aty ps $ \ (xs, ex, vs, r) -> 
 >       bindUn am ex vs xs $ \ ex' vs' xs' ->

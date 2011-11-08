@@ -88,7 +88,7 @@
 >     return $ foldr makeEq ty' vts
 >   where
 >     makeEq :: (Var () KNum, Maybe TypeNum) -> Type KSet -> Type KSet
->     makeEq (a, Just n)   = Qual (TyVar a %==% n)
+>     makeEq (a, Just n)   = Qual (tyPred EL (TyVar a) n)
 >     makeEq (_, Nothing)  = id
 
 > gadtMangle :: [Ex (Var ())] -> Type k ->

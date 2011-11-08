@@ -3,7 +3,6 @@
 > module Language.Inch.KindCheck where
 
 > import Control.Applicative
-> import Data.Foldable hiding (elem, foldr)
 > import Data.Set (Set)
 > import qualified Data.Set as Set
 > import Data.Traversable
@@ -29,8 +28,9 @@
 >     collectUnbound _ (STyInt _)       = Set.empty
 >     collectUnbound _ (SUnOp _)        = Set.empty
 >     collectUnbound _ (SBinOp _)       = Set.empty
+>     collectUnbound _ (STyComp _)       = Set.empty
 >     collectUnbound bs (SBind _ b _ u)  = collectUnbound (b:bs) u
->     collectUnbound bs (SQual p u)      = foldMap (collectUnbound bs) p `Set.union` collectUnbound bs u
+>     collectUnbound bs (SQual p u)      = collectUnbound bs p `Set.union` collectUnbound bs u
 
 
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind
@@ -50,17 +50,18 @@
 > inferKind _ _ (STyInt i)   = return $ TK (TyInt i) KNum
 > inferKind _ _ (SUnOp o)    = return $ TK (UnOp o) (KNum :-> KNum)
 > inferKind _ _ (SBinOp o)   = return $ TK (BinOp o) (KNum :-> KNum :-> KNum)
+> inferKind _ _ (STyComp c)  = return $ TK (TyComp c) (KNum :-> KNum :-> KConstraint)
 > inferKind b g (SBind c a SKNat t)  = do
 >     v <- freshVar (UserVar All) a KNum
 >     ty <- checkKindSet b (g :< Ex v) t
->     return $ TK (Bind c a KNum (bindTy v (Qual (P LE 0 (TyVar v)) ty))) KSet
+>     return $ TK (Bind c a KNum (bindTy v (Qual (tyPred LE 0 (TyVar v)) ty))) KSet
 > inferKind b g (SBind c a k t)  = case kindKind k of
 >     Ex k' -> do
 >         v <- freshVar (UserVar All) a k'
 >         ty <- checkKindSet b (g :< Ex v) t
 >         return $ TK (Bind c a k' (bindTy v ty)) KSet
 > inferKind b g (SQual p t) = do
->     p' <- checkPredKind b g p
+>     p' <- checkConstraintKind b g p
 >     TK t' KSet <- inferKind b g t
 >     return $ TK (Qual p' t') KSet
 
@@ -70,6 +71,14 @@
 >   case k of
 >     KNum  -> return t'
 >     _     -> errKindMismatch (fogTy t' ::: fogKind k) SKNum
+
+> checkConstraintKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual (Type KConstraint)
+> checkConstraintKind b g t = do
+>   TK t' k <- inferKind b g t
+>   case k of
+>     KConstraint  -> return t'
+>     _            -> errKindMismatch (fogTy t' ::: fogKind k) SKConstraint
+
 
 > checkPredKind :: Binder -> Bwd (Ex (Var ())) -> SPredicate -> Contextual Predicate
 > checkPredKind b g = traverse (checkNumKind b g)
