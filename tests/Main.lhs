@@ -216,8 +216,8 @@
 >   "x = y\n  where\n    y = z\n    z = x" :
 >   "import A.B.C\nimport qualified B\nimport C (x, y)\nimport D as E hiding (z)\nimport F ()" :
 >   "f (n + 1) = n" :
->   "(&&) :: Bool -> Bool -> Bool\n(&&) True x = x\n(&&) False _ = False" :
->   "(&&) :: Bool -> Bool -> Bool\nTrue && x = x\nFalse && _ = False" :
+>   "(&&&) :: Bool -> Bool -> Bool\n(&&&) True x = x\n(&&&) False _ = False" :
+>   "(&&&) :: Bool -> Bool -> Bool\nTrue &&& x = x\nFalse &&& _ = False" :
 >   "f :: _a -> _a\nf x = x" :
 >   "x = (case xs of\n    [] -> []\n    (:) x ys -> scanl f (f q x) ys)" :
 >   []
@@ -504,7 +504,7 @@
 >   ("f :: Integer\nf = case True of True -> 3", True) :
 >   ("x :: Bool\nx = (<) 2 3", True) :
 >   ("data Empty where", True) :
->   ("(&&) :: Bool -> Bool -> Bool\nTrue && x = x\nFalse && _ = False", True) :
+>   ("(&&&) :: Bool -> Bool -> Bool\nTrue &&& x = x\nFalse &&& _ = False", True) :
 >   (vecDecl ++ "vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec (m + n) a -> (Vec m a, Vec n a)\nvsplit {0}   xs           = (Nil, xs)\nvsplit {m+1} (Cons x xs) = case vsplit {m} xs of\n                                (ys, zs) -> (Cons x ys, zs)", True) :
 >   (vecDecl ++ "vsplit :: forall (n :: Nat) a . pi (m :: Nat) . Vec (m + n) a -> (Vec m a, Vec n a)\nvsplit {0}   xs           = (Nil, xs)\nvsplit {m+1} (Cons x xs) = case vsplit {m} xs of\n                                (ys, zs) | True -> (Cons x ys, zs)", True) :
 >   (vecDecl ++ "foo :: forall a (n m :: Nat) . Vec (m + n) a -> Vec (n + m) a\nfoo = foo", True) :
