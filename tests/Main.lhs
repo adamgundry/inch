@@ -96,7 +96,7 @@
 > eraseCheck ds s = case parseModule "eraseCheck" s of
 >     Right md   -> case runStateT (checkModule md ds) initialState of
 >         Right (md', st) -> case evalStateT (eraseModule md') st of
->             Right md'' -> case evalStateT (checkModule (fog md'') []) initialState of
+>             Right md'' -> case evalStateT (checkModule (fog md'') ds) initialState of
 >                 Right md''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog md''')) of
 >                     Right md'''' -> Right $ "Erased program:\n" ++ renderMe md''''
 >                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog md''') ++ "\n" ++ show err
