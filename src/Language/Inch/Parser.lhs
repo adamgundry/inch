@@ -284,7 +284,7 @@ Terms
 
 Interface files
 
-> interface = many (dataDecl <|> sigDecl)
+> interface = many (dataDecl <|> Decl <$> sigDecl)
 
 
 Modules
@@ -316,12 +316,28 @@ Modules
 > moduleName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
 
-> topdecls  = associate <$> many (dataDecl <|> sigDecl <|> funDecl)
-> decls     = associate <$> many (sigDecl <|> funDecl)
+> topdecls  = associateTop <$> many (dataDecl
+>                                    <|> (Decl <$> (sigDecl <|> funDecl)))
+>  where
+>     associateTop :: [STopDeclaration ()] -> [STopDeclaration ()]
+>     associateTop = map joinFun . groupBy sameFun
+>
+>     sameFun (Decl (FunDecl x _)) (Decl (FunDecl y _))  = x == y
+>     sameFun _             _                            = False
+> 
+>     joinFun :: [STopDeclaration ()] -> STopDeclaration ()
+>     joinFun [d] = d
+>     joinFun fs@(Decl (FunDecl x _) : _) = Decl (FunDecl x (join (map altsOf fs)))
+>     joinFun _ = error "joinFun: impossible"
+>
+>     altsOf (Decl (FunDecl _ as)) = as
+>     altsOf _ = error "altsOf: impossible"
 
-> associate :: [SDeclaration ()] -> [SDeclaration ()]
-> associate = map joinFun . groupBy sameFun
+> decls     = associate <$> many (sigDecl <|> funDecl)
 >   where
+>     associate :: [SDeclaration ()] -> [SDeclaration ()]
+>     associate = map joinFun . groupBy sameFun
+>
 >     sameFun (FunDecl x _) (FunDecl y _)  = x == y
 >     sameFun _             _              = False
 > 
@@ -329,9 +345,11 @@ Modules
 >     joinFun [d] = d
 >     joinFun fs@(FunDecl x _ : _) = FunDecl x (join (map altsOf fs))
 >     joinFun _ = error "joinFun: impossible"
-
+>
 >     altsOf (FunDecl _ as) = as
 >     altsOf _ = error "altsOf: impossible"
+
+
 
 > dataDecl = I.lineFold $ do
 >     try (reserved "data")

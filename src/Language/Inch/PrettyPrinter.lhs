@@ -54,7 +54,7 @@
 > instance Pretty String where
 >     pretty s _ = text s
 
-> instance Pretty [SDeclaration ()] where
+> instance Pretty [STopDeclaration ()] where
 >     pretty ds _ = vcat (map prettyHigh ds)
 
 > instance Pretty SKind where
@@ -192,7 +192,7 @@
 >     pretty (ImpHiding xs)  _ = text "hiding" <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
-> instance Pretty (SDeclaration a) where
+> instance Pretty (STopDeclaration a) where
 >     pretty (DataDecl n k cs ds) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
@@ -201,6 +201,9 @@
 >         derivingClause []  = empty
 >         derivingClause xs  = text "deriving" <+>
 >                                parens (hsep (punctuate  (text ",") (map text xs)))
+>     pretty (Decl d) s = pretty d s
+
+> instance Pretty (SDeclaration a) where
 >     pretty (FunDecl n ps) _ = vcat (map ((text n <+>) . prettyHigh) ps)
 >     pretty (SigDecl n ty) _ = text n <+> text "::" <+> prettyHigh ty
 

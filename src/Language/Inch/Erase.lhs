@@ -159,16 +159,19 @@
 >     (ps',  g) <- erasePatList ps
 >     return (p' :! ps', f . g)
 
-> eraseDecl :: Declaration () -> Contextual (Declaration ())
-> eraseDecl (DataDecl s k cs ds) =
+> eraseTopDecl :: TopDeclaration () -> Contextual (TopDeclaration ())
+> eraseTopDecl (DataDecl s k cs ds) =
 >     case eraseKind k of
 >         Just (Ex k') -> do
 >             cs' <- traverse eraseCon cs
 >             return $ DataDecl s k' cs' ds
->         Nothing -> error $ "eraseType: failed to erase kind " ++ show k
+>         Nothing -> error $ "eraseTopDecl: failed to erase kind " ++ show k
+> eraseTopDecl (Decl d) = Decl <$> eraseDecl d
+
+> eraseDecl :: Declaration () -> Contextual (Declaration ())
 > eraseDecl (FunDecl x ps) =
 >     FunDecl x <$> traverse eraseAlt ps
 > eraseDecl (SigDecl x ty) = SigDecl x <$> eraseToSet ty
 
 > eraseModule :: Module () -> Contextual (Module ())
-> eraseModule (Mod mh is ds) = Mod mh is <$> traverse eraseDecl ds
+> eraseModule (Mod mh is ds) = Mod mh is <$> traverse eraseTopDecl ds

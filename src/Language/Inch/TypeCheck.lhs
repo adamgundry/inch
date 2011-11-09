@@ -380,7 +380,7 @@ status.
 > checkLocalDecls ds =
 >     withLayerExtract False False (LetBindings Map.empty) letBindings $ do
 >         mapM_ (makeBinding False) ds
->         Data.List.concat <$> traverse checkInferFunDecl ds  
+>         Data.List.concat <$> traverse checkInferDecl ds  
 
 > makeBinding :: Bool -> SDeclaration () -> Contextual ()
 > makeBinding defd (SigDecl x ty) = inLocation (text $ "in binding " ++ x) $ do
@@ -390,12 +390,11 @@ status.
 >         KSet  -> insertBinding x (Just ty', defd)
 >         _     -> errKindNotSet (fogKind k)
 > makeBinding _ (FunDecl _ _)       = return ()
-> makeBinding _ (DataDecl _ _ _ _)  = return ()
 
-> checkInferFunDecl :: SDeclaration () -> Contextual [Declaration ()]
-> checkInferFunDecl (FunDecl s []) =
+> checkInferDecl :: SDeclaration () -> Contextual [Declaration ()]
+> checkInferDecl (FunDecl s []) =
 >   inLocation (text $ "in declaration of " ++ s) $ erk $ "No alternative"
-> checkInferFunDecl (FunDecl s (p:ps)) = do
+> checkInferDecl (FunDecl s (p:ps)) = do
 >     when (not (null ps) && isVarAlt p) $ errDuplicateTmVar s
 >     mty <- optional $ lookupBinding s
 >     case mty of
@@ -405,10 +404,9 @@ status.
 >             (fd, ty) <- inferFunDecl s (p:ps)
 >             updateBinding s (Just ty, True)
 >             return [SigDecl s ty, fd]
-> checkInferFunDecl (SigDecl x _) = do
+> checkInferDecl (SigDecl x _) = do
 >     _ ::: ty <- fst <$> lookupBinding x
 >     return [SigDecl x ty]
-> checkInferFunDecl (DataDecl _ _ _ _) = error "checkInferFunDecl: that's a data declaration"
 
 > inferFunDecl :: String -> [SAlternative ()] -> Contextual (Declaration (), Type KSet)
 > inferFunDecl s pats =

@@ -41,18 +41,18 @@
 > getInterface :: Module () -> String
 > getInterface = renderMe . map fog . filter dataOrSigDecl . modDecls
 >   where
->     dataOrSigDecl (SigDecl _ _)       = True
->     dataOrSigDecl (DataDecl _ _ _ _)  = True
->     dataOrSigDecl (FunDecl _ _)       = False
+>     dataOrSigDecl (DataDecl _ _ _ _)    = True
+>     dataOrSigDecl (Decl (SigDecl _ _))  = True
+>     dataOrSigDecl (Decl (FunDecl _ _))  = False
 
 
-> readImport :: FilePath -> Import -> IO [SDeclaration ()]
+> readImport :: FilePath -> Import -> IO [STopDeclaration ()]
 > readImport dir im = do
 >     s <- catch (readFile (combine dir inchFile)) $ \ (_ :: IOException) ->
 >              catch (readFile =<< getDataFileName inchFile) $ \ (_ :: IOException) ->
 >                  hPutStrLn stderr ("Could not load " ++ inchFile) >> return ""
 >     case parseInterface inchFile s of
->         Right ds  -> return $ filter (included . declName) ds
+>         Right ds  -> return $ filter (included . topDeclName) ds
 >         Left err  -> putStrLn ("interface parse error:\n" ++ show err) >> exitFailure
 >   where
 >     inchFile = importName im ++ ".inch"
@@ -61,7 +61,7 @@
 >         Imp ys        -> x `elem` ys
 >         ImpHiding ys  -> x `notElem` ys
 
-> readImports :: FilePath -> [Import] -> IO [SDeclaration ()]
+> readImports :: FilePath -> [Import] -> IO [STopDeclaration ()]
 > readImports dir is = fmap join (mapM (readImport dir) is')
 >   where
 >     is' = if any (("Prelude" ==) . importName) is then is

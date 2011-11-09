@@ -53,24 +53,26 @@
 
 > type Con s        = TmConName ::: ATy s () KSet
 
-> type Term             = Tm OK
 > type Module           = Mod OK
+> type Term             = Tm OK
 > type Constructor      = Con OK
 > type Alternative      = Alt OK
 > type CaseAlternative  = CaseAlt OK
 > type PatternList      = PatList OK
 > type Pattern          = Pat OK
+> type TopDeclaration   = TopDecl OK
 > type Declaration      = Decl OK
 > type Guard            = Grd OK
 > type GuardTerms       = GrdTms OK
 
-> type STerm             = Tm RAW
 > type SModule           = Mod RAW
+> type STerm             = Tm RAW
 > type SConstructor      = Con RAW
 > type SAlternative      = Alt RAW
 > type SCaseAlternative  = CaseAlt RAW
 > type SPatternList      = PatList RAW
 > type SPattern          = Pat RAW
+> type STopDeclaration   = TopDecl RAW
 > type SDeclaration      = Decl RAW
 > type SGuard            = Grd RAW
 > type SGuardTerms       = GrdTms RAW
@@ -150,7 +152,7 @@
 
 > data Mod s a = Mod { modName :: Maybe (String, [String])
 >                    , modImports :: [Import]
->                    , modDecls :: [Decl s a]
+>                    , modDecls :: [TopDecl s a]
 >                    }
 
 > deriving instance Show (Mod RAW a)
@@ -170,6 +172,7 @@
 
 > data ImpSpec = ImpAll | Imp [String] | ImpHiding [String]
 >   deriving (Eq, Show)
+
 
 
 > data Tm s a where
@@ -251,9 +254,47 @@
 > tmBinOp t m n = TmBinOp t `TmApp` m `TmApp` n
 
 
-> data Decl s a where
+
+
+> data TopDecl s a where
 >     DataDecl  :: TyConName -> AKind s k -> [TmConName ::: ATy s a KSet] ->
->                      [String] -> Decl s a
+>                      [String] -> TopDecl s a
+>     Decl      :: Decl s a -> TopDecl s a
+
+> deriving instance Show (TopDecl RAW a)
+> deriving instance Show (TopDecl OK a)
+
+> instance Eq (TopDecl RAW a) where
+>     DataDecl x k cs ds == DataDecl x' k' cs' ds' = x == x' && k == k' && cs == cs' && ds == ds'
+>     Decl d == Decl d' = d == d'
+>     _ == _ = False
+
+> instance TravTypes TopDecl where
+
+>     travTypes g (DataDecl x k cs ds) =
+>         DataDecl x k <$> traverse (\ (y ::: t) -> (y :::) <$> g t) cs <*> pure ds
+>     travTypes g (Decl d) = Decl <$> travTypes g d
+
+>     fogTypes g (DataDecl x k cs ds) = DataDecl x (fogKind k)
+>         (map (\ (y ::: t) -> y ::: fogTy' g [] t) cs)
+>         ds
+>     fogTypes g (Decl d)  = Decl (fogTypes g d)
+
+>     renameTypes g (DataDecl x k cs ds) = DataDecl x k
+>         (map (\ (y ::: t) -> y ::: renameTy g t) cs)
+>         ds
+>     renameTypes g (Decl d)  = Decl (renameTypes g d)
+
+> instance a ~ b => FV (TopDecl OK a) b where
+>     fvFoldMap f (DataDecl _ _ cs _)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
+>     fvFoldMap f (Decl d)             = fvFoldMap f d
+
+> topDeclName :: TopDecl s a -> String
+> topDeclName (DataDecl x _ _ _)  = x
+> topDeclName (Decl d)            = declName d
+
+
+> data Decl s a where
 >     FunDecl   :: TmName -> [Alt s a] -> Decl s a
 >     SigDecl   :: TmName -> ATy s a KSet -> Decl s a
 
@@ -262,32 +303,21 @@
 > deriving instance Eq (Decl RAW a)
 
 > instance TravTypes Decl where
-
->     travTypes g (DataDecl x k cs ds) =
->         DataDecl x k <$> traverse (\ (y ::: t) -> (y :::) <$> g t) cs <*> pure ds
 >     travTypes g (FunDecl x ps) =
 >         FunDecl x <$> traverse (travTypes g) ps
 >     travTypes g (SigDecl x ty) = SigDecl x <$> g ty
 
->     fogTypes g (DataDecl x k cs ds) = DataDecl x (fogKind k)
->         (map (\ (y ::: t) -> y ::: fogTy' g [] t) cs)
->         ds
 >     fogTypes g (FunDecl x ps)  = FunDecl x (map (fogTypes g) ps)
 >     fogTypes g (SigDecl x ty)  = SigDecl x (fogTy' g [] ty)
 
->     renameTypes g (DataDecl x k cs ds) = DataDecl x k
->         (map (\ (y ::: t) -> y ::: renameTy g t) cs)
->         ds
 >     renameTypes g (FunDecl x ps)  = FunDecl x (map (renameTypes g) ps)
 >     renameTypes g (SigDecl x ty)  = SigDecl x (renameTy g ty) 
 
 > instance a ~ b => FV (Decl OK a) b where
->     fvFoldMap f (DataDecl _ _ cs _)  = fvFoldMap f (map (\ (_ ::: t) -> t) cs)
 >     fvFoldMap f (FunDecl _ as)       = fvFoldMap f as
 >     fvFoldMap f (SigDecl _ t)        = fvFoldMap f t
 
 > declName :: Decl s a -> String
-> declName (DataDecl x _ _ _)  = x
 > declName (FunDecl x _)       = x
 > declName (SigDecl x _)       = x
 

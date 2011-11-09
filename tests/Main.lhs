@@ -77,7 +77,7 @@
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> parseCheck :: [SDeclaration ()] -> (String, Bool) -> Either String String
+> parseCheck :: [STopDeclaration ()] -> (String, Bool) -> Either String String
 > parseCheck ds (s, b) = case parseModule "parseCheck" s of
 >     Right md   -> case evalStateT (checkModule md ds) initialState of
 >         Right md'
@@ -92,7 +92,7 @@
 >                             ++ renderMe md ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
-> eraseCheck :: [SDeclaration ()] -> String -> Either String String
+> eraseCheck :: [STopDeclaration ()] -> String -> Either String String
 > eraseCheck ds s = case parseModule "eraseCheck" s of
 >     Right md   -> case runStateT (checkModule md ds) initialState of
 >         Right (md', st) -> case evalStateT (eraseModule md') st of

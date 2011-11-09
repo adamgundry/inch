@@ -29,35 +29,39 @@
 >         B0  -> return ()
 >         _   -> traceContext "assertContextEmpty" >> erk "context is not empty"
 
-> checkModule :: SModule () -> [SDeclaration ()] -> Contextual (Module ())
+> checkModule :: SModule () -> [STopDeclaration ()] -> Contextual (Module ())
 > checkModule (Mod mh is ds) xs = do
 >     mapM_ makeTyCon xs
->     mapM_ (makeBinding True) xs
->     mapM_ checkDecl xs
+>     mapM_ (makeTopBinding True) xs
+>     mapM_ checkTopDecl xs
 >     mapM_ makeTyCon ds
->     mapM_ (makeBinding False) ds
->     ds' <- concat <$> traverse checkDecl ds
+>     mapM_ (makeTopBinding False) ds
+>     ds' <- concat <$> traverse checkTopDecl ds
 >     return $ Mod mh is ds'
 >   where
->     makeTyCon :: SDeclaration () -> Contextual ()
+>     makeTyCon :: STopDeclaration () -> Contextual ()
 >     makeTyCon (DataDecl t k _ _) = inLocation (text $ "in data type " ++ t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
 >             insertTyCon t (Ex k')
->     makeTyCon _ = return ()
+>     makeTyCon (Decl _) = return ()
 
-> checkDecl :: SDeclaration () -> Contextual [Declaration ()]
-> checkDecl (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $ 
+> makeTopBinding :: Bool -> STopDeclaration () -> Contextual ()
+> makeTopBinding _ (DataDecl _ _ _ _)  = return ()
+> makeTopBinding b (Decl d) = makeBinding b d
+
+> checkTopDecl :: STopDeclaration () -> Contextual [TopDeclaration ()]
+> checkTopDecl (DataDecl t k cs ds) = inLocation (text $ "in data type " ++ t) $ 
 >   unEx (kindKind k) $ \ k' -> do
 >     cs'    <- traverse (checkConstructor t) cs
 >     return [DataDecl t k' cs' ds]
 > checkDecl d = do
 >   assertContextEmpty 
->   ds <- checkInferFunDecl d
+>   ds <- checkInferDecl d
 >   assertContextEmpty
->   unless (all (goodDecl B0) ds) $ erk $ unlines ("checkDecl: bad declaration" : map (renderMe . fog) ds)
->   return ds
+>   unless (all (goodDecl B0) ds) $ erk $ unlines ("checkTopDecl: bad declaration" : map (renderMe . fog) ds)
+>   return $ map Decl ds
 
 > checkConstructor :: TyConName -> SConstructor -> Contextual Constructor
 > checkConstructor t (c ::: ty) = inLocation (text $ "in constructor " ++ c) $ do
