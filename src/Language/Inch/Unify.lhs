@@ -256,7 +256,7 @@ This is wrong, I think:
 >                modifyContext (<>< _Psi)
 >                constrainZero e
 >                replace F0
->           where varsLeft = not . null $ vars e \\ vars _Psi
+>           where varsLeft = not . null $ vars e \\ (Ex a : vars _Psi)
 
 We can insert a fresh variable into a unit thus:
 
