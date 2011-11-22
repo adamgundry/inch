@@ -18,6 +18,7 @@
 
 > import Language.Inch.Type
 > import Language.Inch.Syntax
+> import Language.Inch.ModuleSyntax
 > import Language.Inch.Kit
 > import Language.Inch.Kind hiding (kind)
 
@@ -25,7 +26,7 @@
 
 > parseInterface = I.parse interface
 
-> def = haskellDef { identStart = identStart haskellDef <|> char '_' 
+> def = haskellDef { identStart = identStart haskellDef <|> char '_'
 >                  , reservedNames = "_" : reservedNames haskellDef }
 
 > lexer       = T.makeTokenParser def    
@@ -68,6 +69,9 @@
 
 > wrapParens p = (\ s -> "(" ++ s ++ ")") <$> p
 
+> single p = (\ x -> [x]) <$> p
+> manymany p = join <$> many p 
+
 > isVar :: String -> Bool
 > isVar ('_':_:_)  = True
 > isVar (x:_)      = isLower x
@@ -105,6 +109,10 @@
 >         <|>  reservedOp "(,)" *> return "(,)"
 >         <|>  con
 
+> gtycon =     reservedOp "()" *> return "()"
+>         <|>  reservedOp "[]" *> return "[]"
+>         <|>  reservedOp "(,)" *> return "(,)"
+>         <|>  con
 
 
 
@@ -127,7 +135,7 @@ Types
 >              <|> try (reservedOp "()" >> return unitTypeName)
 > numVarName = identLike True "numeric type variable"
 > tyVar      = STyVar <$> tyVarName
-> tyCon      = STyCon <$> tyConName
+> tyCon      = STyCon <$> gtycon
 > tyExp      = tyAll <|> tyPi <|> tyQual <|> tyExpArr
 > tyAll      = tyQuant "forall" (SBind All)
 > tyPi       = tyQuant "pi" (SBind Pi)
@@ -168,7 +176,7 @@ Types
 > prefixUnOp   =    reserved "abs" *> pure Abs
 >              <|>  reserved "signum" *> pure Signum
 
-> prefixComparator  =    reservedOp "(==)" *> pure EL
+> prefixComparator  =    reservedOp "(~)" *> pure EL
 >                   <|>  reservedOp "(>=)" *> pure GE
 >                   <|>  reservedOp "(>)"  *> pure GR
 >                   <|>  reservedOp "(<=)" *> pure LE
@@ -195,7 +203,7 @@ Types
 >                <|>  (\ a -> ([a] , SKSet)) <$> tyVarName
 
 > tyQual = do
->     ps <- try (constraints <* reservedOp "=>")
+>     ps <- try ((parens constraints <|> (pure <$> tyBit)) <* reservedOp "=>")
 >     t <- tyExp
 >     return $ foldr SQual t ps
 
@@ -259,9 +267,6 @@ Terms
 > aexp  =    TmInt <$> try natural
 >       <|>  CharLit <$> charLiteral
 >       <|>  StrLit  <$> stringLiteral
->       <|>  TmBinOp <$> prefixBinOp
->       <|>  TmUnOp <$> prefixUnOp
->       <|>  TmComp <$> prefixComparator
 >       <|>  TmVar <$> var
 >       <|>  TmCon <$> gcon
 >       <|>  parens (fmap (foldr1 (TmApp . TmApp (TmCon tupleConsName))) (commaSep1 expr))
@@ -284,7 +289,7 @@ Terms
 
 Interface files
 
-> interface = many (dataDecl <|> Decl <$> sigDecl)
+> interface = manymany (single dataDecl <|> single classDecl <|> single instHeader <|> map Decl <$> sigDecls) <* eof
 
 
 Modules
@@ -310,22 +315,24 @@ Modules
 >     return $ Import q n as im
 
 > importSpec =    Imp <$> parens (commaSep identifier)
->            <|>  ImpHiding <$> (reserved "hiding" *> parens (commaSep identifier))
+>            <|>  ImpHiding <$> (reserved "hiding" *> parens (commaSep (var <|> con)))
 >            <|>  pure ImpAll
 
 > moduleName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
 
-> topdecls  = associateTop <$> many (dataDecl
->                                    <|> (Decl <$> (sigDecl <|> funDecl)))
+> topdecls  = associateTop <$> manymany (single dataDecl
+>                                    <|> single classDecl
+>                                    <|> single instDecl
+>                                    <|> (map Decl <$> (sigDecls <|> single funDecl)))
 >  where
->     associateTop :: [STopDeclaration ()] -> [STopDeclaration ()]
+>     associateTop :: [STopDeclaration] -> [STopDeclaration]
 >     associateTop = map joinFun . groupBy sameFun
 >
 >     sameFun (Decl (FunDecl x _)) (Decl (FunDecl y _))  = x == y
 >     sameFun _             _                            = False
 > 
->     joinFun :: [STopDeclaration ()] -> STopDeclaration ()
+>     joinFun :: [STopDeclaration] -> STopDeclaration
 >     joinFun [d] = d
 >     joinFun fs@(Decl (FunDecl x _) : _) = Decl (FunDecl x (join (map altsOf fs)))
 >     joinFun _ = error "joinFun: impossible"
@@ -333,7 +340,7 @@ Modules
 >     altsOf (Decl (FunDecl _ as)) = as
 >     altsOf _ = error "altsOf: impossible"
 
-> decls     = associate <$> many (sigDecl <|> funDecl)
+> decls     = associate <$> manymany (sigDecls <|> single funDecl)
 >   where
 >     associate :: [SDeclaration ()] -> [SDeclaration ()]
 >     associate = map joinFun . groupBy sameFun
@@ -365,6 +372,45 @@ Modules
 
 > className = identLike False "type class name"
 
+> classDecl = I.lineFold $ do
+>     reserved "class"
+>     ss  <- optionalList $ parens (commaSep tyExp) <* reservedOp "=>"
+>     s   <- className
+>     vs  <- many classVar
+>     ms  <- optionalList (reserved "where" *> manymany tmtypes)
+>     return $ CDecl s (ClassDecl vs ss ms) 
+>   where
+>     classVar = ( ((\ v -> VK v SKSet) <$> var)
+>              <|> parens (VK <$> var <*> (doubleColon *> kind)))
+
+> instDecl = I.lineFold $ do
+>     reserved "instance"
+>     t <- tyExp
+>     (cs, s, ts) <- implyBits t
+>     zs <- optionalList (reserved "where" *> many funline)
+>     return $ IDecl s (InstDecl ts cs zs)
+
+
+> implyBits :: Monad m => SType -> m ([SType], String, [SType])
+> implyBits (SQual q t) = do
+>     let qs = uncomma q
+>     (cs, s, ts) <- implyBits t
+>     return (qs ++ cs, s, ts)
+>   where
+>     uncomma (STyCon c `STyApp` x `STyApp` y)
+>         | c == tupleConsName = uncomma x ++ uncomma y
+>     uncomma x = [x]
+> implyBits (STyApp f t) = do
+>     ([], s, ts) <- implyBits f
+>     return ([], s, t:ts)
+> implyBits (STyCon c) = return ([], c, [])
+> implyBits _ = fail "ook"
+
+
+
+> instHeader = instDecl
+
+
 > constructor = do
 >     s <- con
 >     doubleColon
@@ -372,17 +418,19 @@ Modules
 >     return $ s ::: t
 
 
-> sigDecl = I.lineFold $ do
->     s   <- try $ var <* doubleColon
+> tmtypes = I.lineFold $ do
+>     ss  <- try $ commaSep var <* doubleColon
 >     ty  <- tyExp
->     return $ SigDecl s ty
+>     return $ map (\ s -> s ::: ty) ss
 
+> sigDecls = map (\ (s ::: ty) -> SigDecl s ty) <$> tmtypes
 
-> funDecl = I.lineFold $ do
+> funline = I.lineFold $ do
 >     (v, ps)  <- funlhs
 >     gt       <- rhs
->     return $ FunDecl v [Alt (foldr (:!) P0 ps) gt]
+>     return (v, [Alt (foldr (:!) P0 ps) gt])
 
+> funDecl = uncurry FunDecl <$> funline
 
 > altRest p  =    Unguarded <$> (p *> expr) <*> whereClause
 >            <|>  Guarded <$> (many1 (reservedOp "|" *> ((:*:) <$> guarded <* p <*> expr)))
@@ -406,8 +454,10 @@ Modules
 >     <*> whereClause
 
 
-> patList  =    (:!) <$> apat <*> patList
->          <|>  pure P0
+> rtc p  =    (:!) <$> p <*> rtc p
+>        <|>  pure P0
+
+> patList = rtc apat
 
 > pat = do
 >     l   <- lpat
@@ -422,6 +472,8 @@ Modules
 > apat =        nplusk
 >          <|>  PatCon <$> gcon <*> pure P0
 >          <|>  PatIntLit <$> try integer
+>          <|>  PatStrLit <$> stringLiteral
+>          <|>  PatCharLit <$> charLiteral
 >          <|>  underscore *> pure PatIgnore
 >          <|>  parens (foldr1 tupleConsPat <$> commaSep1 pat)
 >          <|>  brackets (foldr listConsPat listNilPat <$> commaSep pat)

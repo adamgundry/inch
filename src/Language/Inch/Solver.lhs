@@ -45,7 +45,7 @@
 >     g <- getContext
 >     let (g', vs, hs, ps) = collect g [] [] []
 >     putContext g'
->     let qs = simplifyConstraints vs hs ps
+>     qs <- simplifyConstraints vs hs ps
 >     return (hs, qs)
 >   where
 >     collect :: Context -> [Ex (Var ())] -> [Type KConstraint] -> [Type KConstraint] ->
@@ -98,8 +98,9 @@
 
 
 > simplifyConstraints :: [Ex (Var ())] -> [Type KConstraint] ->
->                            [Type KConstraint] -> [Type KConstraint]
-> simplifyConstraints vs hs ps = filter (not . checkPred) (nub ps)
+>                            [Type KConstraint] -> Contextual [Type KConstraint]
+> simplifyConstraints vs hs ps = simplifyClassConstraints hs $
+>                                    filter (not . checkPred) (nub ps)
 >   where
 >     -- Compute the transitive dependency closure of the variables that occur in p.
 >     -- We have to keep iterating until we reach a fixed point. This
@@ -118,8 +119,8 @@
 >
 >     checkPred :: Type KConstraint -> Bool
 >     checkPred p = p' `elem` phs' || case constraintToPred p' of
->                      Just p'' -> P.check . toFormula xs'' phs'' . normalisePred $ p''
->                      Nothing -> False
+>                      Just p''  -> P.check . toFormula xs'' phs'' . normalisePred $ p''
+>                      Nothing   -> False
 >       where
 >         (pvs, pool)  = partition (\ (Ex v) -> v <? p) vs
 >         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, hs)
@@ -223,3 +224,70 @@
 >     compToFormula GR  = (:>:)
 
 
+
+> simplifyClassConstraints :: [Type KConstraint] -> [Type KConstraint] ->
+>                                 Contextual [Type KConstraint]
+> simplifyClassConstraints _  []     = return []
+> simplifyClassConstraints hs (q:qs) = case splitConstraint q of
+>     Nothing      -> (q :) <$> simplifyClassConstraints hs qs
+>     Just (c, _) -> do
+>         is <- lookupInstances c
+>         let hs' = hs ++ is
+>         (simp, hard) <- if q `elem` hs' then return ([], [])
+>                                         else simplify (hs ++ is) q
+>         (simp ++) <$> simplifyClassConstraints (simp ++ hs) (hard ++ qs)
+>   where
+>     splitConstraint :: Type k -> Maybe (ClassName, [Ex (Ty ())])
+>     splitConstraint (TyCon c _)    = Just (c, [])
+>     splitConstraint (f `TyApp` s)  = do  (c, as) <- splitConstraint f
+>                                          Just (c, as ++ [Ex s])
+>                                       
+>     splitConstraint _              = Nothing
+>
+>     simplify :: [Type KConstraint] -> Type KConstraint ->
+>                     Contextual ([Type KConstraint], [Type KConstraint])
+>     simplify []     p = return ([p], [])
+>     simplify (h:xs) p = do
+>         ms <- matcher h p []
+>         case ms of
+>             Just (cs, _)  -> return ([], cs)
+>             Nothing       -> simplify xs p
+>
+>     matcher :: Type k -> Type k -> [Ex (Var ())] -> 
+>                    Contextual (Maybe ([Type KConstraint], Subst))
+>     matcher (Qual g h) p vs = (\ mp -> (\ (cs, ss) -> (applySubst ss g:cs, ss)) <$> mp) <$> matcher h p vs
+>     matcher (TyVar a) p vs | a `hetElem` vs = return (Just ([], [VT a p]))
+>     matcher (Bind All x k t) p vs = do
+>         v   <- freshVar SysVar x k
+>         ms  <- matcher (unbindTy v t) p (Ex v : vs)
+>         return $ (\ (cs, ss) -> (cs, filter (vtVarIs v) ss)) <$> ms
+>     matcher (TyApp f s) (TyApp f' s') vs = hetEq (getTyKind f) (getTyKind f') (do
+>         ms <- matcher f f' vs
+>         case ms of
+>             Nothing        -> return Nothing
+>             Just (cs, ss)  -> do
+>                 ms' <- matcher (applySubst ss s) s' vs
+>                 case ms' of
+>                     Nothing -> return Nothing
+>                     Just (cs', ss') -> return $ Just (cs ++ cs', ss ++ ss')
+>       ) (return Nothing)
+>     matcher s t _  | s == t     = return (Just ([], []))
+>                    | otherwise  = return Nothing
+
+> type Subst = [VarType]
+
+> data VarType where
+>   VT :: Var () k -> Type k -> VarType
+
+> vtVarIs :: Var () k -> VarType -> Bool
+> vtVarIs a (VT v _) = a =?= v
+
+> lookupSubst :: Subst -> Var () k -> Maybe (Type k)
+> lookupSubst [] _ = Nothing
+> lookupSubst (VT v t : s) a = hetEq a v (Just t) (lookupSubst s a)
+
+> applySubst :: Subst -> Type k -> Type k
+> applySubst s = substTy f
+>   where
+>     f :: Var () l -> Type l
+>     f v = maybe (TyVar v) id (lookupSubst s v)

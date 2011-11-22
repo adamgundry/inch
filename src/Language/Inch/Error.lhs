@@ -1,5 +1,5 @@
 > {-# LANGUAGE TypeSynonymInstances, FlexibleContexts, GADTs, TypeOperators,
->              NoMonomorphismRestriction #-}
+>              NoMonomorphismRestriction, FlexibleInstances #-}
 
 > module Language.Inch.Error where
 
@@ -72,7 +72,7 @@
 >                                                 ,  text "when generalising type"
 >                                                 ,  nest 2 (prettyHigh $ fogSysTy t)
 >                                                 ]
->     pretty (Impossible p) _ = text "Impossible constraint " <+> prettyHigh (fogSysTy p)
+>     pretty (Impossible p) _ = text "Impossible constraint" <+> prettyHigh (fogSysTy p)
 >     pretty (BadBindingLevel a) _ = text "Forall-bound variable"
 >                                        <+> prettyVar a
 >                                        <+> text "used where pi-bound variable required"

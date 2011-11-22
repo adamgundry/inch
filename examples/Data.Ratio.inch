@@ -1,4 +1,0 @@
-data Rational where
-numerator :: Rational -> Integer
-denominator :: Rational -> Integer
-(%) :: Integer -> Integer -> Rational

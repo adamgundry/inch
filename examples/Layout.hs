@@ -41,7 +41,7 @@ horizPad {w1} {d1} {w2} {d2} l1 l2
 
 
 stuffAt :: forall a (w d :: Num) . pi (x y :: Nat) .
-    x < w, y < d => Layout (K a) w d -> Maybe a
+    (x < w, y < d) => Layout (K a) w d -> Maybe a
 stuffAt {x} {y} (Stuff (K i))       = Just i
 stuffAt {x} {y} Empty               = Nothing
 stuffAt {x} {y} (Horiz {wx} l1 l2) | {x <  wx} = stuffAt {x} {y} l1
@@ -78,7 +78,7 @@ returnLayout = Stuff
 
 -- Tiling needs multiplication, otherwise it only works for 1x1 tiles
 
-tile :: forall (s :: Num -> Num -> *) . pi (w d :: Num) . 1 <= w, 1 <= d =>
+tile :: forall (s :: Num -> Num -> *) . pi (w d :: Num) . (1 <= w, 1 <= d) =>
             Layout s 1 1 -> Layout s w d
 tile {1}    {1}    l = l
 tile {w+2}  {1}    l = Horiz {1} l (tile {w+1} {1} l) 
@@ -92,7 +92,7 @@ data Proxy :: Num -> * where
 tilen :: forall (s :: Num -> Num -> *) . 
            (forall a (m n :: Nat) . Proxy m -> Proxy n -> (0 <= m * n => a) -> a) ->
            (pi (w d x y :: Num) .
-             0 <= w, 0 <= d, 1 <= x, 1 <= y =>
+             (0 <= w, 0 <= d, 1 <= x, 1 <= y) =>
                  Layout s w d -> Layout s (w*x) (d*y))
 tilen lem {w} {d} {1}    {1}    l = l
 tilen lem {w} {d} {x+2}  {1}    l = lem (Proxy :: Proxy x) (Proxy :: Proxy w)
@@ -191,9 +191,9 @@ renderM {w} {d} l = showM (render {w} {d} l)
 -- Cropping a w*d layout to produce a wc*dc layout starting from (x, y) 
 
 crop :: forall (s :: Num -> Num -> *) . 
-          (pi (w' d' x' y' wc' dc' :: Nat) . x' + wc' <= w', y' + dc' <= d' =>
+          (pi (w' d' x' y' wc' dc' :: Nat) . (x' + wc' <= w', y' + dc' <= d') =>
             s w' d' -> Layout s wc' dc') ->
-          (pi (w d x y wc dc :: Nat) . x + wc <= w, y + dc <= d =>
+          (pi (w d x y wc dc :: Nat) . (x + wc <= w, y + dc <= d) =>
             Layout s w d -> Layout s wc dc)
 crop f {w} {d} {x} {y} {wc} {dc} (Stuff s) = f {w} {d} {x} {y} {wc} {dc} s
 crop f {w} {d} {x} {y} {wc} {dc} Empty = Empty
@@ -212,7 +212,7 @@ crop f {w} {d} {x} {y} {wc} {dc} (Vert {dy} l1 l2) | {y < dy, y + dc > dy}
     = Vert {dy-y} (crop f {w} {dy} {x} {y} {wc} {dy-y} l1)
                   (crop f {w} {d-dy} {x} {0} {wc} {dc-(dy-y)} l2)
 
-cropK :: forall a . pi (w d x y wc dc :: Nat) . x + wc <= w, y + dc <= d =>
+cropK :: forall a . pi (w d x y wc dc :: Nat) . (x + wc <= w, y + dc <= d) =>
             K a w d -> Layout (K a) wc dc
 cropK {w} {d} {x} {y} {wc} {dc} (K u) | {wc > 0, dc > 0}  = Stuff (K u)
 cropK {w} {d} {x} {y} {wc} {dc} (K u) | True              = Empty
@@ -223,7 +223,7 @@ crop' = crop cropK
 -- Overlaying two layouts so the empty bits of the second layout are transparent
 
 overlay :: forall (s :: Num -> Num -> *) .
-               (pi (w d x y wc dc :: Nat) . x + wc <= w, y + dc <= d =>
+               (pi (w d x y wc dc :: Nat) . (x + wc <= w, y + dc <= d) =>
                    Layout s w d -> Layout s wc dc) ->
                (pi (w d :: Num) . 
                    Layout s w d -> Layout s w d -> Layout s w d)

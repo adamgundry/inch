@@ -11,6 +11,7 @@
 > import Language.Inch.Type
 > import Language.Inch.BwdFwd
 > import Language.Inch.Syntax
+> import Language.Inch.ModuleSyntax
 > import Language.Inch.Kit
 
 
@@ -37,10 +38,10 @@
 > prettySysVar :: Var () k -> Doc
 > prettySysVar = prettyHigh . fogSysVar
 
-> prettyFog :: (TravTypes t, Pretty (t RAW ())) => t OK () -> Doc
-> prettyFog = prettyHigh . fog
+> prettyFog :: (TravTypes1 t, Pretty (t RAW ())) => t OK () -> Doc
+> prettyFog = prettyHigh . fog1
 
-> prettyFogSys :: (TravTypes t, Pretty (t RAW ())) => t OK () -> Doc
+> prettyFogSys :: (TravTypes1 t, Pretty (t RAW ())) => t OK () -> Doc
 > prettyFogSys = prettyHigh . fogSys
 
 > renderMe :: Pretty a => a -> String
@@ -54,7 +55,7 @@
 > instance Pretty String where
 >     pretty s _ = text s
 
-> instance Pretty [STopDeclaration ()] where
+> instance Pretty [STopDeclaration] where
 >     pretty ds _ = vcat (map prettyHigh ds)
 
 > instance Pretty SKind where
@@ -133,7 +134,7 @@
 > prettyQual ps t = wrapDoc ArrSize $
 >     prettyPreds (trail ps) <+> text "=>" <++> pretty t ArrSize
 >   where
->     prettyPreds xs = hsep (punctuate (text ",") (map prettyHigh xs))
+>     prettyPreds xs = parens (hsep (punctuate (text ",") (map prettyHigh xs)))
 
 
 > instance Pretty (STerm a) where
@@ -143,8 +144,8 @@
 >                               integer k
 >     pretty (CharLit c)  = const $ text $ show c
 >     pretty (StrLit s)   = const $ text $ show s
->     pretty (TmApp (TmApp (TmBinOp o) m) n) | binOpInfix o =
->         wrapDoc AppSize $ pretty m ArgSize <+> text (binOpString o) <+> pretty n ArgSize
+>     -- pretty (TmApp (TmApp f m) n) | Just s <- infixTmName f =
+>     --    wrapDoc AppSize $ pretty m ArgSize <+> text s <+> pretty n ArgSize
 >     pretty (TmApp f s)  = wrapDoc AppSize $
 >         pretty f AppSize <++> pretty s ArgSize
 >     pretty (TmBrace n)  = const $ braces $ prettyHigh n 
@@ -154,10 +155,10 @@
 >     pretty (Case t as)  = wrapDoc maxBound $ text "case" <+> prettyHigh t <+> text "of" <++> vcatPretty as
 >     pretty (t :? ty)    = wrapDoc ArrSize $ 
 >         pretty t AppSize <+> text "::" <+> pretty ty maxBound
->     pretty (TmUnOp o)   = pretty o
->     pretty (TmBinOp o)  = pretty o
->     pretty (TmComp EL)  = const . parens $ text "=="
->     pretty (TmComp c)   = parens . pretty c
+
+> infixTmName :: STerm a -> Maybe String
+> infixTmName (TmVar ('(':v)) = Just (init v)
+> infixTmName _ = Nothing
 
 > prettyLam :: Doc -> STerm a -> Size -> Doc
 > prettyLam d (Lam x t) = prettyLam (d <+> text x) t
@@ -171,7 +172,7 @@
 > parenCommaList d xs = d <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
-> instance Pretty (SModule a) where
+> instance Pretty SModule where
 >     pretty (Mod mh is ds) _ = maybe empty prettyModHeader mh
 >                                   $$ vcat (map prettyHigh is)
 >                                   $$ vcat (intersperse (text " ") (map prettyHigh ds))
@@ -192,7 +193,7 @@
 >     pretty (ImpHiding xs)  _ = text "hiding" <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
-> instance Pretty (STopDeclaration a) where
+> instance Pretty STopDeclaration where
 >     pretty (DataDecl n k cs ds) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
 >         <+> text "where") 2 $
@@ -201,6 +202,18 @@
 >         derivingClause []  = empty
 >         derivingClause xs  = text "deriving" <+>
 >                                parens (hsep (punctuate  (text ",") (map text xs)))
+>     pretty (CDecl x (ClassDecl vs ss ms)) _ =
+>         hang (text "class"
+>               <+> (if null ss then empty else parens (fsepPretty ss) <+> text "=>")
+>               <+> text x <+> fsep (map prettyHigh vs)
+>               <+> text "where") 2 $
+>                   vcat (map prettyHigh ms)
+>     pretty (IDecl x (InstDecl ts cs zs)) _ =
+>         hang (text "instance"
+>               <+> (if null cs then empty else parens (fsepPretty cs) <+> text "=>")
+>               <+> text x  <+> fsep (map prettyHigh ts)
+>               <+> text "where") 2 $
+>                   vcat (map (prettyHigh . uncurry FunDecl) zs)
 >     pretty (Decl d) s = pretty d s
 
 > instance Pretty (SDeclaration a) where
@@ -249,12 +262,29 @@
 >     pretty (PatBrace a k)  = const $ braces $
 >                                     text a <+> text "+" <+> integer k
 >     pretty (PatIntLit i)   = const $ integer i
+>     pretty (PatCharLit c)  = const $ text $ show c
+>     pretty (PatStrLit s)   = const $ text $ show s
 >     pretty (PatNPlusK n k) = const $ parens $ text n <+> text "+" <+> integer k
 
 > instance Pretty (SGuard a) where
 >     pretty (ExpGuard t)  = const $ fsepPretty t
 >     pretty (NumGuard p)  = const $ braces (fsepPretty p)
 
+
+> instance Pretty (VarList RAW a b) where
+>     pretty P0         _  = empty
+>     pretty (p :! ps)  z  = pretty p z <+> pretty ps z
+
+> instance Pretty (VarBinding RAW a b) where
+>     pretty (VB x SKSet) _ = prettyHigh x
+>     pretty (VB x k)     _ = parens (prettyHigh x <+> text "::" <+> prettyHigh k)
+
+> instance Pretty (TyList RAW a b) where
+>     pretty P0               _  = empty
+>     pretty (TyK t _ :! ps)  z  = pretty t z <+> pretty ps z
+
+> instance Pretty (VarKind RAW ()) where
+>     pretty (VK v _) = pretty v
 
 > {-
 > instance Pretty SNormalPred where

@@ -66,18 +66,18 @@ plugBR t (ZBL {x} z r) = plug t (ZBL {x} z r)
 plugBR t (ZBR {x} l z) = plug t (ZBR {x} l z)
 
 data SearchResult :: Integer -> Integer -> Integer -> Integer -> * where
-  Nope  ::  forall (x rlo rhi lo hi :: Integer)(rn :: Nat) . lo < x, x < hi =>
+  Nope  ::  forall (x rlo rhi lo hi :: Integer)(rn :: Nat) . (lo < x, x < hi) =>
                 TreeZip rlo rhi 0 rn lo hi 0 0 -> SearchResult x rlo rhi rn
   Yep   ::  forall (x rlo rhi lo hi c :: Integer)(rn n :: Nat) .
                 TreeZip rlo rhi 0 rn lo hi c n -> Tree lo hi c n ->
                     SearchResult x rlo rhi rn
 
 search ::  forall (rlo rhi :: Integer)(rn :: Nat) .
-               pi (x :: Integer) . rlo < x, x < rhi =>
+               pi (x :: Integer) . (rlo < x, x < rhi) =>
                     Tree rlo rhi 0 rn -> SearchResult x rlo rhi rn
 search {x} = help Root
   where
-    help ::  forall (lo hi c :: Integer)(n :: Nat) . lo < x, x < hi =>
+    help ::  forall (lo hi c :: Integer)(n :: Nat) . (lo < x, x < hi) =>
                  TreeZip rlo rhi 0 rn lo hi c n -> Tree lo hi c n ->
                      SearchResult x rlo rhi rn
     help z E                       = Nope z
@@ -88,7 +88,7 @@ search {x} = help Root
     help z (TB {y} l r) | {x ~ y}  = Yep z (TB {y} l r)
     help z (TB {y} l r) | {x > y}  = help (ZBR {y} l z) r
 
-member ::  forall (lo hi :: Integer) . pi (x :: Integer) . lo < x, x < hi =>
+member ::  forall (lo hi :: Integer) . pi (x :: Integer) . (lo < x, x < hi) =>
                RBT lo hi -> Bool
 member {x} (RBT t) = case search {x} t of
                        Nope _   -> False
@@ -125,7 +125,7 @@ solveIns (PanicRB {xi} (TR {xil} lil ril) ri)  (ZBR {x} l z)  =
 solveIns (PanicBR {xi} li (TR {xir} lir rir))  (ZBR {x} l z)  =
     solveIns (Level Red (TR {xi} (TB {x} l li) (TB {xir} lir rir))) z
 
-insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . lo < x, x < hi =>
+insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
                Tree lo hi 0 n -> RBT lo hi
 insert {x} t = case search {x} t :: SearchResult x lo hi n of
     Nope z   -> solveIns (Level Red (TR {x} E E)) z
@@ -227,7 +227,7 @@ delFocus (TB {x} l (TB {rx} rl rr))          z = findMin (TB {rx} rl rr) (\ {k} 
 delFocus (TB {x} (TB {lx} ll lr)  r)         z = findMin r (\ {k} -> ZBR {k} (wkTree (TB {lx} ll lr)) z)
 
  
-delete ::  forall (lo hi :: Integer) . pi (x :: Integer) . lo < x, x < hi =>
+delete ::  forall (lo hi :: Integer) . pi (x :: Integer) . (lo < x, x < hi) =>
                RBT lo hi -> RBT lo hi
 delete {x} (RBT t) = f (search {x} t)
   where
@@ -263,7 +263,7 @@ weakling :: forall (lo hi c n :: Num) . pi (x :: Num) . Tree lo hi c n ->
               Tree (min lo (x-1)) (max hi (x+1)) c n
 weakling {x} t = wkTree2 t
 
-wkTree2 :: forall (lo lo' hi hi' c n :: Num) . lo' <= lo, hi <= hi' =>
+wkTree2 :: forall (lo lo' hi hi' c n :: Num) . (lo' <= lo, hi <= hi') =>
                Tree lo hi c n -> Tree lo' hi' c n
 wkTree2 E            = E
 wkTree2 (TB {x} l r) = TB {x} (wkTree2 l) (wkTree2 r)

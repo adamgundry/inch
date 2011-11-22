@@ -76,7 +76,7 @@ wires {n+1} = sequ wire (wires {n})
 manyWires = wires {1000}
 sillyWires {n} = wires {1000000*n}
 
-bind :: forall (m n j :: Nat) a . 0 < n, 0 < j =>
+bind :: forall (m n j :: Nat) a . (0 < n, 0 < j) =>
             Wire m a 1 a -> (a -> Wire n a j a) -> Wire (m + n) a j a 
 bind (Say a p) g = sequ p (g a)
 bind (Ask f)   g = Ask (\ x -> bind (f x) g)
@@ -138,14 +138,14 @@ adder {m+1}  = ripple {m} (adder {m})
 -- We don't have type-level div/mod (yet?) but can fake it thus
 
 divvy :: forall a. pi (n d :: Nat) . 1 <= d =>
-             (pi (m r :: Nat) . n ~ d * m + r, r < d => a) -> a
+             (pi (m r :: Nat) . (n ~ d * m + r, r < d) => a) -> a
 divvy {n}    {d} f | {n < d} = f {0} {n}
 divvy {n}    {d} f | {n >= d} =
-                     let g :: pi (m r :: Nat) . n - d ~ d * m + r, r < d => a
+                     let g :: pi (m r :: Nat) . (n - d ~ d * m + r, r < d) => a
                          g {m} {r} = f {m+1} {r}
                      in divvy {n-d} {d} g
 
-half :: forall a. pi (n :: Nat) . (pi (m r :: Nat) . n ~ 2 * m + r, r <= 1 => a) -> a
+half :: forall a. pi (n :: Nat) . (pi (m r :: Nat) . (n ~ 2 * m + r, r <= 1) => a) -> a
 half {n} = divvy {n} {2}
 
 

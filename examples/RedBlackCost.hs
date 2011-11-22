@@ -71,7 +71,7 @@ plugBR t (ZBR {x} l z) = plug t (ZBR {x} l z)
 
 data SearchResult :: Integer -> Integer -> Integer -> Integer -> * where
   Nope  :: forall (x rlo rhi lo hi :: Integer)(rn d :: Nat) .
-               d <= (2 * rn), lo < x, x < hi =>
+               (d <= (2 * rn), lo < x, x < hi) =>
                    TreeZip rlo rhi 0 rn lo hi 0 0 d -> SearchResult x rlo rhi rn
   Yep   :: forall (x rlo rhi lo hi c :: Integer)(rn n d :: Nat) .
                ((2 * n) + d) <= (2 * rn) =>
@@ -79,12 +79,12 @@ data SearchResult :: Integer -> Integer -> Integer -> Integer -> * where
                        SearchResult x rlo rhi rn
 
 search ::  forall (rlo rhi :: Integer)(rn :: Nat) .
-               pi (x :: Integer) . rlo < x, x < rhi =>
+               pi (x :: Integer) . (rlo < x, x < rhi) =>
                    Tree rlo rhi 0 rn -> Cost (2 * rn + 1) (SearchResult x rlo rhi rn)
 search {x} = helpB Root
   where
     help :: forall (lo hi c :: Integer)(n d :: Nat) .
-                (1 + (2 * n) + d) <= (2 * rn), lo < x, x < hi =>
+                ((1 + (2 * n) + d) <= (2 * rn), lo < x, x < hi) =>
                     TreeZip rlo rhi 0 rn lo hi c n d -> Tree lo hi c n ->
                         Cost (2 + 2 * n) (SearchResult x rlo rhi rn)
     help z E                      = tick (returnW (Nope z))
@@ -96,7 +96,7 @@ search {x} = helpB Root
     help z (TB {y} l r) | {x > y} = tick (weakenBy {1} (help (ZBR {y} l z) r))
 
     helpB :: forall (lo hi :: Integer)(n d :: Nat) .
-                 ((2 * n) + d) <= (2 * rn), lo < x, x < hi =>
+                 (((2 * n) + d) <= (2 * rn), lo < x, x < hi) =>
                      TreeZip rlo rhi 0 rn lo hi 0 n d -> Tree lo hi 0 n ->
                          Cost (2 * n + 1) (SearchResult x rlo rhi rn)
     helpB z E                      = tick (returnW (Nope z))
@@ -106,7 +106,7 @@ search {x} = helpB Root
 
 
 member ::  forall (lo hi :: Integer)(n :: Nat) .
-               pi (x :: Integer) . lo < x, x < hi =>
+               pi (x :: Integer) . (lo < x, x < hi) =>
                    Tree lo hi 0 n -> Cost (2 * n + 3) Bool
 member {x} t = tick (bindCost (search {x} t) f)
   where
@@ -149,7 +149,7 @@ solveIns (PanicBR {xi} li (TR {xir} lir rir))  (ZBR {x} l z)  =
 
 
 
-insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . lo < x, x < hi =>
+insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
                Tree lo hi 0 n -> Cost (4 * n + 6) (RBT lo hi)
 insert {x} t = tick (bindCost (search {x} t) f)
   where
@@ -260,7 +260,7 @@ delFocus (TB {x} l (TB {rx} rl rr))          z = tick (weakenBy {3} (findMin (TB
 delFocus (TB {x} (TB {lx} ll lr)  r)         z = tick (weakenBy {3} (findMin r (\ {k} -> ZBR {k} (wkTree (TB {lx} ll lr)) z)))
 
 
-delete :: forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . lo < x, x < hi =>
+delete :: forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
            Tree lo hi 0 n -> Cost (5 * n + 6) (RBT lo hi)
 delete {x} t = tick (bindCost (search {x} t) f)
   where

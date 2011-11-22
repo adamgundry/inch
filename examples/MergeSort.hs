@@ -61,7 +61,7 @@ omerge (OCons {x} xs) (OCons {y} ys)
 
 
 data In :: Integer -> Integer -> * where
-    In :: forall (l u :: Integer) . pi (x :: Integer) . l <= x, x <= u => In l u
+    In :: forall (l u :: Integer) . pi (x :: Integer) . (l <= x, x <= u) => In l u
   deriving Show
 
 oflatten :: forall (n l u :: Integer) . l <= u => DTree (In l u) n -> OVec n l u

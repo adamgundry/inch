@@ -3,57 +3,172 @@
 
 module InchPrelude where
 
-import Prelude hiding (subtract, id, const, flip, maybe, either,
-                         curry, uncurry, until, asTypeOf, map, filter,
-                         concat, concatMap, head, tail, last, init,
-                         null, length, foldl, foldl1, scanl, scanl1,
-                         foldr, foldr1, iterate, repeat, replicate,
-                         take, drop, splitAt, takeWhile, unlines,
-                         unwords, reverse, and, or, any, all, sum,
+import Prelude hiding (subtract, even, odd, gcd, lcm, (^), (^^),
+                         fromIntegral, realToFrac, sequence,
+                         sequence_, mapM, mapM_, (=<<), id, const,
+                         (.), flip, ($), ($!), (&&), (||), not,
+                         otherwise, maybe, either, curry, uncurry,
+                         until, asTypeOf, error, undefined, map, (++),
+                         filter, concat, concatMap, head, tail, last,
+                         init, null, length, (!!), foldl, foldl1,
+                         scanl, scanl1, foldr, foldr1, scanr, scanr1,
+                         iterate, repeat, replicate, take, drop,
+                         splitAt, takeWhile, dropWhile, span, break,
+                         lines, words, unlines, unwords, reverse, and,
+                         or, any, all, elem, notElem, lookup, sum,
                          product, maximum, minimum, zip, zipWith,
-                         zipWith3, cycle, map, fst, snd, error,
-                         undefined)
+                         zipWith3, cycle, map, fst, snd)
 
--- Numeric functions
-
-
-subtract         :: Integer -> Integer -> Integer
-subtract         =  flip (-)
 
 {-
-even             :: Integer -> Bool
-odd              :: Integer -> Bool
-even n           =  rem n 2 == 0
-odd              =  not . even
+class  Eq' a  where  
+    (==.) :: a -> a -> Bool  
+    (/=.) :: a -> a -> Bool
 
 
-gcd              :: (Integral a) => a -> a -> a
+class  (Eq' a) => Ord' a  where  
+    compare'              :: a -> a -> Ordering  
+    (<), (<=), (>=), (>)  :: a -> a -> Bool  
+    max', min'            :: a -> a -> a  
+
+
+class  Enum' a  where  
+    succ', pred'      :: a -> a  
+    toEnum'           :: Int -> a  
+    fromEnum'         :: a -> Int  
+    enumFrom'         :: a -> [a]             -- [n..]  
+    enumFromThen'     :: a -> a -> [a]        -- [n,n'..]  
+    enumFromTo'       :: a -> a -> [a]        -- [n..m]  
+    enumFromThenTo'   :: a -> a -> a -> [a]   -- [n,n'..m]  
+ 
+
+class  Bounded' a  where  
+    minBound'         :: a  
+    maxBound'         :: a
+
+-- Numeric classes  
+ 
+class  (Eq a, Show a) =>  Num' a  where  
+    (+.), (-.), (*.)    :: a -> a -> a  
+    negate'           :: a -> a  
+    abs, signum      :: a -> a  
+    fromInteger'      :: Integer -> a  
+
+class  (Num a, Ord a) =>  Real' a  where  
+    toRational'       ::  a -> Rational
+
+class (Real a, Enum a) =>  Integral' a  where  
+    quot', rem'        :: a -> a -> a  
+    div', mod'         :: a -> a -> a  
+    quotRem', divMod'  :: a -> a -> (a,a)  
+    toInteger'        :: a -> Integer  
+ 
+class (Num a) =>  Fractional' a  where  
+    (/.)              :: a -> a -> a  
+    recip'            :: a -> a  
+    fromRational'     :: Rational -> a  
+ 
+class (Fractional a) =>  Floating' a  where  
+    pi'                  :: a  
+    exp', log', sqrt'      :: a -> a  
+    (**.), logBase'       :: a -> a -> a  
+    sin', cos', tan'       :: a -> a  
+    asin', acos', atan'    :: a -> a  
+    sinh', cosh', tanh'    :: a -> a  
+    asinh', acosh', atanh' :: a -> a  
+ 
+class (Real a, Fractional a) =>  RealFrac' a  where  
+    properFraction'   :: forall b . (Integral b) => a -> (b,a)  
+    truncate', round'  :: forall b . (Integral b) => a -> b  
+    ceiling', floor'   :: forall b . (Integral b) => a -> b  
+ 
+class (RealFrac a, Floating a) =>  RealFloat' a  where  
+    floatRadix'       :: a -> Integer  
+    floatDigits'      :: a -> Int  
+    floatRange'       :: a -> (Int,Int)  
+    decodeFloat'      :: a -> (Integer,Int)  
+    encodeFloat'      :: Integer -> Int -> a  
+    exponent'         :: a -> Int  
+    significand'      :: a -> a  
+    scaleFloat'       :: Int -> a -> a  
+    isNaN', isInfinite', isDenormalized', isNegativeZero', isIEEE'  
+                     :: a -> Bool  
+    atan2'            :: a -> a -> a  
+-}
+ 
+
+subtract         :: Num a => a -> a -> a
+subtract         =  flip (-)
+
+even, odd        :: (Eq a, Num a, Integral a) => a -> Bool
+even n           =  (==) (rem n 2) 0
+odd              =  (.) not even
+
+gcd              :: (Num a, Integral a) => a -> a -> a
 gcd 0 0          =  error "Prelude.gcd: gcd 0 0 is undefined"
 gcd x y          =  gcd' (abs x) (abs y)
                     where gcd' x 0  =  x
-                          gcd' x y  =  gcd' y (x `rem` y)
+                          gcd' x y  =  gcd' y (rem x y)
 
-
-lcm              :: (Integral a) => a -> a -> a
+lcm              :: (Num a, Integral a) => a -> a -> a
 lcm _ 0          =  0
 lcm 0 _          =  0
-lcm x y          =  abs ((x `quot` (gcd x y)) * y)
+lcm x y          =  abs ((quot x (gcd x y)) * y)
 
-
-(^)              :: (Num a, Integral b) => a -> b -> a
-x ^ 0            =  1
-x ^ n | n > 0    =  f x (n-1) x
-                    where f _ 0 y = y
+(^)              :: (Num a, Num b, Eq b, Ord b, Integral b) => a -> b -> a
+(^) x 0              =  1
+(^) x n | (>) n 0    =  f x (n-1) x
+                    where 
+                          f :: a -> b -> a -> a
+                          f _ 0 y = y
                           f x n y = g x n  where
-                                    g x n | even n  = g (x*x) (n `quot` 2)
+                                    g x n | even n  = g (x*x) (quot n 2)
                                           | otherwise = f x (n-1) (x*y)
 _ ^ _            = error "Prelude.^: negative exponent"
 
 
-(^^)             :: (Fractional a, Integral b) => a -> b -> a
-x ^^ n           =  if n >= 0 then x^n else recip (x^(-n))
+(^^)             :: (Num a, Fractional a, Eq b, Ord b, Num b, Integral b) => a -> b -> a
+(^^) x n           | (>=) n 0 = (^) x n
+                   | otherwise = recip (x^(-n))
 
+fromIntegral     :: (Integral a, Num b) => a -> b  
+fromIntegral     =  (.) fromInteger toInteger
+
+realToFrac     :: (Real a, Fractional b) => a -> b  
+realToFrac      =  (.) fromRational toRational 
+
+
+{-
+class  Functor f  where  
+    fmap              :: (a -> b) -> f a -> f b
+
+class  Monad m  where  
+    (>>=)  :: m a -> (a -> m b) -> m b  
+    (>>)   :: m a -> m b -> m b  
+    return :: a -> m a  
+    fail   :: String -> m a  
 -}
+
+sequence       :: forall a (m :: * -> *) . Monad m => [m a] -> m [a]  
+sequence       =  foldr mcons (return [])  
+                    where mcons p q = (>>=) p (\x -> (>>=) q (\y -> return (x:y)))
+
+sequence_      :: forall a (m :: * -> *) . Monad m => [m a] -> m ()  
+sequence_      =  foldr (>>) (return ())
+
+mapM             :: forall a b (m :: * -> *) . Monad m => (a -> m b) -> [a] -> m [b]  
+mapM f as        =  sequence (map f as)
+
+mapM_            :: forall a b (m :: * -> *) . Monad m => (a -> m b) -> [a] -> m ()  
+mapM_ f as       =  sequence_ (map f as)
+
+(=<<)            :: forall a b (m :: * -> *) . Monad m => (a -> m b) -> m a -> m b  
+(=<<) f x          =  (>>=) x f
+
+ 
+-- data  ()  =  ()  deriving (Eq, Ord, Enum, Bounded)  
+
+
 
 id               :: a -> a
 id x             =  x
@@ -61,46 +176,39 @@ id x             =  x
 const            :: a -> b -> a
 const x _        =  x
 
--- should be (.)
-comp              :: (b -> c) -> (a -> b) -> a -> c
-comp f g            =  \ x -> f (g x)
+(.)              :: (b -> c) -> (a -> b) -> a -> c
+(.) f g          =  \ x -> f (g x)
 
 flip             :: (a -> b -> c) -> b -> a -> c
 flip f x y       =  f y x
 
 
-{-
 ($), ($!) :: (a -> b) -> a -> b
-f $  x    =  f x
-f $! x    =  x `seq` f x
--}
+($) f  x    =  f x
+($!) f x    =  seq x (f x)
 
 
 -- built in
 data  Bool' where
      False' :: Bool'
-     True' :: Bool'
+     True'  :: Bool'
    deriving (Eq, Ord, Enum, Read, Show, Bounded)
 
+(&&), (||)      :: Bool -> Bool -> Bool
+True  && x      =  x
+False && _      =  False
 
-
--- should be (&&)
-amp              :: Bool -> Bool -> Bool
-amp True x       =  x
-amp False _      =  False
-
--- should be (||)
-bar True _       =  True
-bar False x      =  x
+True  || _      =  True
+False || x      =  x
                                     
 
 -- built in
-not'              :: Bool -> Bool
-not' True         =  False
-not' False        =  True
+not              :: Bool -> Bool
+not True         =  False
+not False        =  True
 
-otherwise'        :: Bool
-otherwise'        =  True
+otherwise        :: Bool
+otherwise        =  True
 
 
 
@@ -136,33 +244,22 @@ data  Ordering' where
   deriving (Eq, Ord, Enum, Read, Show, Bounded)
 
 
-numericEnumFrom         :: Integer -> [Integer]
-
-numericEnumFromThen     :: Integer -> Integer -> [Integer]
-
--- numericEnumFromTo       :: Integer -> Integer -> [Integer]
--- numericEnumFromThenTo   :: Integer -> Integer -> Integer -> [Integer]
-
-numericEnumFrom         =  iterate (\ x -> x + 1)
-numericEnumFromThen n m =  iterate (\ x -> x + (m-n)) n
-
-
-{-
-numericEnumFromTo n m   =  takeWhile (<= m+1/2) (numericEnumFrom n)
-numericEnumFromThenTo n n' m = takeWhile p (numericEnumFromThen n n')
-                             where
-                               p | n' >= n   = (<= m + (n'-n)/2)
-                                 | otherwise = (>= m + (n'-n)/2)
--}
+numericEnumFrom'         :: (Num a, Fractional a) => a -> [a]  
+numericEnumFromThen'     :: (Num a, Fractional a) => a -> a -> [a]  
+numericEnumFromTo'       :: (Num a, Fractional a, Ord a) => a -> a -> [a]  
+numericEnumFromThenTo'   :: (Num a, Fractional a, Ord a) => a -> a -> a -> [a]  
+numericEnumFrom'         =  iterate (\ x -> x+1)  
+numericEnumFromThen' n m =  iterate (\ x -> x +(m-n)) n  
+numericEnumFromTo' n m   =  takeWhile (\ x -> (<=) x ((/) (m+1) 2)) (numericEnumFrom' n)  
+numericEnumFromThenTo' n n' m = takeWhile p (numericEnumFromThen' n n')  
+                             where  
+                               p | (>=) n' n   = (\ x -> (<=) x (m + ((/) (n'-n) 2)))  
+                                 | otherwise = (\ x -> (>=) x (m + ((/) (n'-n) 2))) 
 
 
 
-
-{-
--- Illegal Haskell
-data  [a]  =  [] | a : [a]  deriving (Eq, Ord)
-data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
--}
+-- data  [a]  =  [] | a : [a]  deriving (Eq, Ord)
+-- data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
 
 fst              :: (a,b) -> a
 fst (x,y)        =  x
@@ -190,14 +287,16 @@ error            =  error
 undefined        :: a
 undefined        =  error "Prelude.undefined"
 
+
+
+
 map :: (a -> b) -> [a] -> [b]
 map f []     = []
 map f (x:xs) = f x : map f xs
 
--- should be (++)
-append :: [a] -> [a] -> [a]
-append []     ys = ys
-append (x:xs) ys = x : append xs ys
+(++) :: [a] -> [a] -> [a]
+[]     ++ ys = ys
+(x:xs) ++ ys = x : (++) xs ys
 
 filter :: (a -> Bool) -> [a] -> [a]
 filter p []                 = []
@@ -205,11 +304,11 @@ filter p (x:xs) | p x       = x : filter p xs
                 | otherwise = filter p xs
 
 concat :: [[a]] -> [a]
-concat xss = foldr append [] xss
+concat xss = foldr (++) [] xss
 
 
 concatMap :: (a -> [b]) -> [a] -> [b]
-concatMap f = comp concat (map f)
+concatMap f = (.) concat (map f)
 
 head             :: [a] -> a
 head (x:_)       =  x
@@ -238,13 +337,11 @@ length []        =  0
 length ((:) _ l) =  1 + length l
 
 
-{-
 (!!)                :: [a] -> Int -> a
-xs     !! n | n < 0 =  error "Prelude.!!: negative index"
-[]     !! _         =  error "Prelude.!!: index too large"
-(x:_)  !! 0         =  x
-(_:xs) !! n         =  xs !! (n-1)
--}
+(!!) xs     n | (<) n 0 =  error "Prelude.!!: negative index"
+(!!) []     _         =  error "Prelude.!!: index too large"
+(!!) (x:_)  0         =  x
+(!!) (_:xs) n         =  (!!) xs (n-1)
 
 
 
@@ -278,19 +375,19 @@ foldr1 f (x:xs)  =  f x (foldr1 f xs)
 foldr1 _ []      =  error "Prelude.foldr1: empty list"
 
 
-{-
 scanr             :: (a -> b -> b) -> b -> [a] -> [b]
 scanr f q0 []     =  [q0]
 scanr f q0 (x:xs) =  f x q : qs
-                     where qs@(q:_) = scanr f q0 xs 
+                     where qs = scanr f q0 xs 
+                           q = head qs
 
 
 scanr1          :: (a -> a -> a) -> [a] -> [a]
 scanr1 f []     =  []
 scanr1 f [x]    =  [x]
 scanr1 f (x:xs) =  f x q : qs
-                   where qs@(q:_) = scanr1 f xs 
--}
+                   where qs = scanr1 f xs 
+                         q = head qs
 
 
 iterate          :: (a -> a) -> a -> [a]
@@ -307,17 +404,17 @@ replicate n x    =  take n (repeat x)
 
 cycle            :: [a] -> [a]
 cycle []         =  error "Prelude.cycle: empty list"
-cycle xs         =  xs' where xs' = append xs xs'
+cycle xs         =  xs' where xs' = (++) xs xs'
 
 take                   :: Integer -> [a] -> [a]
--- take n _      | n <= 0 =  []
-take _ []              =  []
-take n (x:xs)          =  x : take (n-1) xs
+take n _      | (<=) n 0 =  []
+take _ []                =  []
+take n (x:xs)            =  x : take (n-1) xs
 
 drop                   :: Integer -> [a] -> [a]
--- drop n xs     | n <= 0 =  xs
-drop _ []              =  []
-drop n ((:) _ xs)          =  drop (n-1) xs
+drop n xs     | (<=) n 0 =  xs
+drop _ []                =  []
+drop n ((:) _ xs)        =  drop (n-1) xs
 
 
 splitAt                  :: Integer -> [a] -> ([a],[a])
@@ -330,95 +427,88 @@ takeWhile p (x:xs)
             | otherwise =  []
 
 
-{-
 dropWhile               :: (a -> Bool) -> [a] -> [a]
 dropWhile p []          =  []
-dropWhile p xs@(x:xs')
-            | p x       =  dropWhile p xs'
-            | otherwise =  xs
+dropWhile p xs
+            | p (head xs)  =  dropWhile p (tail xs)
+            | otherwise    =  xs
 
 span                    :: (a -> Bool) -> [a] -> ([a],[a])
 span p []               = ([],[])
-span p xs@(x:xs') 
-            | p x       =  (x:ys,zs) 
-            | otherwise =  ([],xs)
-                           where (ys,zs) = span p xs'
+span p xs
+            | p (head xs) =  (x:fst yszs, snd yszs) 
+            | otherwise   =  ([],xs)
+                           where yszs = span p (tail xs)
+                                 x = head xs
 
 break                   :: (a -> Bool) -> [a] -> ([a],[a])
-break p                 =  span (not . p)
--}
-
-{-
-
--- lines breaks a string up into a list of strings at newline characters.
--- The resulting strings do not contain newlines.  Similary, words
--- breaks a string up into a list of words, which were delimited by
--- white space.  unlines and unwords are the inverse operations.
--- unlines joins lines with terminating newlines, and unwords joins
--- words with separating spaces.
+break p                 =  span ((.) not p)
 
 
-lines            :: String -> [String]
+
+
+
+lines            :: [Char] -> [[Char]]
 lines ""         =  []
-lines s          =  let (l, s') = break (== '\n') s
-                      in  l : case s' of
+lines s          =  let ls' = break ((==) '\n') s
+                        l = fst ls'
+                        s' = snd ls'
+                      in  l : (case s' of
                                 []      -> []
                                 (_:s'') -> lines s''
+                              )
 
 
-words            :: String -> [String]
-words s          =  case dropWhile Char.isSpace s of
+words            :: [Char] -> [[Char]]
+words s          =  case dropWhile isSpace s of
                       "" -> []
                       s' -> w : words s''
-                            where (w, s'') = break Char.isSpace s'
--}
+                            where ws'' = break isSpace s'
+                                  w = fst ws''
+                                  s'' = snd ws''
+  where
+    isSpace ' '  = True
+    isSpace _    = False
 
 unlines          :: [[Char]] -> [Char]
-unlines          =  concatMap (\ x -> append x "\n")
+unlines          =  concatMap (\ x -> (++) x "\n")
 
 
 
 unwords          :: [[Char]] -> [Char]
 unwords []       =  ""
-unwords ws       =  foldr1 (\w s -> append w (' ':s)) ws
+unwords ws       =  foldr1 (\w s -> (++) w (' ':s)) ws
 
 reverse          :: [a] -> [a]
 reverse          =  foldl (flip (:)) []
 
 and              :: [Bool] -> Bool
-and              =  foldr amp True
-or               =  foldr bar False
+and              =  foldr (&&) True
+or               =  foldr (||) False
 
 any              :: (a -> Bool) -> [a] -> Bool
-any p            =  comp or (map p)
-all p            =  comp and (map p)
+any p            =  (.) or (map p)
+all p            =  (.) and (map p)
 
-
-{-
--- elem is the list membership predicate, usually written in infix form,
--- e.g., x `elem` xs.  notElem is the negation.
 
 elem, notElem    :: (Eq a) => a -> [a] -> Bool
-elem x           =  any (== x)
-notElem x        =  all (/= x)
-
--- lookup key assocs looks up a key in an association list.
+elem x           =  any ((==) x)
+notElem x        =  all ((/=) x)
 
 lookup           :: (Eq a) => a -> [(a,b)] -> Maybe b
 lookup key []    =  Nothing
 lookup key ((x,y):xys)
-    | key == x   =  Just y
-    | otherwise  =  lookup key xys
--}
+    | (==) key x   =  Just y
+    | otherwise    =  lookup key xys
 
 
 
-sum     :: [Integer] -> Integer
+sum     :: Num a => [a] -> a
 sum              =  foldl (+) 0  
 product          =  foldl (*) 1
 
 
-maximum :: [Integer] -> Integer
+maximum :: Ord a => [a] -> a
 maximum []       =  error "Prelude.maximum: empty list"
 maximum xs       =  foldl1 max xs
 

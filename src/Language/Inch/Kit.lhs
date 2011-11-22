@@ -4,7 +4,8 @@
 > module Language.Inch.Kit where
 
 > import Control.Applicative
-> import Data.Foldable
+> import Data.Foldable hiding (foldr)
+> import Data.List
 > import Data.Monoid
 > import Data.Traversable
 > import Debug.Trace
@@ -20,6 +21,16 @@
 > unEx :: Ex t -> (forall a . t a -> b) -> b
 > unEx (Ex t) f = f t
 
+> unEx2 :: (forall a . t a -> b) -> Ex t -> b
+> unEx2 f (Ex t) = f t
+
+> mapEx :: (forall a . f a -> g a) -> Ex f -> Ex g
+> mapEx f (Ex t) = Ex (f t)
+
+> travEx :: Functor t => (forall a . f a -> t (g a)) -> Ex f -> t (Ex g)
+> travEx f (Ex t) = Ex <$> f t
+
+
 > class HetEq t where
 >     hetEq :: t a -> t b -> (a ~ b => x) -> x -> x
 >     (=?=) :: t a -> t b -> Bool
@@ -28,13 +39,12 @@
 > instance HetEq t => Eq (Ex t) where
 >     Ex s == Ex t = s =?= t
 
-
 > hetElem :: HetEq t => t a -> [Ex t] -> Bool
 > hetElem _ []      = False
 > hetElem x (Ex y:ys)  = x =?= y || hetElem x ys
 
 > class HetOrd t where
->     (<?=) :: t a -> t b -> Bool
+>     (<?=) :: t a -> t b -> Bool     
 
 > data S a where
 >     S :: a -> S a
@@ -98,3 +108,7 @@ Really we want g to be a pointed functor!
 > instance Applicative Id where
 >     pure = Id
 >     Id f <*> Id s = Id (f s)
+
+
+> unions :: Eq a => [[a]] -> [a]
+> unions = foldr union []

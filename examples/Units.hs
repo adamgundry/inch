@@ -13,22 +13,11 @@
   See Bjorn Buckwalter's dimensional package
   (http://dimensional.googlecode.com/) for a more comprehensive
   implementation of this idea, using existing features of GHC Haskell.
-
-  All this would be even cleaner if inch supported typeclasses, of
-  course...
 -}
 
 module Units (Quantity, dimensionless, metres, seconds, grams,
                  minutes, hours, plus, minus, inv, times, over, scale,
                  kilo, centi, units) where
-
-import Data.Ratio
-import UnitsHacks
-
-
-rat :: Integer -> Rational
-rat k = (%) k 1
-
 
 
 -- Unit collects indices for the powers of metres, seconds and grams
@@ -69,48 +58,47 @@ seconds = Q
 grams :: a -> Quantity (Unit 0 0 1) a
 grams = Q
 
-minutes x  = scale (rat 60) (seconds x)
-hours x    = scale (rat 60) (minutes x)
+minutes = (.) (scale 60) seconds
+hours   = (.) (scale 60) minutes
 
 
--- Arithmetic of units (a bit annoying thanks to the lack of typeclass
--- support in the current version of inch, but otherwise straightforward)
+-- Arithmetic of units
 
-plus :: Quantity u Rational -> Quantity u Rational -> Quantity u Rational
-plus (Q x) (Q y) = Q (plusRational x y)
+plus :: Num a => Quantity u a -> Quantity u a -> Quantity u a
+plus (Q x) (Q y) = Q (x + y)
 
-minus :: Quantity u Rational -> Quantity u Rational -> Quantity u Rational
-minus (Q x) (Q y) = Q (minusRational x y)
+minus :: Num a => Quantity u a -> Quantity u a -> Quantity u a
+minus (Q x) (Q y) = Q (x - y)
 
-inv :: forall (m s g :: Integer) . 
-           Quantity (Unit m s g) Rational -> Quantity (Unit (-m) (-s) (-g)) Rational
-inv (Q x) = Q (recipRational x)
+inv :: forall (m s g :: Integer) a . Fractional a => 
+           Quantity (Unit m s g) a -> Quantity (Unit (-m) (-s) (-g)) a
+inv (Q x) = Q (recip x)
 
-times :: forall (m s g m' s' g' :: Integer) . 
-             Quantity (Unit m s g) Rational -> Quantity (Unit m' s' g') Rational ->
-                 Quantity (Unit (m + m') (s + s') (g + g')) Rational
-times (Q x) (Q y) = Q (timesRational x y)
+times :: forall (m s g m' s' g' :: Integer) a . Num a => 
+             Quantity (Unit m s g) a -> Quantity (Unit m' s' g') a ->
+                 Quantity (Unit (m + m') (s + s') (g + g')) a
+times (Q x) (Q y) = Q (x * y)
 
 over x y = times x (inv y)
 
-scale :: Rational -> Quantity u Rational -> Quantity u Rational
-scale x (Q y) = Q (timesRational x y)
+scale :: Num a => a -> Quantity u a -> Quantity u a
+scale x (Q y) = Q (x * y)
 
-pow :: forall (m s g :: Integer) . pi (k :: Nat) .
-           Quantity (Unit m s g) Rational ->
-               Quantity (Unit (k * m) (k * s) (k * g)) Rational
-pow {k} (Q x) = Q (powRational x k)
+pow :: forall (m s g :: Integer) a . Fractional a =>
+           pi (k :: Nat) . Quantity (Unit m s g) a ->
+               Quantity (Unit (k * m) (k * s) (k * g)) a
+pow {k} (Q x) = Q ((^^) x k)
 
 sqr = pow {2}
 
 
 -- We can write unit prefixes as transformers of the constructors...
 
-kilo :: (Rational -> Quantity u Rational) -> Rational -> Quantity u Rational
-kilo f x = scale (rat 1000) (f x)
+kilo :: Num a => (a -> Quantity u a) -> a -> Quantity u a
+kilo f x = scale 1000 (f x)
 
-centi :: (Rational -> Quantity u Rational) -> Rational -> Quantity u Rational
-centi f x = scale (recipRational (rat 100)) (f x)
+centi :: (Num a, Fractional a) => (a -> Quantity u a) -> a -> Quantity u a
+centi f x = scale (recip 100) (f x)
 
 
 -- ...allowing things like this:
@@ -128,17 +116,17 @@ units x f = f x
 
 
 
--- distanceTravelled :: Quantity (Unit 0 1 0) Rational -> Quantity (Unit 1 0 0) Rational
--- or better yet Quantity Second Rational -> Quantity Metre Rational
+-- distanceTravelled :: Fractional a => Quantity (Unit 0 1 0) a -> Quantity (Unit 1 0 0) a
+-- or better yet Quantity Second a -> Quantity Metre a
 -- or we can just omit the type annotations, and get good inference behaviour
 distanceTravelled t = plus (times vel t) (times accel (sqr t))
   where
-    vel    = over (metres (rat 2)) (seconds (rat 1))
-    accel  = over (metres (rat 36)) (sqr (seconds (rat 10)))
+    vel    = over (units 2 metres) (units 1 seconds)
+    accel  = over (units 36 metres) (sqr (units 10 seconds))
 
 
 nastyExample x = let d = over x
                  in (d mass, d time)
   where
-    mass = units ((%) 5 6) kg
-    time = units ((%) 3 2) seconds
+    mass = units 5 kg
+    time = units 3 seconds

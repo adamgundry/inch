@@ -67,10 +67,6 @@ Set this to True in order to verify the context regularly:
 > goodTy :: Context -> Type k -> Bool
 > goodTy = goodFV
 
-> goodTopDecl :: Context -> TopDeclaration () -> Bool
-> goodTopDecl g (DataDecl _ _ cs _)  = all (\ (_ ::: t) -> goodTy g t) cs
-> goodTopDecl g (Decl d)             = goodDecl g d
-
 > goodDecl :: Context -> Declaration () -> Bool
 > goodDecl g (SigDecl _ t)        = goodTy g t
 > goodDecl _ (FunDecl _ _)        = True
@@ -87,3 +83,12 @@ Set this to True in order to verify the context regularly:
 
 > wrapVerify :: String -> Contextual t -> Contextual t
 > wrapVerify s m = verifyContext True s *> m <* verifyContext False s
+
+
+
+> assertContextEmpty :: Contextual ()
+> assertContextEmpty = do
+>     g <- getContext
+>     case g of
+>         B0  -> return ()
+>         _   -> traceContext "assertContextEmpty" >> erk "Error: context is not empty"

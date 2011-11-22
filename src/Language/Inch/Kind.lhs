@@ -18,6 +18,7 @@
 > type TmName           = String
 > type TyConName        = String
 > type TmConName        = String
+> type ClassName        = String
 
 
 > data Binder where
@@ -70,13 +71,14 @@
 >     hetEq _ _ _ no = no
 
 > instance HetOrd Kind where
->     KSet  <?=  _               = True
->     _     <?=  KSet            = False
->     KNum  <?=  _               = True
->     _     <?=  KNum            = False
->     KConstraint <?= _            = True
->     _           <?= KConstraint  = False
->     (k :-> k') <?= (l :-> l')  = k <?= k' && l <?= l'
+>     KSet         <?=  _           = True
+>     _            <?=  KSet        = False
+>     KNum         <?=  _           = True
+>     _            <?=  KNum        = False
+>     KConstraint  <?= _            = True
+>     _            <?= KConstraint  = False
+>     (k :-> k')   <?= (l :-> l')   | k =?= k' =  l <?= l'
+>                                   | otherwise = k <?= k'
 
 > class KindI t where
 >     kind :: Kind t
@@ -163,10 +165,7 @@
 > data Var a k where
 >     BVar :: BVar a k          -> Var a k
 >     FVar :: TyName -> Kind k  -> Var a k
-
-> instance Show (Var a k) where
->     show (BVar x)    = show x
->     show (FVar a _)  = show a
+>  deriving Show
 
 > instance HetEq (Var a) where
 >     hetEq (FVar a k)  (FVar b l)  yes _ | a == b =
@@ -179,8 +178,8 @@
 
 > instance HetOrd (Var a) where
 >     BVar x    <?= BVar y    = x <?= y
->     FVar a _  <?= FVar b _  = a <= b
 >     BVar _    <?= FVar _ _  = True
+>     FVar a _  <?= FVar b _  = a <= b
 >     FVar _ _  <?= BVar _    = False
 
 > instance Ord (Var a k) where
@@ -298,21 +297,52 @@
 > instance (Ord t, FV t a) => FV (Map t x) a where
 >     fvFoldMap f = Map.foldrWithKey (\ t _ m -> fvFoldMap f t <.> m) mempty
 
+> instance FV (Ex (Var a)) a where
+>     fvFoldMap f (Ex v) = f v 
 
-> data VarSuffix a b where
->     VS0    :: VarSuffix a a
->     (:<<)  :: VarSuffix a b -> Var a k -> VarSuffix a (b, k)
+> data VarSuffix a b x where
+>     VS0    :: VarSuffix a a ()
+>     (:<<)  :: VarSuffix a b x -> Var a k -> VarSuffix a (b, k) (x, k)
 
-> renameBVarVS :: VarSuffix a b -> BVar a k -> BVar b k
+> renameBVarVS :: VarSuffix a b x -> BVar a k -> BVar b k
 > renameBVarVS VS0         x = x
 > renameBVarVS (vs :<< _)  x = Pop (renameBVarVS vs x)
 
-> renameVS :: VarSuffix a b -> Var a k -> Var b k
+> renameVS :: VarSuffix a b x -> Var a k -> Var b k
 > renameVS _   (FVar a k)  = FVar a k
 > renameVS vs  (BVar x)    = BVar (renameBVarVS vs x)
 
-> renameVSinv :: VarSuffix a b -> Var b k -> Var a k
+> renameVSinv :: VarSuffix a b x -> Var b k -> Var a k
 > renameVSinv _          (FVar a k)      = FVar a k
 > renameVSinv VS0        (BVar v)        = BVar v
 > renameVSinv (_ :<< v)  (BVar Top)      = v
 > renameVSinv (vs :<< _) (BVar (Pop x))  = renameVSinv vs (BVar x)
+
+> extRenaming :: VarSuffix a b x -> VarSuffix c d x -> (Var a k -> Var c k) ->
+>                    Var b k -> Var d k
+> extRenaming _            ecd          g (FVar a k)      = renameVS ecd $ g (FVar a k)
+> extRenaming VS0          VS0          g (BVar v)        = g (BVar v)
+> extRenaming (_ :<<_)     (_ :<< _)    _ (BVar Top)      = BVar Top
+> extRenaming (eab :<< _)  (ecd :<< _)  g (BVar (Pop v))  = wkVar $ extRenaming eab ecd g (BVar v)
+> extRenaming _ _ _ _ = error "extRenaming: invariant violation"
+
+< extExt :: Ext a b x -> (forall d y . Ext c d y -> p) -> p
+< extExt E0       q = q E0
+< extExt (EC ex)  q = extExt ex (q . EC)
+
+> extComp :: VarSuffix a b x -> VarSuffix b c y -> (forall z . VarSuffix a c z -> p) -> p
+> extComp eab VS0          q = q eab
+> extComp eab (ebc :<< v)  q = extComp eab ebc (q . (:<< renameVSinv eab v))
+
+
+
+> data VarSuffixFwd a b where
+>     VF0    :: VarSuffixFwd a a
+>     (:>>)  :: Var a k -> VarSuffixFwd (a, k) b -> VarSuffixFwd a b
+
+> {-
+> renameVSFinv :: VarSuffixFwd a b -> Var b k -> Var a k
+> renameVSFinv _ (FVar a k) = FVar a k
+> renameVSFinv VF0 (BVar v) = BVar v
+> renameVSFinv (v :>> _) (BVar Top) = v
+> -}

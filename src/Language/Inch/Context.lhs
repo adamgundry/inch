@@ -9,6 +9,7 @@
 > import Control.Monad.State
 > import Control.Monad.Writer hiding (All)
 > import qualified Data.Map as Map
+> import Data.Map (Map)
 > import Data.Foldable
 > import Text.PrettyPrint.HughesPJ
 
@@ -16,11 +17,12 @@
 > import Language.Inch.Kind
 > import Language.Inch.Type
 > import Language.Inch.Syntax hiding (Alternative)
+> import Language.Inch.ModuleSyntax
 > import Language.Inch.PrettyPrinter
 > import Language.Inch.Kit
 > import Language.Inch.Error
 
-> type Bindings = Map.Map TmName (Maybe Sigma, Bool)
+> type Bindings = Map TmName (Maybe Sigma, Bool)
 
 > data TmLayer  =  PatternTop  (TmName ::: Sigma)
 >               |  CaseTop
@@ -168,23 +170,29 @@ when the layer is extracted.
 > _Gamma <>< (TE e :> _Xi)  = _Gamma :< A e <>< _Xi
 > infixl 8 <><
 
-> data ZipState = St  {  nextFreshInt :: Int
->                     ,  context   :: Context
->                     ,  tyCons    :: Map.Map TyConName (Ex Kind)
->                     ,  tmCons    :: Map.Map TmConName Sigma
->                     ,  bindings  :: Bindings
+> data ZipState = St  {  nextFreshInt  :: Int
+>                     ,  context       :: Context
+>                     ,  tyCons        :: Map TyConName (Ex Kind)
+>                     ,  tmCons        :: Map TmConName Sigma
+>                     ,  bindings      :: Bindings
+>                     ,  classes       :: Map ClassName ClassDeclaration
+>                     ,  instances     :: Map ClassName [Type KConstraint]
 >                     }
 
 
 Initial state
 
-> tyInteger, tyBool, tyOrdering, tyUnit, tyChar, tyString :: Ty a KSet
+> tyInteger, tyBool, tyOrdering, tyUnit, tyChar, tyString, tyIntLit :: Ty a KSet
 > tyInteger     = TyCon "Integer" KSet
 > tyBool        = TyCon "Bool" KSet
 > tyOrdering    = TyCon "Ordering" KSet
 > tyUnit        = TyCon unitTypeName KSet
 > tyChar        = TyCon "Char" KSet
 > tyString      = tyList tyChar
+
+> tyIntLit      = Bind All "a" KSet
+>                     $ Qual (TyCon "Num" (KSet :-> KConstraint) `TyApp` TyVar (BVar Top))
+>                            (TyVar (BVar Top))
 
 > tyMaybe, tyList :: Ty a KSet -> Ty a KSet
 > tyMaybe       = TyApp (TyCon "Maybe" (KSet :-> KSet))
@@ -194,9 +202,16 @@ Initial state
 > tyEither a b  = TyApp (TyApp (TyCon "Either" (KSet :-> KSet :-> KSet)) a) b
 > tyTuple       = TyApp . TyApp (TyCon tupleTypeName (KSet :-> KSet :-> KSet))
 
+> tyTrivial :: Ty a KConstraint
+> tyTrivial = TyCon "Trivial" KConstraint
+
+> isTrivial :: Ty a KConstraint -> Bool
+> isTrivial (TyCon "Trivial" KConstraint)  = True
+> isTrivial _                              = False
+
 
 > initialState :: ZipState
-> initialState = St 0 B0 initTyCons initTmCons initBindings
+> initialState = St 0 B0 initTyCons initTmCons initBindings Map.empty Map.empty
 >   where
 >     initTyCons = Map.fromList $
 >       ("Char",        Ex KSet) :
@@ -204,6 +219,7 @@ Initial state
 >       (listTypeName,  Ex (KSet :-> KSet)) :
 >       (unitTypeName,  Ex KSet) :
 >       (tupleTypeName, Ex (KSet :-> KSet :-> KSet)) :
+>       ("Trivial",     Ex KConstraint) :
 >       []
 >     initTmCons = Map.fromList $
 >       (listNilName,   Bind All "a" KSet (tyList (TyVar (BVar Top)))) :
@@ -436,3 +452,39 @@ Bindings
 >         | x == y     = return $ TmVar y ::: ty
 >         | otherwise  = seek g
 >     seek (g :< _) = seek g
+
+
+
+Classes
+
+
+> insertClassDecl :: (MonadState ZipState m, MonadError ErrorData m) =>
+>                        ClassName -> ClassDeclaration -> m ()
+> insertClassDecl x d = do
+>     st <- get
+>     when (Map.member x (classes st)) $ erk $ "Duplicate class " ++ x
+>     put st{classes = Map.insert x d (classes st)}
+
+
+> lookupClassDecl ::  (MonadState ZipState m, MonadError ErrorData m) =>
+>                        ClassName -> m ClassDeclaration
+> lookupClassDecl x = do
+>     cs <- gets classes
+>     case Map.lookup x cs of
+>         Just d   -> return d
+>         Nothing  -> erk $ "Missing class " ++ x
+
+
+
+Instances
+
+> insertInstDecl :: (MonadState ZipState m, MonadError ErrorData m) =>
+>                        ClassName -> Type KConstraint -> m ()
+> insertInstDecl x t = modify addInst
+>   where
+>     addInst st = st{instances = Map.alter f x (instances st)}
+>     f mds = Just (t : maybe [] id mds)
+
+> lookupInstances :: (Functor m, MonadState ZipState m, MonadError ErrorData m) =>
+>                        ClassName -> m [Type KConstraint]
+> lookupInstances x = Map.findWithDefault [] x <$> gets instances

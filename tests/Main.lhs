@@ -8,6 +8,7 @@
 
 > import Language.Inch.Context
 > import Language.Inch.Syntax
+> import Language.Inch.ModuleSyntax
 > import Language.Inch.Parser
 > import Language.Inch.PrettyPrinter
 > import Language.Inch.ProgramCheck
@@ -15,12 +16,18 @@
 > import Language.Inch.File (checkFile, readImports)
 
 > main :: IO ()
-> main = checks "examples/"
+> main = checks "examples/" >> erases "examples/"
 
 > checks :: FilePath -> IO ()
-> checks d = do
+> checks = testDir check
+
+> erases :: FilePath -> IO ()
+> erases = testDir erase
+
+> testDir :: (FilePath -> IO ()) -> FilePath -> IO ()
+> testDir f d = do
 >     fns <- sort . filter (".hs" `isSuffixOf`) <$> getDirectoryContents d
->     mapM_ (check . (d ++)) fns
+>     mapM_ (f . (d ++)) fns
 
 > check :: FilePath -> IO ()
 > check fn = do
@@ -31,6 +38,7 @@
 
 > erase :: FilePath -> IO ()
 > erase fn = do
+>     putStrLn $ "TEST " ++ show fn
 >     s <- readFile fn
 >     (md, st) <- checkFile fn s
 >     case evalStateT (eraseModule md) st of
@@ -77,7 +85,7 @@
 >                                    ++ s' ++ "\n" ++ show err
 >     Left err -> Left $ "Initial parse:\n" ++ s ++ "\n" ++ show err
 
-> parseCheck :: [STopDeclaration ()] -> (String, Bool) -> Either String String
+> parseCheck :: [STopDeclaration] -> (String, Bool) -> Either String String
 > parseCheck ds (s, b) = case parseModule "parseCheck" s of
 >     Right md   -> case evalStateT (checkModule md ds) initialState of
 >         Right md'
@@ -92,7 +100,7 @@
 >                             ++ renderMe md ++ "\n" ++ renderMe err ++ "\n"
 >     Left err  -> Left $ "Parse error:\n" ++ s ++ "\n" ++ show err ++ "\n"
 
-> eraseCheck :: [STopDeclaration ()] -> String -> Either String String
+> eraseCheck :: [STopDeclaration] -> String -> Either String String
 > eraseCheck ds s = case parseModule "eraseCheck" s of
 >     Right md   -> case runStateT (checkModule md ds) initialState of
 >         Right (md', st) -> case evalStateT (eraseModule md') st of
@@ -100,7 +108,7 @@
 >                 Right md''' -> case parseModule "eraseCheckRoundTrip" (renderMe (fog md''')) of
 >                     Right md'''' -> Right $ "Erased program:\n" ++ renderMe md''''
 >                     Left err -> Left $ "Erased program failed to round-trip:\n" ++ renderMe (fog md''') ++ "\n" ++ show err
->                 Left err -> Left $ "Erased program failed to type check: " ++ renderMe err
+>                 Left err -> Left $ "Erased program failed to type check:\n" ++ renderMe (fog md'') ++ "\n" ++ renderMe err
 >             Left err        -> Left $ "Erase error:\n" ++ s ++ "\n" ++ renderMe err ++ "\n"
 
 >         Left err -> Right $ "Skipping rejected program:\n"
@@ -150,9 +158,9 @@
 >   "f :: forall m n. m <= n => Vec m\nf = f" :
 >   "f :: forall m n. (m) <= (n) => Vec m\nf = f" :
 >   "f :: forall m n. (m + 1) <= (2 + n) => Vec m\nf = f" :
->   "f :: forall m n. m <= n, m <= n => Vec m\nf = f" :
->   "f :: forall m n. m <= n, (m + 1) <= n => Vec m\nf = f" :
->   "f :: forall m n. 0 <= n, n <= 10 => Vec m\nf = f" :
+>   "f :: forall m n. (m <= n, m <= n) => Vec m\nf = f" :
+>   "f :: forall m n. (m <= n, (m + 1) <= n) => Vec m\nf = f" :
+>   "f :: forall m n. (0 <= n, n <= 10) => Vec m\nf = f" :
 >   "f :: forall m n. (m + (- 1)) <= n => Vec m\nf = f" :
 >   "f :: forall m n. 0 <= -1 => Vec m\nf = f" :
 >   "f :: forall m n. 0 <= -n => Vec m\nf = f" :
@@ -171,7 +179,7 @@
 >   "f :: 0 + m <= n + 1 => Integer\nf = f" :
 >   "f :: 0 < 1 => a\nf = f" :
 >   "f :: 0 > 1 => a\nf = f" :
->   "f :: 1 >= 0, a + 3 > 7 => a\nf = f" :
+>   "f :: (1 >= 0, a + 3 > 7) => a\nf = f" :
 >   "f x | gr x 0 = x" :
 >   "f x | {x > 0} = x" :
 >   "f x | {x > 0, x ~ 0} = x" :
@@ -222,6 +230,16 @@
 >   "x = (case xs of\n    [] -> []\n    (:) x ys -> scanl f (f q x) ys)" :
 >   "f :: forall (c :: Constraint) . c => Integer\nf = f" :
 >   "f :: Dict ((<=) 2 3) -> Dict (2 <= 3)\nf x = x" :
+>   "f :: Show a => a -> [Char]\nf x = show x" :
+>   "class T a => S a" :
+>   "class (T a) => S a" :
+>   "class (T a, B a a) => S a" :
+>   "class S a where\n  s :: a -> [Char]" :
+>   "class S a where\n  s :: a -> [Char]\n  t :: Integer -> a" :
+>   "instance S [Char] where\n  s x = x\n  f g = 0" :
+>   "x, y :: Integer" :
+>   "instance (S Integer, S a) => S [a] where" :
+>   "instance Monad [] where" :
 >   []
 
 
@@ -230,7 +248,7 @@
 
 > vecDecl = "data Vec :: Num -> * -> * where\n"
 >   ++ "  Nil :: forall a (n :: Num). n ~ 0 => Vec n a\n"
->   ++ "  Cons :: forall a (m n :: Num). 0 <= m, n ~ (m + 1) => a -> Vec m a -> Vec n a\n"
+>   ++ "  Cons :: forall a (m n :: Num). (0 <= m, n ~ (m + 1)) => a -> Vec m a -> Vec n a\n"
 >   ++ " deriving (Eq, Show)\n"
 
 > vec2Decl = "data Vec :: * -> Num -> * where\n"
@@ -277,7 +295,7 @@
 >   ("f :: forall a (n :: Num) . n ~ m => a -> a\nf x = x", False) :
 >   (vecDecl ++ "vhead (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
 >   (vecDecl ++ "vhead :: forall (n :: Num) a. Vec (1+n) a -> a\nvhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
->   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   (vecDecl ++ "append :: forall a (m n :: Num) . (0 <= m, 0 <= n, 0 <= (m + n)) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vecDecl ++ "vtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\nvtail (Cons x xs) = xs", True) :
 >   (vecDecl ++ "lie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
@@ -286,7 +304,7 @@
 >   (vecDecl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x\nbad = silly (Cons Nil Nil)", False) :
 >   (vecDecl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nwrong = vhead Nil", False) :
 >   (vecDecl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nright = vhead (Cons Nil Nil)", True) :
->   (vecDecl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
+>   (vecDecl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). (0 <= m, 0 <= (m+1)) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
 >   (vecDecl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails xs = vtail (vtail xs)", True) :
 >   (vecDecl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
 >   (vecDecl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
@@ -308,7 +326,7 @@
 >   ("f :: pi (n :: Num) . Integer\nf {n} = n", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {0} = 0\nf {n+1} = n", True) :
 >   ("f :: pi (n :: Num) . Integer\nf {n+1} = n", True) :
->   (vecDecl ++ "vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a\nvtake {0}   _            = Nil\nvtake {i+1} (Cons x xs) = Cons x (vtake {i} xs)", True) :
+>   (vecDecl ++ "vtake :: forall (n :: Num) a . pi (m :: Num) . (0 <= m, 0 <= n) => Vec (m + n) a -> Vec m a\nvtake {0}   _            = Nil\nvtake {i+1} (Cons x xs) = Cons x (vtake {i} xs)", True) :
 >   (vecDecl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 0 <= m => a -> f m -> f (m + 1)) -> Vec n a -> f n\nvfold n c Nil         = n\nvfold n c (Cons x xs) = c x (vfold n c xs)", True) :
 >   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> (a -> One) -> Ex\nf (Ex s g) = g s", True) :
 >   ("data One where One :: One\ndata Ex where Ex :: forall a. a -> (a -> One) -> Ex\nf :: Ex -> One\nf (Ex s g) = g s", True) :
@@ -332,9 +350,9 @@
 >   (vec2Decl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 1 <= m => a -> f (m-1) -> f m) -> Vec a n -> f n\nvfold = vfold\nvbuild :: forall (n :: Num) a . Vec a n -> Vec a n\nvbuild = vfold Nil Cons", True) :
 >   (vec2Decl ++ "vfold :: forall (n :: Num) a (f :: Num -> *) . f 0 -> (forall (m :: Num) . 1 <= m => a -> f (m-1) -> f m) -> Vec a n -> f n\nvfold = vfold\nvbuild = vfold Nil Cons", True) :
 >   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . a -> a\ng {m} = \\ x -> x\ny = f g", True) :
->   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
->   ("f :: forall b. (forall a . pi (m :: Num) . 0 <= m, m <= 3 => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . m <= 3, 0 <= m => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
->   ("f :: forall (b :: Num -> *) (n :: Num) . 0 <= n, n <= 3 => (forall (a :: Num -> *) (m :: Num) . 0 <= m, m <= 3 => a m -> a m) -> b n -> b n\nf h = h\ng :: forall (a :: Num -> *) (m :: Num) . m <= 3, 0 <= m => a m -> a m\ng = \\ x -> x\ny = f g", True) :
+>   ("f :: forall b. (forall a . pi (m :: Num) . (0 <= m, m <= 3) => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . (0 <= m, m <= 3) => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
+>   ("f :: forall b. (forall a . pi (m :: Num) . (0 <= m, m <= 3) => a -> a) -> b -> b\nf h = h {0}\ng :: forall a . pi (m :: Num) . (m <= 3, 0 <= m) => a -> a\ng {m} = \\ x -> x\ny = f g", True) :
+>   ("f :: forall (b :: Num -> *) (n :: Num) . (0 <= n, n <= 3) => (forall (a :: Num -> *) (m :: Num) . (0 <= m, m <= 3) => a m -> a m) -> b n -> b n\nf h = h\ng :: forall (a :: Num -> *) (m :: Num) . (m <= 3, 0 <= m) => a m -> a m\ng = \\ x -> x\ny = f g", True) :
 >   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf g h = g h", True) : 
 >   ("f :: ((Integer -> (forall a. a -> a)) -> Integer) -> (Integer -> (forall a . a)) -> Integer\nf = f", True) : 
 >   ("f :: (Integer -> (forall a. a -> a)) -> (forall b . (b -> b) -> (b -> b))\nf x = x 0", True) :
@@ -352,15 +370,15 @@
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = undefined\ntri2 :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri2 = tri", True) :
 >   ("tri :: forall a . pi (m n :: Num) . (m < n => a) -> (m ~ n => a) -> (m > n => a) -> a\ntri = tri\nf :: pi (m n :: Num) . m ~ n => Integer\nf = f\nloop = loop\ng :: pi (m n :: Num) . Integer\ng {m} {n} = tri {m} {n} loop loop (f {m} {n})", False) :
 >   ("f :: forall a. pi (m n :: Num) . m ~ n => a\nf = f\nid2 x = x\ny :: forall a . pi (m n :: Num) . a\ny {m} {n} = id2 (f {m} {n})", False) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = Ex Refl", True) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex Refl\nf {n+1} = f {n}", False) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n+1} Refl", True) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n} Refl", False) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n}", False) :
->   ("data Eq :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eq m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eq n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n-1}", False) :
->   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . 0 <= m, m < n => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . 0 <= n, n < m => a m n) -> (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)\ntri a b c {0}   {n+1} = a\ntri a b c {0}   {0}   = b\ntri a b c {m+1} {0}   = c\ntri a b c {m+1} {n+1} = tri a b c {m} {n}", False) :
->   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . 0 <= m, m < n => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . 0 <= n, n < m => a m n) -> (forall (m n :: Num) . 0 <= m, 0 <= n => a m n -> a (m+1) (n+1)) -> (pi (m n :: Num) . 0 <= m, 0 <= n => a m n)\ntri a b c step {0}   {n+1} = a\ntri a b c step {0}   {0}   = b\ntri a b c step {m+1} {0}   = c\ntri a b c step {m+1} {n+1} = step (tri a b c step {m} {n})", True) :
->   ("tri :: forall a . pi (m n :: Num) . 0 <= m, 0 <= n => (pi (d :: Num) . 0 < d, d ~ m - n => a) -> (n ~ m => a) -> (pi (d :: Num) . 0 < d, d ~ n - m => a) -> a\ntri {0}   {0}   a b c = b\ntri {m+1} {0}   a b c = a {m+1}\ntri {0}   {n+1} a b c = c {n+1}\ntri {m+1} {n+1} a b c = tri {m} {n} a b c", True) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex Refl\nf {n+1} = Ex Refl", True) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *)(n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex Refl\nf {n+1} = f {n}", False) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n+1} Refl", True) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex {0} Refl\nf {n+1} = Ex {n} Refl", False) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n}", False) :
+>   ("data Eql :: Num -> Num -> * where Refl :: forall (m n :: Num) . m ~ n => Eql m n\ndata Ex :: (Num -> *) -> * where Ex :: forall (p :: Num -> *) . pi (n :: Num) . p n -> Ex p\nf :: pi (n :: Num) . Ex (Eql n)\nf {0} = Ex {0} Refl\nf {n+1} = f {n-1}", False) :
+>   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . (0 <= m, m < n) => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . (0 <= n, n < m) => a m n) -> (pi (m n :: Num) . (0 <= m, 0 <= n) => a m n)\ntri a b c {0}   {n+1} = a\ntri a b c {0}   {0}   = b\ntri a b c {m+1} {0}   = c\ntri a b c {m+1} {n+1} = tri a b c {m} {n}", False) :
+>   ("tri :: forall (a :: Num -> Num -> *) . (forall (m n :: Num) . (0 <= m, m < n) => a m n) -> (forall (m   :: Num) . 0 <= m        => a m m) -> (forall (m n :: Num) . (0 <= n, n < m) => a m n) -> (forall (m n :: Num) . (0 <= m, 0 <= n) => a m n -> a (m+1) (n+1)) -> (pi (m n :: Num) . (0 <= m, 0 <= n) => a m n)\ntri a b c step {0}   {n+1} = a\ntri a b c step {0}   {0}   = b\ntri a b c step {m+1} {0}   = c\ntri a b c step {m+1} {n+1} = step (tri a b c step {m} {n})", True) :
+>   ("tri :: forall a . pi (m n :: Num) . (0 <= m, 0 <= n) => (pi (d :: Num) . (0 < d, d ~ m - n) => a) -> (n ~ m => a) -> (pi (d :: Num) . (0 < d, d ~ n - m) => a) -> a\ntri {0}   {0}   a b c = b\ntri {m+1} {0}   a b c = a {m+1}\ntri {0}   {n+1} a b c = c {n+1}\ntri {m+1} {n+1} a b c = tri {m} {n} a b c", True) :
 >   ("f :: forall a . pi (m n :: Num) . a\nf {m} {n} = let h :: m ~ n => a\n                h = h\n            in f {m} {n}", True) :
 >   ("f :: forall a (m n :: Num) . (m ~ n => a) -> a\nf x = x", False) :
 >   ("f :: forall a (m n :: Num) . ((m ~ n => a) -> a) -> (m ~ n => a) -> a\nf x y = x y", True) :
@@ -379,7 +397,7 @@
 >   ("x :: forall (a :: * -> *) . a\nx = x", False) : 
 >   (vec3Decl ++ "vhead (Cons x xs) = x\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", False) :
 >   (vec3Decl ++ "vhead :: forall (n :: Num) a. Vec (1+n) a -> a\nvhead (Cons x xs) = x\nid2 :: forall (n :: Num) a. Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
->   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= m, 0 <= n, 0 <= (m + n) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
+>   (vec3Decl ++ "append :: forall a (m n :: Num) . (0 <= m, 0 <= n, 0 <= (m + n)) => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vec3Decl ++ "append :: forall a (m n :: Num) . 0 <= n => Vec m a -> Vec n a -> Vec (m+n) a\nappend Nil ys = ys\nappend (Cons x xs) ys = Cons x (append xs ys)", True) :
 >   (vec3Decl ++ "vtail :: forall (n :: Num) a. Vec (n+1) a -> Vec n a\nvtail (Cons x xs) = xs", True) :
 >   (vec3Decl ++ "lie :: forall a (n :: Num) . Vec n a\nlie = Nil", False) :
@@ -388,7 +406,7 @@
 >   (vec3Decl ++ "silly :: forall a (m :: Num). m <= -1 => Vec m a -> a\nsilly (Cons x xs) = x\nbad = silly (Cons Nil Nil)", False) :
 >   (vec3Decl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nwrong = vhead Nil", False) :
 >   (vec3Decl ++ "vhead :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> a\nvhead (Cons x xs) = x\nright = vhead (Cons Nil Nil)", True) :
->   (vec3Decl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). 0 <= m, 0 <= (m+1) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
+>   (vec3Decl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails :: forall a (m :: Num). (0 <= m, 0 <= (m+1)) => Vec (m+2) a -> Vec m a \ntwotails xs = vtail (vtail xs)", True) :
 >   (vec3Decl ++ "vtail :: forall a (m :: Num). 0 <= m => Vec (m+1) a -> Vec m a\nvtail (Cons x xs) = xs\ntwotails xs = vtail (vtail xs)", True) :
 >   (vec3Decl ++ "f :: forall a (n m :: Num). n ~ m => Vec n a -> Vec m a\nf x = x", True) :
 >   (vec3Decl ++ "id2 :: forall a (n :: Num) . Vec n a -> Vec n a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
@@ -396,8 +414,8 @@
 >   (vec3Decl ++ "id2 :: forall a (n m :: Num) . n ~ m => Vec n a -> Vec m a\nid2 Nil = Nil\nid2 (Cons x xs) = Cons x xs", True) :
 >   (vec3Decl ++ "data Pair :: * -> * -> * where Pair :: forall a b. a -> b -> Pair a b\nvsplit2 :: forall (n :: Num) a . pi (m :: Num) . Vec (m + n) a -> Pair (Vec m a) (Vec n a)\nvsplit2 {0}   xs           = Pair Nil xs\nvsplit2 {n+1} (Cons x xs) = let  f (Pair ys zs)  = Pair (Cons x ys) zs\n                                 xs'             = vsplit2 {n} xs\n                             in f xs'", True) :
 >   ("data Max :: Num -> Num -> Num -> * where\n  Less :: forall (m n :: Num) . m < n => Max m n n\n  Same :: forall (m :: Num) . Max m m m\n  More :: forall (m n :: Num) . m > n => Max m n m", True) :
->   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven (Twice {n}) = int {n}", False) :
->   ("data Int :: Num -> * where\nint :: pi (n :: Num) . Int n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven :: forall (n :: Num). Even (2 * n) -> Int n\nunEven (Twice {n}) = int {n}", True) :
+>   ("data In :: Num -> * where\nint :: pi (n :: Num) . In n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven (Twice {n}) = int {n}", False) :
+>   ("data In :: Num -> * where\nint :: pi (n :: Num) . In n\nint = int\ndata Even :: Num -> * where\n  Twice :: pi (n :: Num) . Even (2 * n)\nunEven :: forall (n :: Num). Even (2 * n) -> In n\nunEven (Twice {n}) = int {n}", True) :
 >   ("f :: Boo -> Boo\nf x = x\ndata Boo where Boo :: Boo", True) :
 >   ("data Ex where Ex :: pi (n :: Num) . Ex\nf :: forall a . (pi (n :: Num) . a) -> Ex -> a\nf g (Ex {n}) = g {n}", True) :
 >   ("y = 2\ny :: Integer", True) :
@@ -450,8 +468,8 @@
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (max a 3) -> f (max 3 a)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (max a 3) -> f (max 2 a)\nf x = x", False) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f (min a b) -> f (min b a)\nf x = x", True) :
->   ("f :: forall (f :: Num -> *)(a b c :: Num) . a <= b, b <= c => f (min a b) -> f (min c a)\nf x = x", True) :
->   ("f :: forall (f :: Num -> *)(a b c :: Num) . a >= b, b <= c => f (min a b) -> f (min c a)\nf x = x", False) :
+>   ("f :: forall (f :: Num -> *)(a b c :: Num) . (a <= b, b <= c) => f (min a b) -> f (min c a)\nf x = x", True) :
+>   ("f :: forall (f :: Num -> *)(a b c :: Num) . (a >= b, b <= c) => f (min a b) -> f (min c a)\nf x = x", False) :
 >   ("f :: forall (f :: Num -> *)(a :: Num) . a > 99 => f a -> f (abs a)\nf x = x", True) :
 >   ("f :: forall (f :: Num -> *) . f (signum (-6)) -> f (abs (-1) - 2)\nf x = x", True) :
 >   ("f :: pi (m :: Num) . Integer\nf {m} = f {abs m}", True) :
@@ -470,9 +488,9 @@
 >   ("f x | (case x of True -> False\n                 False -> True\n            ) = 1\n    | otherwise = 0", True) :
 >   ("f x | True = 1\n    | False = True", False) :
 >   ("f :: forall (f :: Num -> *)(a b :: Num) . f ((a + 2) * b) -> f (b + b + b * a)\nf x = x", True) :
->   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b => f a -> f b\ng = f", True) :
->   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b + a => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= b + 1 => f a -> f b\ng = f", True) :
->   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= b + 1 => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . 0 <= a, 0 <= a * b + a => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . (0 <= a, 0 <= b) => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= a * b + a => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . (0 <= a, 0 <= b + 1) => f a -> f b\ng = f", True) :
+>   ("f :: forall (f :: Num -> *)(a b :: Num) . 0 <= b + 1 => f a -> f b\nf = f\ng :: forall (f :: Num -> *)(a b :: Num) . (0 <= a, 0 <= a * b + a) => f a -> f b\ng = f", True) :
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (a ^ (-1)) -> f (a ^ (-1))\nf x = x", False) :
 >   ("f :: forall (f :: Num -> *)(a :: Num) . f (a * a ^ (-1)) -> f 1\nf x = x", False) :
 >   ("data Fin :: Num -> * where\ndata Tm :: Num -> * where A :: forall (m :: Num) . 0 <= m => Tm m -> Tm m -> Tm m\nsubst :: forall (m n :: Num) . 0 <= n => (pi (w :: Num) . 0 <= w => Fin (w+m) -> Tm (w + n)) -> Tm m -> Tm n\nsubst s (A f a) = A (subst s f) (subst s a)", True) :
@@ -489,7 +507,7 @@
 >   ("x :: forall a . [a]\nx = []", True) :
 >   ("y :: [Integer]\ny = 1 : 2 : [3, 4]", True) :
 >   ("x = [[]]", True) :
->   ("x = 1 : [] : []", False) :
+>   ("x = 'a' : [] : []", False) :
 >   ("x = 1 + 3 : [6]", True) : 
 >   ("x :: ()\nx = ()", True) : 
 >   ("x :: (Integer, Integer)\nx = ()", False) : 
@@ -516,4 +534,28 @@
 >   ("foo :: forall (f :: Num -> Num -> Num) a (p :: Num -> *) . (forall (m n :: Num) a . p m -> p n -> (f m n ~ f n m => a) -> a) -> (f 1 3 ~ f 3 1 => a) -> a\nfoo comm x = comm (undefined :: p 1) (undefined :: p 3) x", True) :
 >   ("f :: forall (p :: Constraint -> *)(c :: Constraint) . c => p c -> Integer\nf = f", True) :
 >   ("f :: forall (p :: Constraint -> *) . p (2 + 3 <= 7)\nf = f", True) :
+>   ("class S a where\n  s :: a -> [Char]\nx = s", True) :
+>   ("class T a (b :: Integer) where\n  s :: forall (p :: Integer -> *) . a -> p b -> Integer\nx = s", True) :
+>   ("class S a where\n  s :: 6", False) :
+>   ("f :: forall (p :: Integer -> *) . pi (x :: Integer) . p x\nf {y} = undefined :: p y", True) : 
+>   ("f :: forall (p :: Integer -> *) . pi (x :: Integer) . p x\nf {y} = undefined :: p x", False) : 
+>   ("f :: Show a => a -> [Char]\nf x = show x\nz :: [Char]\nz = show (3 :: Integer)", True) :
+>   ("f :: Show a => a -> [Char]\nf x = show x\nz :: [Char]\nz = show 3", True) :
+>   ("class Foo a where\n foo :: b -> a", True) :
+>   (vecDecl ++ "class N a where n :: pi (x :: Nat) . a -> Vec x a", True) :
+>   ("class X a where x :: a\ninstance X Integer where x = 3", True) : 
+>   ("class X a where x :: a\ninstance X Integer where x = 'a'", False) : 
+>   ("class X a where x :: a\ninstance X Integer where x = 3\ny :: Integer\ny = x", True) : 
+>   ("class Comm (f :: Integer -> Integer -> Integer) where comm :: forall (m n :: Integer) a . (f m n ~ f n m => a) -> a\ninstance Comm (+) where comm x = x", True) :
+>   ("class X a where x :: a\ninstance X a => X [a] where x = [x]", True) : 
+>   ("class X a where x :: a\ninstance (X Integer, X a) => X [a] where x = [x]", True) : 
+>   ("class X a where x :: a\ninstance X a => X [a] where x = []\ny :: X a => [a]\ny = x", True) : 
+>   ("class (a ~ b) => X (a :: Integer) (b :: Integer) where coe :: forall (p :: Integer -> *) . p a -> p b\ninstance X a a where coe x = x", True) : 
+>   ("class X a where x :: a\nclass (X a) => Y a\ny :: Y a => a\ny = x", True) : 
+>   ("elimNat :: forall a . pi (n :: Nat) . (n ~ 0 => a) -> (pi (m :: Nat) . n ~ m + 1 => a) -> a\nelimNat {0}   z s = z\nelimNat {m+1} z s = s {m}\nnatToInt p {n} = elimNat {n} 0 (\\ {m} -> p m 1)", True) :
+>   ("data Foo :: * -> * where\n  X :: forall a. Foo a\n  deriving Show\nf :: Foo a -> [Char]\nf = show", True) :
+>   ("data Foo where\n  X :: Foo\n  deriving Show\nf :: Foo -> [Char]\nf = show", True) :
+>   ("f :: Show a => b -> [Char]\nf = show", False) :
+>   ("f :: Eq a => (a,a) -> (a,a) -> Bool\nf = (==)", True) :
+>   ("badexp :: (Num a, Num b, Eq b, Ord b, Integral b) => a -> b -> a\nbadexp x n | (>) n 0 = f x ((-) n 1) x where\n  f :: forall _s _s' . (Num _s, Integral _s', Num _s', Eq _s') => _s -> (_s' -> (_s -> _s))\n  f _ 0 y = y\n  f x n y = g x n where\n    g x n | even n = g ((*) x x) (quot n 2)\n           | otherwise = f x ((-) n 1) ((*) x y)", False) :
 >   []

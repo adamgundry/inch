@@ -1,65 +1,211 @@
-(==) :: a -> a -> Bool
-(/=) :: a -> a -> Bool
-compare :: Integer -> Integer -> Ordering
-div :: Integer -> Integer -> Integer
-mod :: Integer -> Integer -> Integer
-quot :: Integer -> Integer -> Integer
-rem :: Integer -> Integer -> Integer
-quotRem :: Integer -> Integer -> (Integer, Integer)
-divMod :: Integer -> Integer -> (Integer, Integer)
-subtract         :: Integer -> (Integer -> Integer)
-even             :: Integer -> Bool
-odd              :: Integer -> Bool
-gcd              :: Integer -> Integer -> Integer
-lcm              :: Integer -> Integer -> Integer
-fmap             :: forall (f :: * -> *) a b . (a -> b) -> f a -> f b
-(>>=)            :: forall (m :: * -> *) a b . m a -> (a -> m b) -> m b  
-(>>)             :: forall (m :: * -> *) a b . m a -> m b -> m b  
-return           :: forall (m :: * -> *) a . a -> m a  
-fail             :: forall (m :: * -> *) a . [Char] -> m a  
+data Rational where
+
+class  Eq a  where  
+    (==), (/=) :: a -> a -> Bool  
+
+class  (Eq a) => Ord a  where  
+    compare              :: a -> a -> Ordering  
+    (<), (<=), (>=), (>) :: a -> a -> Bool  
+    max, min             :: a -> a -> a  
+
+class  Enum a  where  
+    succ, pred       :: a -> a  
+    toEnum           :: Int -> a  
+    fromEnum         :: a -> Int  
+    enumFrom         :: a -> [a]             
+    enumFromThen     :: a -> a -> [a]        
+    enumFromTo       :: a -> a -> [a]        
+    enumFromThenTo   :: a -> a -> a -> [a]   
+
+class  Bounded a  where  
+    minBound         :: a  
+    maxBound         :: a
+
+class  (Eq a, Show a) => Num a  where  
+    (+), (-), (*)    :: a -> a -> a  
+    negate           :: a -> a  
+    abs, signum      :: a -> a  
+    fromInteger      :: Integer -> a  
+
+class  (Num a, Ord a) =>  Real a  where  
+    toRational       ::  a -> Rational
+
+class  (Real a, Enum a) => Integral a  where  
+    quot, rem        :: a -> a -> a  
+    div, mod         :: a -> a -> a  
+    quotRem, divMod  :: a -> a -> (a,a)  
+    toInteger        :: a -> Integer  
+
+class  (Num a) => Fractional a  where  
+    (/)              :: a -> a -> a  
+    recip            :: a -> a  
+    fromRational     :: Rational -> a  
+
+class  (Fractional a) => Floating a  where  
+    pi                  :: a  
+    exp, log, sqrt      :: a -> a  
+    (**), logBase       :: a -> a -> a  
+    sin, cos, tan       :: a -> a  
+    asin, acos, atan    :: a -> a  
+    sinh, cosh, tanh    :: a -> a  
+    asinh, acosh, atanh :: a -> a  
+
+class  (Real a, Fractional a) => RealFrac a  where  
+    properFraction   :: forall b . (Integral b) => a -> (b,a)  
+    truncate, round  :: forall b . (Integral b) => a -> b  
+    ceiling, floor   :: forall b . (Integral b) => a -> b  
+
+class  (RealFrac a, Floating a) => RealFloat a  where  
+    floatRadix       :: a -> Integer  
+    floatDigits      :: a -> Int  
+    floatRange       :: a -> (Int,Int)  
+    decodeFloat      :: a -> (Integer,Int)  
+    encodeFloat      :: Integer -> Int -> a  
+    exponent         :: a -> Int  
+    significand      :: a -> a  
+    scaleFloat       :: Int -> a -> a  
+    isNaN, isInfinite, isDenormalized, isNegativeZero, isIEEE  
+                     :: a -> Bool  
+    atan2            :: a -> a -> a  
+
+subtract         :: Num a => a -> a -> a
+even, odd        :: Num a => a -> Bool
+gcd              :: Integral a => a -> a -> a
+lcm              :: Integral a => a -> a -> a
+(^)              :: (Num a, Integral b) => a -> b -> a  
+(^^)             :: (Fractional a, Integral b) => a -> b -> a  
+fromIntegral     :: (Integral a, Num b) => a -> b  
+realToFrac     :: (Real a, Fractional b) => a -> b  
+
+class  Functor (f :: * -> *)  where  
+    fmap              :: (a -> b) -> f a -> f b
+
+class  Monad (m :: * -> *)  where  
+    (>>=)  :: m a -> (a -> m b) -> m b  
+    (>>)   :: m a -> m b -> m b  
+    return :: a -> m a  
+    fail   :: [Char] -> m a  
+
 sequence         :: forall (m :: * -> *) a . [m a] -> m [a]  
 sequence_        :: forall (m :: * -> *) a . [m a] -> m ()
 mapM             :: forall (m :: * -> *) a b . (a -> m b) -> [a] -> m [b]  
 mapM_            :: forall (m :: * -> *) a b . (a -> m b) -> [a] -> m ()  
 (=<<)            :: forall (m :: * -> *) a b . (a -> m b) -> m a -> m b  
+
+-- data () built in
+instance Eq ()
+instance Ord ()
+instance Enum ()
+instance Bounded ()
+
 id               :: a -> a
 const            :: a -> (b -> a)
 (.)              :: (b -> c) -> (a -> b) -> a -> c  
 flip             :: (a -> (b -> c)) -> (b -> (a -> c))
 seq              :: a -> b -> b
-($) :: (a -> b) -> a -> b  
-($!) :: (a -> b) -> a -> b  
+($), ($!)        :: (a -> b) -> a -> b  
+
 data Bool where
   False :: Bool
   True :: Bool
   deriving (Eq, Ord, Enum, Read, Show, Bounded)
+
 (&&)             :: Bool -> Bool -> Bool  
 (||)             :: Bool -> Bool -> Bool  
 not :: Bool -> Bool
 otherwise :: Bool
+
+-- data Char built in
+instance  Eq Char
+instance  Ord Char
+instance  Enum Char 
+instance  Bounded Char
+
 data Maybe :: * -> * where
   Nothing :: Maybe a
   Just :: a -> Maybe a
   deriving (Eq, Ord, Read, Show)
 maybe :: b -> ((a -> b) -> (Maybe a -> b))
+instance  Functor Maybe 
+instance  Monad Maybe
+
 data Either :: * -> * -> * where
   Left :: a -> Either a b
   Right :: b -> Either a b
   deriving (Eq, Ord, Read, Show)
 either :: (a -> c) -> ((b -> c) -> (Either a b -> c))
+
+data IO :: * -> * where
+instance Functor IO  
+instance Monad IO
+
 data Ordering where
   LT :: Ordering
   EQ :: Ordering
   GT :: Ordering
   deriving (Eq, Ord, Enum, Read, Show, Bounded)
+
+data  Int where
+instance  Eq       Int
+instance  Ord      Int
+instance  Num      Int
+instance  Real     Int
+instance  Integral Int
+instance  Enum     Int
+instance  Bounded  Int
+
+-- data  Integer  built in
+instance  Eq       Integer
+instance  Ord      Integer
+instance  Num      Integer
+instance  Real     Integer
+instance  Integral Integer
+instance  Enum     Integer
+
+data  Float where  
+instance  Eq         Float
+instance  Ord        Float
+instance  Num        Float  
+instance  Real       Float  
+instance  Fractional Float  
+instance  Floating   Float  
+instance  RealFrac   Float  
+instance  RealFloat  Float
+
+data  Double where
+instance  Eq         Double  
+instance  Ord        Double  
+instance  Num        Double  
+instance  Real       Double  
+instance  Fractional Double  
+instance  Floating   Double  
+instance  RealFrac   Double  
+instance  RealFloat  Double
+
+instance  Enum Float  
+instance  Enum Double
+
+-- data [] built in
+instance Eq a => Eq [a]
+instance Ord a => Ord [a]
+instance Functor []  
+instance Monad []  
+  
+-- data (,) built in
+instance (Eq a, Eq b) => Eq (a, b)
+instance (Ord a, Ord b) => Ord (a, b)
+instance (Bounded a, Bounded b) => Bounded (a, b)
+
 fst :: (a, b) -> a
 snd :: (a, b) -> b
 curry :: ((a, b) -> c) -> (a -> (b -> c))
 uncurry :: (a -> (b -> c)) -> ((a, b) -> c)
+
 until :: (a -> Bool) -> ((a -> a) -> (a -> a))
 asTypeOf :: a -> (a -> a)
 error :: [Char] -> a
 undefined :: a
+
 map :: (a -> b) -> ([a] -> [b])
 (++) :: [a] -> [a] -> [a]
 filter :: (a -> Bool) -> ([a] -> [a])
@@ -96,25 +242,56 @@ words            :: [Char] -> [[Char]]
 unlines :: [[Char]] -> [Char]
 unwords :: [[Char]] -> [Char]
 reverse :: [a] -> [a]
-and :: [Bool] -> Bool
-or :: [Bool] -> Bool
-any :: (a -> Bool) -> ([a] -> Bool)
-all :: (a -> Bool) -> ([a] -> Bool)
-elem :: a -> [a] -> Bool
-notElem :: a -> [a] -> Bool
-lookup :: a -> [(a, b)] -> Maybe b
-sum :: [Integer] -> Integer
-product :: [Integer] -> Integer
-maximum :: [Integer] -> Integer
-minimum :: [Integer] -> Integer
+and, or :: [Bool] -> Bool
+any, all :: (a -> Bool) -> ([a] -> Bool)
+elem, notElem :: Eq a => a -> [a] -> Bool
+lookup :: Eq a => a -> [(a, b)] -> Maybe b
+sum, product :: Num a => [a] -> a
+maximum, minimum :: Ord a => [a] -> a
 zip :: [a] -> ([b] -> [(a, b)])
 zipWith :: (a -> (b -> c)) -> ([a] -> ([b] -> [c]))
 zipWith3 :: (a -> (b -> (c -> d))) -> ([a] -> ([b] -> ([c] -> [d])))
 unzip            :: [(a,b)] -> ([a],[b])
-show :: a -> [Char]
-read :: [Char] -> a
-data IO :: * -> * where
+
+class  Read a  where  
+    readsPrec        :: Int -> [Char] -> [(a, [Char])]  
+    readList         :: [Char] -> [([a], [Char])]
+
+class  Show a  where  
+    showsPrec        :: Int -> a -> [Char] -> [Char]  
+    show             :: a -> [Char]
+    showList         :: [a] -> [Char] -> [Char]  
+ 
+reads            :: (Read a) => [Char] -> [(a, [Char])]  
+shows            :: (Show a) => a -> [Char] -> [Char]  
+read             :: (Read a) => [Char] -> a  
+showChar         :: Char -> [Char] -> [Char]  
+showString       :: [Char] -> [Char] -> [Char]  
+showParen        :: Bool -> ([Char] -> [Char]) -> ([Char] -> [Char])
+readParen        :: Bool -> ([Char] -> [(a, [Char])]) -> ([Char] -> [(a, [Char])])
+lex              :: [Char] -> [([Char], [Char])]  
+    
+instance  Show Int  
+instance  Read Int  
+instance  Show Integer  
+instance  Read Integer  
+instance  Show Float  
+instance  Read Float  
+instance  Show Double  
+instance  Read Double  
+instance  Show ()  
+instance Read () where  
+instance  Show Char  
+instance  Read Char  
+instance  (Show a) => Show [a]  
+instance  (Read a) => Read [a]  
+instance  (Show a, Show b) => Show (a,b)  
+instance  (Read a, Read b) => Read (a,b)  
+
 data IOError where
+instance  Show IOError  
+instance  Eq IOError
+
 ioError    ::  IOError -> IO a  
 userError  ::  [Char] -> IOError  
 catch      ::  IO a -> (IOError -> IO a) -> IO a  
@@ -128,5 +305,5 @@ interact    ::  ([Char] -> [Char]) -> IO ()
 readFile   :: [Char] -> IO [Char]
 writeFile  :: [Char] -> [Char] -> IO ()  
 appendFile :: [Char] -> [Char] -> IO ()  
-readIO :: [Char] -> IO a
-readLn :: IO a
+readIO :: Read a => [Char] -> IO a
+readLn :: Read a => IO a

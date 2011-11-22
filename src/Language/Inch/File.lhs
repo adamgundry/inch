@@ -13,12 +13,13 @@
 
 > import Language.Inch.Context
 > import Language.Inch.Syntax
+> import Language.Inch.ModuleSyntax
 > import Language.Inch.Parser
 > import Language.Inch.PrettyPrinter
 > import Language.Inch.ProgramCheck
 > import Language.Inch.Erase
 
-> checkFile :: FilePath -> String -> IO (Module (), ZipState)
+> checkFile :: FilePath -> String -> IO (Module, ZipState)
 > checkFile original s = do
 >     md <- parseModuleIO
 >     ds <- readImports (fst (splitFileName original)) (modImports md)
@@ -33,20 +34,22 @@
 >         Left err  -> putStrLn ("type-checking failed:\n" ++ renderMe err) >> exitFailure
 
 
-> eraseWrite :: FilePath -> Module () -> ZipState -> IO ()
+> eraseWrite :: FilePath -> Module -> ZipState -> IO ()
 > eraseWrite output md st = case evalStateT (eraseModule md) st of
 >     Right md'  -> writeFile output (renderMe (fog md'))
 >     Left err   -> putStrLn ("erase error:\n" ++ renderMe err) >> exitFailure
 
-> getInterface :: Module () -> String
-> getInterface = renderMe . map fog . filter dataOrSigDecl . modDecls
+> getInterface :: Module -> String
+> getInterface = renderMe . map fog . filter interfaceDecl . modDecls
 >   where
->     dataOrSigDecl (DataDecl _ _ _ _)    = True
->     dataOrSigDecl (Decl (SigDecl _ _))  = True
->     dataOrSigDecl (Decl (FunDecl _ _))  = False
+>     interfaceDecl (DataDecl _ _ _ _)    = True
+>     interfaceDecl (CDecl _ _      )     = True
+>     interfaceDecl (IDecl _ _)           = True
+>     interfaceDecl (Decl (SigDecl _ _))  = True
+>     interfaceDecl (Decl (FunDecl _ _))  = False
 
 
-> readImport :: FilePath -> Import -> IO [STopDeclaration ()]
+> readImport :: FilePath -> Import -> IO [STopDeclaration]
 > readImport dir im = do
 >     s <- catch (readFile (combine dir inchFile)) $ \ (_ :: IOException) ->
 >              catch (readFile =<< getDataFileName inchFile) $ \ (_ :: IOException) ->
@@ -61,7 +64,7 @@
 >         Imp ys        -> x `elem` ys
 >         ImpHiding ys  -> x `notElem` ys
 
-> readImports :: FilePath -> [Import] -> IO [STopDeclaration ()]
+> readImports :: FilePath -> [Import] -> IO [STopDeclaration]
 > readImports dir is = fmap join (mapM (readImport dir) is')
 >   where
 >     is' = if any (("Prelude" ==) . importName) is then is

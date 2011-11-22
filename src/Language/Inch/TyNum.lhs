@@ -33,7 +33,7 @@
 > import Data.List hiding (all, any, foldr)
 > import Data.Map (Map)
 > import qualified Data.Map as Map
-> import Data.Monoid
+> import Data.Monoid hiding (All)
 
 > import Language.Inch.Kit
 > import Language.Inch.Kind
@@ -85,10 +85,11 @@
 >     VarFac a    <?= VarFac b    = a <?= b
 >     VarFac _    <?= _           = True
 >     _           <?= VarFac _    = False
->     AppFac f m  <?= AppFac g n  = f <?= g && m <= n
+>     AppFac f m  <?= AppFac g n  = m < n || (m == n && f <?= g)
 >     AppFac _ _  <?= _           = True
 >     _           <?= AppFac _ _  = False
->     AptFac f s  <?= AptFac g t  = f <?= g && s <?= t
+>     AptFac f s  <?= AptFac g t  | f =?= g    = s <?= t
+>                                 | otherwise  = f <?= g
 >     AptFac _ _  <?= _           = True
 >     _           <?= AptFac _ _  = False
 >     UnFac o     <?= UnFac p     = o <= p
@@ -149,7 +150,7 @@
 
 
 > mkVar :: Var a KNum -> NormNum a
-> mkVar a = NN $ Map.singleton (monoVar a) 1
+> mkVar = singleMono . monoVar
 
 
 > numVariables :: NormNum a -> Int
@@ -302,16 +303,17 @@
 >                 Nothing  -> singleFac (UnFac o `AppFac` m)
 
 > nbinOp :: BinOp -> NormNum a -> NormNum a -> NormNum a
-> nbinOp o m n = case (o, getConstant m, getConstant n) of
->         (Pow,    Just i,   Just j)  | j >= 0     -> fromInteger (i ^ j)
->         (Pow,    _,        Just j)  | j >= 0     -> m ^ j
->                                     | otherwise  -> singleFac (BinFac Pow `AppFac` m `AppFac` n)
->         (Pow,    Just 1,   _)       -> 1
->         (Pow,    _,        _)       -> foldr foo 1 (Map.toList $ elimNN n)
->           where
->             foo (x, k) t | Map.null x  = t * (m ^ k)
->                          | otherwise   = t * (singleFac (BinFac Pow `AppFac` m `AppFac` singleMono x) ^ k)
+> nbinOp Pow m n = case (getConstant m, getConstant n) of
+>                    (Just i,   Just j)  | j >= 0     -> fromInteger (i ^ j)
+>                    (_,        Just j)  | j >= 0     -> m ^ j
+>                                        | otherwise  -> singleFac (BinFac Pow `AppFac` m `AppFac` n)
+>                    (Just 1,   _)                    -> 1
+>                    _                                -> foldr foo 1 (Map.toList $ elimNN n)
+>  where
+>      foo (x, k) t | Map.null x  = t * (m ^ k)
+>                   | otherwise   = t * (singleFac (BinFac Pow `AppFac` m `AppFac` singleMono x) ^ k)
 
+> nbinOp o m n = case (o, getConstant m, getConstant n) of
 >         (_,      Just i,   Just j)  -> fromInteger (binOpFun o i j)
 >         (Plus,   _,        _)       -> NN $ unionMaps (elimNN m) (elimNN n)
 >         (Minus,  _,        _)       -> NN $ unionMaps (elimNN m) (Map.map negate $ elimNN n)

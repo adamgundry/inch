@@ -9,13 +9,14 @@ Haskell features that would be nice:
 * Pattern-matching let and lambda bindings
 * Mutually recursive binding groups
 * Kind inference
-* Infix operators
+* Infix operator parsing
+* Defaulting
 
 * GHC LINE pragmas that make some kind of sense
 * Coverage checking: incomplete and redundant pattern matches
 
 New things to think about:
-* Constraint kinds
+* Ambiguity checking
 * Lifting types to kinds
 * Higher-order unification
 * Sigma-types
@@ -66,7 +67,7 @@ data Vec :: Num -> * -> * where
 
 data UNat :: Num -> * where
   UZero :: forall (n :: Num) . n ~ 0 => UNat n
-  USuc :: forall (n m :: Num). 0 <= n, m ~ (n + 1) => UNat n -> UNat m
+  USuc :: forall (n m :: Num). (0 <= n, m ~ (n + 1)) => UNat n -> UNat m
 
 
 -- Vector kit
@@ -98,7 +99,7 @@ vappend VNil ys = ys
 vappend (VCons x xs) VNil = VCons x (vappend xs VNil)
 vappend (VCons x xs) (VCons y ys) = VCons x (vappend xs (VCons y ys))
 
-vappend2 :: forall (m n :: Num) a . 0 <= m, 0 <= n =>
+vappend2 :: forall (m n :: Num) a . (0 <= m, 0 <= n) =>
                 Vec m a -> Vec n a -> Vec (m+n) a
 vappend2 VNil ys = ys
 vappend2 (VCons x xs) ys = VCons x (vappend2 xs ys)
@@ -188,7 +189,7 @@ plan {m+1} = VCons (nat {m}) (plan {m})
 
 plan5 = plan {5}
 
-vlookup :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, (m+1) <= n => Vec n a -> a
+vlookup :: forall (n :: Num) a . pi (m :: Num) . (0 <= m, (m+1) <= n) => Vec n a -> a
 vlookup {0}   (VCons x xs) = x
 vlookup {k+1} (VCons x xs) = vlookup {k} xs
 
@@ -209,7 +210,7 @@ vsplit2 {n+1} (VCons x xs) = let  f (Pair ys zs)  = Pair (VCons x ys) zs
                              in f xs'
 -}
 
-vtake :: forall (n :: Num) a . pi (m :: Num) . 0 <= m, 0 <= n => Vec (m + n) a -> Vec m a
+vtake :: forall (n :: Num) a . pi (m :: Num) . (0 <= m, 0 <= n) => Vec (m + n) a -> Vec m a
 vtake {0}   _            = VNil
 vtake {i+1} (VCons x xs) = VCons x (vtake {i} xs)
 
@@ -273,7 +274,7 @@ saTm = subst (comp V FSuc) aTm
 
 
 data Tm' :: Num -> * where
-  V' :: forall (m :: Num) . pi (n :: Num) . 0 <= n, n <= m => Tm' m
+  V' :: forall (m :: Num) . pi (n :: Num) . (0 <= n, n <= m) => Tm' m
   L' :: forall (m :: Num) . 0 <= m => Tm' (m+1) -> Tm' m
   A' :: forall (m :: Num) . Tm' m -> Tm' m -> Tm' m
 
@@ -301,7 +302,7 @@ foldTm2 v l a (A' f s) = a (foldTm2 v l a f) (foldTm2 v l a s)
 
 
 foldTm3 :: forall (a :: Num -> *) (m :: Num) . 
-    (forall (k :: Num) . pi (n :: Num) . 0 <= n, n <= k => a k) ->
+    (forall (k :: Num) . pi (n :: Num) . (0 <= n, n <= k) => a k) ->
     (forall (k :: Num) . 0 <= k => a (k+1) -> a k) ->
     (forall (k :: Num) . a k -> a k -> a k) ->
         Tm' m -> a m
@@ -324,7 +325,7 @@ data Layer :: Num -> * where
   Layer2 :: Bool  -> Layer 2
   Layer3 :: Nat   -> Layer 3
 
-deserialize :: pi (m :: Num) . 0 <= m, m <= 3 => Nat -> Layer m
+deserialize :: pi (m :: Num) . (0 <= m, m <= 3) => Nat -> Layer m
 deserialize {0} n     = Layer0 n
 deserialize {1} n     = Layer1 n
 deserialize {2} Zero  = Layer2 True
@@ -346,11 +347,11 @@ layer (Layer2 True)        = Layer3 Zero
 layer (Layer2 False)       = Layer3 (Suc Zero)
 
 doLayers :: forall (m :: Num) . pi (n :: Num) .
-    0 <= m, 0 <= n, (m + n) <= 3 => Layer m -> Layer (m + n)
+    (0 <= m, 0 <= n, (m + n) <= 3) => Layer m -> Layer (m + n)
 doLayers {0}   l = l
 doLayers {i+1} l = doLayers {i} (layer l)
 
-runLayers :: pi (m n :: Num) . 0 <= m, 0 <= n, (m + n) <= 3 => Nat -> Nat
+runLayers :: pi (m n :: Num) . (0 <= m, 0 <= n, (m + n) <= 3) => Nat -> Nat
 runLayers {m} {n} b = serialize (doLayers {n} (deserialize {m} b))
 
 
@@ -363,10 +364,10 @@ l3  = runLayers {0} {3} Zero
 -- Cartesian
 
 data Coord :: Num -> Num -> Num -> Num -> * where
-  Coord :: pi (l b r t :: Num) . l <= r, b <= t => Coord l b r t
+  Coord :: pi (l b r t :: Num) . (l <= r, b <= t) => Coord l b r t
 
 data Shape :: Num -> Num -> Num -> Num -> * where
-  Box :: pi (l b r t :: Num) . l <= r, b <= t => Shape l b r t
+  Box :: pi (l b r t :: Num) . (l <= r, b <= t) => Shape l b r t
   Above :: forall (l b r t b' :: Num) .
              Shape l b r t -> Shape l b' r b -> Shape l b' r t
 
@@ -752,7 +753,7 @@ sprod plus times (VCons x xs) (VCons y ys) = plus (times x y) (sprod plus times 
 
 
 data SplitVector :: Num -> * -> * where
-  Spv :: forall (m k :: Num) a . 0 <= m, 0 <= k => Vec m a -> Vec k a -> SplitVector (m+k) a
+  Spv :: forall (m k :: Num) a . (0 <= m, 0 <= k) => Vec m a -> Vec k a -> SplitVector (m+k) a
 
 spvLeft :: forall (n :: Num) a . a -> SplitVector n a -> SplitVector (n+1) a
 spvLeft x (Spv l r) = Spv (VCons x l) r
@@ -806,7 +807,7 @@ compareNum {m+1} {n+1} = sucNO (compareNum {m} {n})
 
 
 
-at :: forall (m :: Num) a . Vec m a -> (pi (n :: Num) . 0 <= n, n < m => a)
+at :: forall (m :: Num) a . Vec m a -> (pi (n :: Num) . (0 <= n, n < m) => a)
 at (VCons x xs) {0}    = x
 at (VCons x xs) {n+1}  = at xs {n}
 
@@ -915,7 +916,7 @@ data Thing :: Num -> * where
 mkThing {n} = Thing :: Thing n
 
 
-madNil :: forall a (m :: Num) . 0 <= m, m < 1 => Vec' a m
+madNil :: forall a (m :: Num) . (0 <= m, m < 1) => Vec' a m
 madNil = VNil'
 
 

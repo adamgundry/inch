@@ -6,12 +6,12 @@
 
 > module Language.Inch.Type where
 
+> import Prelude hiding (foldr)
 > import Control.Applicative
-> import Data.Foldable hiding (notElem, any)
+> import Data.Foldable hiding (any, elem, notElem)
 > import qualified Data.Monoid as M
 > import Data.Traversable
-> import Data.List
-> import Unsafe.Coerce
+> import Data.List hiding (foldr)
 
 > import Language.Inch.Kit
 > import Language.Inch.Kind
@@ -37,6 +37,20 @@
 > compFun GE = (>=)
 > compFun GR = (>)
 > compFun EL = (==)
+
+> compStringTm :: Comparator -> String
+> compStringTm LE = "<="
+> compStringTm LS = "<"
+> compStringTm GE = ">="
+> compStringTm GR = ">"
+> compStringTm EL = "=="
+
+> compStringTy :: Comparator -> String
+> compStringTy LE = "<="
+> compStringTy LS = "<"
+> compStringTy GE = ">="
+> compStringTy GR = ">"
+> compStringTy EL = "~"
 
 > data Pred ty where
 >     P      :: Comparator -> ty -> ty -> Pred ty
@@ -95,17 +109,23 @@
 > binOpInfix Min    = False
 > binOpInfix Max    = False
 
+> binOpPrefixString :: BinOp -> String
+> binOpPrefixString b | binOpInfix b  = '(' : binOpString b ++ ")"
+>                     | otherwise     = binOpString b
 
 
 > data TyKind where
 >     TK :: Type k -> Kind k -> TyKind
+
+> tkToEx :: TyKind -> Ex (Ty ())
+> tkToEx (TK t _) = Ex t
 
 
 > data Ty a k where
 >     TyVar  :: Var a k                                       -> Ty a k
 >     TyCon  :: TyConName -> Kind k                           -> Ty a k
 >     TyApp  :: Ty a (l :-> k) -> Ty a l                      -> Ty a k
->     Bind   :: Binder -> String -> Kind l -> Ty (a, l) KSet  -> Ty a KSet
+>     Bind   :: Binder -> String -> Kind l -> Ty (a, l) k     -> Ty a k
 >     Qual   :: Ty a KConstraint -> Ty a k                    -> Ty a k
 >     Arr    :: Ty a (KSet :-> KSet :-> KSet)
 >     TyInt  :: Integer     -> Ty a KNum
@@ -114,14 +134,15 @@
 >     TyComp :: Comparator  -> Ty a (KNum :-> KNum :-> KConstraint)
 
 > deriving instance Show (Ty a k)
+> deriving instance Show (Ex (Ty ()))
 
 > instance HetEq (Ty a) where
->     hetEq (TyVar a)       (TyVar b)           yes no = hetEq a b yes no
+>     hetEq (TyVar a)       (TyVar b)           yes no              = hetEq a b yes no
 >     hetEq (TyCon c k)     (TyCon c' k')       yes no | c == c'    = hetEq k k' yes no
->     hetEq (TyApp f s)     (TyApp f' s')       yes no = hetEq f f' (hetEq s s' yes no) no
+>     hetEq (TyApp f s)     (TyApp f' s')       yes no              = hetEq f f' (hetEq s s' yes no) no
 >     hetEq (Bind b x k t)  (Bind b' x' k' t')  yes no | b == b' && x == x' = hetEq k k' (hetEq t t' yes no) no
 >     hetEq (Qual p t)      (Qual p' t')        yes no | p == p'    = hetEq t t' yes no
->     hetEq Arr             Arr                 yes _  = yes
+>     hetEq Arr             Arr                 yes _               = yes
 >     hetEq (TyInt i)       (TyInt j)           yes _  | i == j     = yes
 >     hetEq (UnOp o)        (UnOp o')           yes _  | o == o'    = yes
 >     hetEq (BinOp o)       (BinOp o')          yes _  | o == o'    = yes
@@ -135,16 +156,19 @@
 >     TyVar a    <?= TyVar b    = a <?= b
 >     TyVar _    <?= _          = True
 >     _          <?= TyVar _    = False
->     TyCon c k  <?= TyCon d l  = c <= d && k <?= l
+>     TyCon c k  <?= TyCon d l  = c < d || (c == d && k <?= l)
 >     TyCon _ _  <?= _          = True
 >     _          <?= TyCon _ _  = False
->     TyApp f s  <?= TyApp g t  = f <?= g && s <?= t
+>     TyApp f s  <?= TyApp g t  | f =?= g = s <?= t
+>                               | otherwise = f <?= g
 >     TyApp _ _  <?= _          = True
 >     _          <?= TyApp _ _  = False
->     Bind b x k t  <?= Bind b' x' k' t'  = b <= b' && x <= x' && k <?= k' && t <?= unsafeCoerce t'
+>     Bind b x k t  <?= Bind b' x' k' t'  = 
+>         b < b' || (b == b' && (x < x' || (x == x' &&
+>             ((k <?= k' && not (k =?= k')) || (hetEq k k' (t <?= t') False)))))
 >     Bind _ _ _ _  <?= _                 = True
 >     _             <?= Bind _ _ _ _      = False
->     Qual p s      <?= Qual q t          = p <= q && s <?= t 
+>     Qual p s      <?= Qual q t          = p < q || (p == q && s <?= t) 
 >     Qual _ _      <?= _                 = True
 >     _             <?= Qual _ _          = False
 >     Arr           <?= _                 = True
@@ -200,9 +224,28 @@
 >     negate (STyInt k)  = STyInt (- k)
 >     negate t           = 0 - t
 
+> collectUnbound :: [String] -> SType -> [String]
+> collectUnbound bs (STyVar s)       | s `elem` bs  = []
+>                                    | otherwise    = [s]
+> collectUnbound _ (STyCon _)        = []
+> collectUnbound bs (STyApp f s)     = collectUnbound bs f `union` collectUnbound bs s
+> collectUnbound bs (SBind _ b _ u)  = collectUnbound (b:bs) u
+> collectUnbound bs (SQual p u)      = collectUnbound bs p `union` collectUnbound bs u
+> collectUnbound _ SArr              = []
+> collectUnbound _ (STyInt _)        = []
+> collectUnbound _ (SUnOp _)         = []
+> collectUnbound _ (SBinOp _)        = []
+> collectUnbound _ (STyComp _)       = []
+
+> wrapForall :: [String] -> SType -> SType
+> wrapForall _ t@(SBind All _ _ _) = t
+> wrapForall xs t = foldr (\ x y -> SBind All x SKSet y) t (collectUnbound xs t)
+
+
 
 > predToConstraint :: Predicate -> Type KConstraint
 > predToConstraint (P c m n) = tyPred c m n
+> predToConstraint (p :=> q) = Qual (predToConstraint p) (predToConstraint q)
 
 > constraintToPred :: Type KConstraint -> Maybe Predicate
 > constraintToPred (Qual p q)                      = (:=>) <$> constraintToPred p <*> constraintToPred q
@@ -259,7 +302,7 @@
 > getTyKind (UnOp _)         = KNum :-> KNum
 > getTyKind (BinOp _)        = KNum :-> KNum :-> KNum
 > getTyKind (Qual _ t)       = getTyKind t
-> getTyKind (Bind _ _ __ _)  = KSet
+> getTyKind (Bind _ _ k t)   = getTyKind (unbindTy (FVar (error "lie") k) t)
 > getTyKind Arr              = KSet :-> KSet :-> KSet
 > getTyKind (TyComp _)       = KNum :-> KNum :-> KConstraint
 
@@ -273,10 +316,10 @@
 > infixr 5 --->
 
 > (/->) :: Foldable f => f (Ty a KSet) -> Ty a KSet -> Ty a KSet
-> ts /-> t = Data.Foldable.foldr (-->) t ts
+> ts /-> t = foldr (-->) t ts
 
-> (/=>) :: Foldable f => f (Ty a KConstraint) -> Ty a KSet -> Ty a KSet
-> ps /=> t = Data.Foldable.foldr Qual t ps
+> (/=>) :: Foldable f => f (Ty a KConstraint) -> Ty a k -> Ty a k
+> ps /=> t = foldr Qual t ps
 
 > unOp :: UnOp -> Ty a KNum -> Ty a KNum
 > unOp o = TyApp (UnOp o)
@@ -340,6 +383,14 @@
 > substTy _ (UnOp o)        = UnOp o
 > substTy _ (BinOp o)       = BinOp o
 > substTy _ (TyComp c)      = TyComp c
+
+> instTy :: forall a l k . Ty a l -> Ty (a, l) k -> Ty a k
+> instTy t = substTy g
+>   where
+>     g :: forall k' . Var (a, l) k' -> Ty a k'
+>     g (BVar Top)      = t
+>     g (BVar (Pop v))  = TyVar (BVar v)
+>     g (FVar a k)      = TyVar (FVar a k)
 
 > replaceTy :: forall a k l. Var a k -> Ty a k -> Ty a l -> Ty a l
 > replaceTy a u = substTy f
@@ -453,3 +504,27 @@
 >     fvFoldMap _ (UnOp _)        = M.mempty
 >     fvFoldMap _ (BinOp _)       = M.mempty
 >     fvFoldMap _ (TyComp _)      = M.mempty
+
+
+
+> {-
+> allWrapVS :: VarSuffix () b x -> Type KSet -> Type KSet
+> allWrapVS VS0        t = t
+> allWrapVS (vs :<< v) t = allWrapVS vs (Bind All (nameToString (varName v)) (varKind v) (bindTy v t))
+
+> applyVS :: (forall k . Kind k -> Type k) -> VarSuffix () b x -> Type KConstraint
+> applyVS hd vs = help vs KConstraint
+>   where
+>     help :: VarSuffix () b x -> Kind l -> Type l
+>     help VS0        k = hd k
+>     help (vs :<< v) k = help vs (varKind v :-> k) `TyApp` TyVar v
+> -}
+
+
+
+> applys :: (forall k . Kind k -> Type k) -> [Ex (Ty ())] -> Kind k' -> Type k'
+> applys f xs k' = help xs k'
+>       where
+>         help :: [Ex (Ty ())] -> Kind l -> Type l
+>         help []          l = f l
+>         help (Ex t : ts) l = help ts (getTyKind t :-> l) `TyApp` t
