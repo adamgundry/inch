@@ -73,10 +73,13 @@
 
 
 > unify :: Type k -> Type k -> Contextual ()
-> unify t u = verifyContext True "unify" >> unifyTypes t u `inLoc` (do
->                 return $ sep [text "when unifying", nest 4 (prettyHigh $ fogSysTy t),
->                              text "and", nest 4 (prettyHigh $ fogSysTy u)])
->                     -- ++ "\n    in context " ++ render g)
+> unify t u = do
+>     verifyContext True "unify"
+>     t' <- expandTySyns t
+>     u' <- expandTySyns u
+>     unifyTypes t' u' `inLoc` (do
+>         return $ sep [text "when unifying", nest 4 (prettyHigh $ fogSysTy t),
+>                       text "and", nest 4 (prettyHigh $ fogSysTy u)])
 
 > unifyTypes :: Type k -> Type k -> Contextual ()
 > -- unifyTypes s t | s == t = return ()
@@ -89,8 +92,9 @@
 >         restore
 >         (case d of
 >           Hole      ->  replace (TE (alpha := Some (TyVar beta)) :> F0)
->           Some tau  ->  unifyTypes (TyVar beta) tau
->                             >> restore
+>           Some tau  ->  do  tau' <- expandTySyns tau
+>                             unifyTypes (TyVar beta) tau'
+>                             restore
 >           _         ->  solve beta (TE (alpha := d) :> F0) (TyVar alpha)
 >                             >> replace F0
 >         )
@@ -98,8 +102,9 @@
 >       (hetEq gamma beta
 >         (case d of
 >           Hole      ->  replace (TE (beta := Some (TyVar alpha)) :> F0)
->           Some tau  ->  unifyTypes (TyVar alpha) tau
->                             >> restore
+>           Some tau  ->  do  tau' <- expandTySyns tau
+>                             unifyTypes (TyVar alpha) tau'
+>                             restore
 >           _         ->  solve alpha (TE (beta := d) :> F0) (TyVar beta)
 >                             >> replace F0
 >         )
@@ -203,16 +208,18 @@ This is wrong, I think:
 >                     ++ renderMe (fogTy tau)
 >          else case d of
 >            Hole          ->  replace (_Xi <.> (TE (alpha := Some tau) :> F0))
->            Some upsilon  ->  modifyContext (<>< _Xi)
->                                         >>  unifyTypes upsilon tau
->                                         >>  restore
+>            Some upsilon  ->  do  modifyContext (<>< _Xi)
+>                                  upsilon' <- expandTySyns upsilon
+>                                  unifyTypes upsilon' tau
+>                                  restore
 >            _             ->  errUnifyFixed alpha tau
 >       )
 >       (if occurs
 >         then case d of
 >           Some upsilon  ->  do
->             (upsilon', xs) <- rigidHull [] upsilon
->             solve alpha (pairsToSuffix xs <.> (TE (gamma := Some upsilon') :> _Xi)) tau
+>             upsilon' <- expandTySyns upsilon
+>             (upsilon'', xs) <- rigidHull [] upsilon'
+>             solve alpha (pairsToSuffix xs <.> (TE (gamma := Some upsilon'') :> _Xi)) tau
 >             unifyPairs xs
 >             replace F0
 >           _             ->  solve alpha (TE (gamma := d) :> _Xi) tau
@@ -237,7 +244,8 @@ This is wrong, I think:
 >     \ (a := d) ->
 >       case (d, solveFor a e) of
 >         (Some t,  _)           -> do  modifyContext (<>< _Psi)
->                                       unifyZero F0 (substNum a t e)
+>                                       t' <- expandTySyns t
+>                                       unifyZero F0 (substNum a t' e)
 >                                       restore
 >         (_,       Absent)      -> do  unifyZero _Psi e
 >                                       restore

@@ -15,21 +15,24 @@ module RedBlackCost where
 
 import Cost
 
+type Black = 0
+type Red   = 1
+
 data Colour :: Integer -> * where
-    Black  :: Colour 0
-    Red    :: Colour 1
+    Black  :: Colour Black
+    Red    :: Colour Red
   deriving Show
 
 data Tree :: Integer -> Integer -> Integer -> Nat -> * where
-    E   :: forall (lo hi :: Integer) . lo < hi => Tree lo hi 0 0
+    E   :: forall (lo hi :: Integer) . lo < hi => Tree lo hi Black 0
     TR  :: forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                   Tree lo x 0 n -> Tree x hi 0 n -> Tree lo hi 1 n
+                   Tree lo x Black n -> Tree x hi Black n -> Tree lo hi Red n
     TB  :: forall (lo hi cl cr :: Integer)(n :: Nat) . pi (x :: Integer) .
-               Tree lo x cl n -> Tree x hi cr n -> Tree lo hi 0 (n+1)
+               Tree lo x cl n -> Tree x hi cr n -> Tree lo hi Black (n+1)
   deriving Show
 
 data RBT :: Integer -> Integer -> * where
-    RBT :: forall (lo hi :: Integer)(n :: Nat) . Tree lo hi 0 n -> RBT lo hi
+    RBT :: forall (lo hi :: Integer)(n :: Nat) . Tree lo hi Black n -> RBT lo hi
   deriving Show
 
 empty = RBT E
@@ -39,16 +42,16 @@ data TreeZip ::  Integer -> Integer -> Integer -> Nat ->
                  Nat -> * where
     Root  :: forall (lo hi c :: Integer)(n :: Nat) . TreeZip lo hi c n lo hi c n 0
     ZRL   :: forall (rlo rhi lo hi rc :: Integer)(rn n d :: Nat) . pi (x :: Integer) .
-                 TreeZip rlo rhi rc rn lo hi 1 n d -> Tree x hi 0 n ->
-                     TreeZip rlo rhi rc rn lo x 0 n (d + 1)
+                 TreeZip rlo rhi rc rn lo hi Red n d -> Tree x hi Black n ->
+                     TreeZip rlo rhi rc rn lo x Black n (d + 1)
     ZRR   :: forall (rlo rhi lo hi rc :: Integer)(rn n d :: Nat) . pi (x :: Integer) .
-                 Tree lo x 0 n -> TreeZip rlo rhi rc rn lo hi 1 n d ->
-                     TreeZip rlo rhi rc rn x hi 0 n (d + 1)
+                 Tree lo x Black n -> TreeZip rlo rhi rc rn lo hi Red n d ->
+                     TreeZip rlo rhi rc rn x hi Black n (d + 1)
     ZBL   :: forall (rlo rhi lo hi rc c hc :: Integer)(rn n d :: Nat) . pi (x :: Integer) . 
-                 TreeZip rlo rhi rc rn lo hi 0 (n+1) d -> Tree x hi c n ->
+                 TreeZip rlo rhi rc rn lo hi Black (n+1) d -> Tree x hi c n ->
                      TreeZip rlo rhi rc rn lo x hc n (d + 1)
     ZBR   :: forall (rlo rhi lo hi rc c hc :: Integer)(rn n d :: Nat) . pi (x :: Integer) .
-                 Tree lo x c n -> TreeZip rlo rhi rc rn lo hi 0 (n+1) d ->
+                 Tree lo x c n -> TreeZip rlo rhi rc rn lo hi Black (n+1) d ->
                      TreeZip rlo rhi rc rn x hi hc n (d + 1)
   deriving Show
 
@@ -61,8 +64,8 @@ plug t (ZRR {x} l z)  = tick (plug (TR {x} l t) z)
 plug t (ZBL {x} z r)  = tick (plug (TB {x} t r) z)
 plug t (ZBR {x} l z)  = tick (plug (TB {x} l t) z)
 
-plugBR :: forall (rlo rhi lo hi n rn d :: Integer) . Tree lo hi 0 n ->
-              TreeZip rlo rhi 0 rn lo hi 1 n d -> Cost (d + 1) (Tree rlo rhi 0 rn)
+plugBR :: forall (rlo rhi lo hi n rn d :: Integer) . Tree lo hi Black n ->
+              TreeZip rlo rhi Black rn lo hi Red n d -> Cost (d + 1) (Tree rlo rhi Black rn)
 plugBR t (ZBL {x} z r) = plug t (ZBL {x} z r)
 plugBR t (ZBR {x} l z) = plug t (ZBR {x} l z)
 
@@ -72,20 +75,20 @@ plugBR t (ZBR {x} l z) = plug t (ZBR {x} l z)
 data SearchResult :: Integer -> Integer -> Integer -> Integer -> * where
   Nope  :: forall (x rlo rhi lo hi :: Integer)(rn d :: Nat) .
                (d <= (2 * rn), lo < x, x < hi) =>
-                   TreeZip rlo rhi 0 rn lo hi 0 0 d -> SearchResult x rlo rhi rn
+                   TreeZip rlo rhi Black rn lo hi Black 0 d -> SearchResult x rlo rhi rn
   Yep   :: forall (x rlo rhi lo hi c :: Integer)(rn n d :: Nat) .
                ((2 * n) + d) <= (2 * rn) =>
-                   TreeZip rlo rhi 0 rn lo hi c n d -> Tree lo hi c n ->
+                   TreeZip rlo rhi Black rn lo hi c n d -> Tree lo hi c n ->
                        SearchResult x rlo rhi rn
 
 search ::  forall (rlo rhi :: Integer)(rn :: Nat) .
                pi (x :: Integer) . (rlo < x, x < rhi) =>
-                   Tree rlo rhi 0 rn -> Cost (2 * rn + 1) (SearchResult x rlo rhi rn)
+                   Tree rlo rhi Black rn -> Cost (2 * rn + 1) (SearchResult x rlo rhi rn)
 search {x} = helpB Root
   where
     help :: forall (lo hi c :: Integer)(n d :: Nat) .
                 ((1 + (2 * n) + d) <= (2 * rn), lo < x, x < hi) =>
-                    TreeZip rlo rhi 0 rn lo hi c n d -> Tree lo hi c n ->
+                    TreeZip rlo rhi Black rn lo hi c n d -> Tree lo hi c n ->
                         Cost (2 + 2 * n) (SearchResult x rlo rhi rn)
     help z E                      = tick (returnW (Nope z))
     help z (TR {y} l r) | {x < y} = tick (helpB (ZRL {y} z r) l)
@@ -97,7 +100,7 @@ search {x} = helpB Root
 
     helpB :: forall (lo hi :: Integer)(n d :: Nat) .
                  (((2 * n) + d) <= (2 * rn), lo < x, x < hi) =>
-                     TreeZip rlo rhi 0 rn lo hi 0 n d -> Tree lo hi 0 n ->
+                     TreeZip rlo rhi Black rn lo hi Black n d -> Tree lo hi Black n ->
                          Cost (2 * n + 1) (SearchResult x rlo rhi rn)
     helpB z E                      = tick (returnW (Nope z))
     helpB z (TB {y} l r) | {x < y} = tick (help (ZBL {y} z r) l)
@@ -107,7 +110,7 @@ search {x} = helpB Root
 
 member ::  forall (lo hi :: Integer)(n :: Nat) .
                pi (x :: Integer) . (lo < x, x < hi) =>
-                   Tree lo hi 0 n -> Cost (2 * n + 3) Bool
+                   Tree lo hi Black n -> Cost (2 * n + 3) Bool
 member {x} t = tick (bindCost (search {x} t) f)
   where
     f :: SearchResult x lo hi n -> Cost 1 Bool
@@ -119,9 +122,9 @@ data InsProb :: Integer -> Integer -> Integer -> Integer -> * where
     Level    ::  forall (lo hi c ci :: Integer)( n :: Nat) .
                     Colour ci -> Tree lo hi ci n -> InsProb lo hi c n
     PanicRB  ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                    Tree lo x 1 n -> Tree x hi 0 n -> InsProb lo hi 1 n
+                    Tree lo x Red n -> Tree x hi Black n -> InsProb lo hi Red n
     PanicBR  ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                    Tree lo x 0 n -> Tree x hi 1 n -> InsProb lo hi 1 n
+                    Tree lo x Black n -> Tree x hi Red n -> InsProb lo hi Red n
   deriving Show
 
 solveIns :: forall (rlo rhi lo hi c rc :: Integer)(rn n d :: Nat) . 
@@ -150,7 +153,7 @@ solveIns (PanicBR {xi} li (TR {xir} lir rir))  (ZBR {x} l z)  =
 
 
 insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
-               Tree lo hi 0 n -> Cost (4 * n + 6) (RBT lo hi)
+               Tree lo hi Black n -> Cost (4 * n + 6) (RBT lo hi)
 insert {x} t = tick (bindCost (search {x} t) f)
   where
     f :: SearchResult x lo hi n -> Cost (2 * n + 4) (RBT lo hi)
@@ -158,7 +161,7 @@ insert {x} t = tick (bindCost (search {x} t) f)
     f (Yep _ _)  = tick (returnW (RBT t))
 
 
-r2b :: forall (lo hi n :: Integer) . Tree lo hi 1 n -> Tree lo hi 0 (n+1)
+r2b :: forall (lo hi n :: Integer) . Tree lo hi Red n -> Tree lo hi Black (n+1)
 r2b (TR {x} l r) = TB {x} l r
 
 rbt :: forall (lo hi c :: Integer)(n :: Nat) . Colour c -> Tree lo hi c n -> RBT lo hi
@@ -169,8 +172,8 @@ rbt Red    t = RBT (r2b t)
 
 
 
-solveDel :: forall (rlo rhi lo hi :: Integer)(rn n d :: Nat) . Tree lo hi 0 n ->
-                TreeZip rlo rhi 0 rn lo hi 0 (n+1) d ->
+solveDel :: forall (rlo rhi lo hi :: Integer)(rn n d :: Nat) . Tree lo hi Black n ->
+                TreeZip rlo rhi Black rn lo hi Black (n+1) d ->
                     Cost (d + 1) (RBT rlo rhi)
 solveDel t Root = tick (returnW (RBT t))
 
@@ -225,7 +228,7 @@ solveDel t (ZBR {x} (TB {y} (TR {lx} ll lr) (TR {rx} rl rr)) z) = tick (mapCost 
 
 
 findMin :: forall (rlo rhi lo hi c :: Integer)(rn n d :: Nat) . Tree lo hi c (n+1) ->
-               (pi (k :: Integer) . lo < k => TreeZip rlo rhi 0 rn k hi c (n+1) d) ->
+               (pi (k :: Integer) . lo < k => TreeZip rlo rhi Black rn k hi c (n+1) d) ->
                    Cost (3 * n + d + 4) (RBT rlo rhi)
 findMin (TR {x} (TB {y} E E) r)                    f = tick (weaken (solveDel E (ZRL {x} (f {y}) r)))
 findMin (TR {x} (TB {y} E (TR {lx} ll lr)) r)      f = tick (weaken (mapCost RBT (plug (TB {lx} ll lr) (ZRL {x} (f {y}) r))))
@@ -247,7 +250,7 @@ wkTree (TR {x} l r) = TR {x} l (wkTree r)
 wkTree (TB {x} l r) = TB {x} l (wkTree r)
 
 delFocus :: forall (rlo rhi lo hi c :: Integer)(rn n d :: Nat) . Tree lo hi c n ->
-                TreeZip rlo rhi 0 rn lo hi c n d ->
+                TreeZip rlo rhi Black rn lo hi c n d ->
                     Cost (3 * n + d + 3) (RBT rlo rhi)
 delFocus (TR {x} E E)                        z = tick (weakenBy {1} (mapCost RBT (plugBR E z)))
 delFocus (TR {x} l (TB {rx} rl rr))          z = tick (findMin (TB {rx} rl rr) (\ {k} -> ZRR {k} (wkTree l) z))
@@ -261,7 +264,7 @@ delFocus (TB {x} (TB {lx} ll lr)  r)         z = tick (weakenBy {3} (findMin r (
 
 
 delete :: forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
-           Tree lo hi 0 n -> Cost (5 * n + 6) (RBT lo hi)
+           Tree lo hi Black n -> Cost (5 * n + 6) (RBT lo hi)
 delete {x} t = tick (bindCost (search {x} t) f)
   where
     f :: SearchResult x lo hi n -> Cost (3 * n + 4) (RBT lo hi)

@@ -34,28 +34,26 @@ data Quantity :: * -> * -> * where
   deriving Show
 
 
--- If we had type synonyms, we could do this:
-
--- type Dimensionless    = Unit 0 0 0
--- type Metre            = Unit 1 0 0
--- type Second           = Unit 0 1 0
--- type Gram             = Unit 0 0 1
--- type MetresPerSecond  = Unit 1 (-1) 0
--- type Newton           = Unit 1 (-2) 1
+type Dimensionless     = Unit 0 0 0
+type Metres            = Unit 1 0 0
+type Seconds           = Unit 0 1 0
+type Grams             = Unit 0 0 1
+type MetresPerSecond   = Unit 1 (-1) 0
+type Newtons           = Unit 1 (-2) 1
 
 
 -- Define some basic constructors
 
-dimensionless :: a -> Quantity (Unit 0 0 0) a
+dimensionless :: a -> Quantity Dimensionless a
 dimensionless = Q
 
-metres :: a -> Quantity (Unit 1 0 0) a
+metres :: a -> Quantity Metres a
 metres = Q
 
-seconds :: a -> Quantity (Unit 0 1 0) a
+seconds :: a -> Quantity Seconds a
 seconds = Q
 
-grams :: a -> Quantity (Unit 0 0 1) a
+grams :: a -> Quantity Grams a
 grams = Q
 
 minutes = (.) (scale 60) seconds
@@ -116,8 +114,7 @@ units x f = f x
 
 
 
--- distanceTravelled :: Fractional a => Quantity (Unit 0 1 0) a -> Quantity (Unit 1 0 0) a
--- or better yet Quantity Second a -> Quantity Metre a
+-- distanceTravelled :: (Num a, Fractional a) => Quantity Seconds a -> Quantity Metres a
 -- or we can just omit the type annotations, and get good inference behaviour
 distanceTravelled t = plus (times vel t) (times accel (sqr t))
   where

@@ -174,6 +174,7 @@ when the layer is extracted.
 >                     ,  context       :: Context
 >                     ,  tyCons        :: Map TyConName (Ex Kind)
 >                     ,  tmCons        :: Map TmConName Sigma
+>                     ,  tySyns        :: Map TyConName (Ex (TySyn ()))
 >                     ,  bindings      :: Bindings
 >                     ,  classes       :: Map ClassName ClassDeclaration
 >                     ,  instances     :: Map ClassName [Type KConstraint]
@@ -211,7 +212,15 @@ Initial state
 
 
 > initialState :: ZipState
-> initialState = St 0 B0 initTyCons initTmCons initBindings Map.empty Map.empty
+> initialState = St { nextFreshInt = 0
+>                   , context = B0
+>                   , tyCons = initTyCons
+>                   , tmCons = initTmCons
+>                   , tySyns = Map.empty
+>                   , bindings = initBindings
+>                   , classes = Map.empty
+>                   , instances = Map.empty
+>                   }
 >   where
 >     initTyCons = Map.fromList $
 >       ("Char",        Ex KSet) :
@@ -452,6 +461,58 @@ Bindings
 >         | x == y     = return $ TmVar y ::: ty
 >         | otherwise  = seek g
 >     seek (g :< _) = seek g
+
+
+
+Type synonyms
+
+
+> insertTySyn :: (MonadState ZipState m, MonadError ErrorData m) =>
+>                        TyConName -> TypeSyn k -> m ()
+> insertTySyn x t = do
+>     st <- get
+>     when (Map.member x (tyCons st)) $ erk $ "Duplicate type constructor and type synonym " ++ x
+>     when (Map.member x (tySyns st)) $ erk $ "Duplicate type synonym " ++ x
+>     put st{tySyns = Map.insert x (Ex t) (tySyns st)}
+
+
+> lookupTySyn ::  (MonadState ZipState m, MonadError ErrorData m) =>
+>                        TyConName -> m (Ex (TySyn (())))
+> lookupTySyn x = do
+>     ts <- gets tySyns
+>     case Map.lookup x ts of
+>         Just t   -> return t
+>         Nothing  -> erk $ "Missing type synonym " ++ x
+
+
+
+> data Args a k l where
+>     A0    :: Args a k k
+>     (:$)  :: Ty a j -> Args a k l -> Args a (j :-> k) l
+
+> ($:$) :: Ty a k -> Args a k l -> Ty a l
+> t $:$ A0 = t
+> t $:$ (a :$ as) = (t `TyApp` a) $:$ as
+
+
+> expandTySyns :: Ty a k -> Contextual (Ty a k)
+> expandTySyns u = help u A0
+>   where
+>     help :: Ty a k -> Args a k l -> Contextual (Ty a l)
+>     help (TySyn _ ts) as = expandTySyns =<< appTySyn ts as
+>     help (TyApp f a) as = do
+>         a' <- expandTySyns a
+>         help f (a' :$ as)
+>     help (Bind b x k t) A0 = Bind b x k <$> expandTySyns t
+>     help (Bind _ _ _ _) _  = error "expandTySyns: bad bind"
+>     help (Qual p t) A0 = Qual <$> expandTySyns p <*> expandTySyns t
+>     help (Qual _ _) _  = error "expandTySyns: bad qual"
+>     help t as = return (t $:$ as)
+
+>     appTySyn :: TySyn a k -> Args a k l -> Contextual (Ty a l)
+>     appTySyn (SynTy t) as = return (t $:$ as)
+>     appTySyn (SynAll _ _ t) (a :$ as) = appTySyn (instTySyn a t) as
+>     appTySyn (SynAll _ _ _) A0 = erk "underapplied type synonym"
 
 
 

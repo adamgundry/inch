@@ -28,7 +28,7 @@
 > unifySolveConstraints = do
 >     (g, ns) <- runWriter . collectEqualities <$> getContext
 >     putContext g
->     mapM_ (uncurry unifyNum) ns
+>     mapM_ (uncurry unify) ns
 >     return ()
 >   where
 >     collectEqualities :: Context -> Writer [(Type KNum, Type KNum)] Context
@@ -99,8 +99,10 @@
 
 > simplifyConstraints :: [Ex (Var ())] -> [Type KConstraint] ->
 >                            [Type KConstraint] -> Contextual [Type KConstraint]
-> simplifyConstraints vs hs ps = simplifyClassConstraints hs $
->                                    filter (not . checkPred) (nub ps)
+> simplifyConstraints vs hs ps = do
+>     hs' <- mapM expandTySyns hs
+>     ps' <- mapM expandTySyns ps
+>     simplifyClassConstraints hs' $ filter (not . checkPred hs') (nub ps')
 >   where
 >     -- Compute the transitive dependency closure of the variables that occur in p.
 >     -- We have to keep iterating until we reach a fixed point. This
@@ -117,13 +119,13 @@
 >         (newVs', poolVs') = partition (\ (Ex v) -> v <? newHs) poolVs
 >         (newHs', poolHs') = partition (newVs <<?) poolHs
 >
->     checkPred :: Type KConstraint -> Bool
->     checkPred p = p' `elem` phs' || case constraintToPred p' of
+>     checkPred :: [Type KConstraint] -> Type KConstraint -> Bool
+>     checkPred chs p = p' `elem` phs' || case constraintToPred p' of
 >                      Just p''  -> P.check . toFormula xs'' phs'' . normalisePred $ p''
 >                      Nothing   -> False
 >       where
 >         (pvs, pool)  = partition (\ (Ex v) -> v <? p) vs
->         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, hs)
+>         (xs, phs)    = iterDeps ([], []) (pvs, []) (pool, chs)
 >         (xs', phs', p')   = elimEquations xs phs p 
 >         phs'' = map normalisePred . catMaybes . map constraintToPred $ phs'
 >         xs'' = catMaybes $ map (\ (Ex v) -> fixNum v) xs'

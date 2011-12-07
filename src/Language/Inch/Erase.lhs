@@ -40,6 +40,11 @@
 > eraseType (TyVar (BVar b))    = impossibleBVar b
 > eraseType (TyCon c k)         = return (eraseKind k >>= \ (Ex l) ->
 >                                                  Just (TK (TyCon c l) l))
+> eraseType (TySyn x t) = do
+>     mt <- eraseTypeSyn t
+>     case mt of
+>         Nothing       -> return Nothing
+>         Just (Ex t')  -> return . Just $ TK (TySyn x t') (getTySynKind t')
 > eraseType (TyApp f s)  = do
 >         k :-> _ <- return $ getTyKind f
 >         mtk <- eraseType f
@@ -77,7 +82,22 @@
 
 > eraseType (TyComp _) = return . Just $ TK tyTrivial KConstraint
 
-> eraseType t = error $ "eraseType: illegal type " ++ show t
+> eraseType _ = return Nothing
+
+
+
+> eraseTypeSyn :: TypeSyn l -> Contextual (Maybe (Ex (TySyn ())))
+> eraseTypeSyn (SynTy t) = do
+>     mtk <- eraseType t
+>     case mtk of
+>        Nothing         -> return Nothing
+>        Just (TK t' _)  -> return (Just (Ex (SynTy t')))
+> eraseTypeSyn (SynAll x k t) = case eraseKind k of
+>     Nothing -> eraseTypeSyn $ unbindTySyn (FVar (N x (error "eraseTypeSyn: erk") (UserVar All)) k) t
+>     Just (Ex k') -> do
+>         a <- fresh SysVar x k Hole
+>         Just (Ex t') <- eraseTypeSyn (unbindTySyn a t)
+>         return . Just . Ex $ SynAll x k' (bindTySyn (FVar (varName a) k') t')
 
 
 
@@ -178,6 +198,11 @@
 >             cs' <- traverse eraseCon cs
 >             return $ DataDecl s k' cs' ds
 >         Nothing -> error $ "eraseTopDecl: failed to erase kind " ++ show k
+> eraseTopDecl (TypeDecl x t) = do
+>     mt <- eraseTypeSyn t
+>     case mt of
+>         Nothing       -> return $ TypeDecl x (SynTy tyUnit)
+>         Just (Ex t')  -> return $ TypeDecl x t'
 > eraseTopDecl (CDecl x d)  = CDecl x <$> eraseClassDecl d
 > eraseTopDecl (IDecl x d)  = IDecl x <$> eraseInstDecl d
 > eraseTopDecl (Decl d)     = Decl <$> eraseDecl d

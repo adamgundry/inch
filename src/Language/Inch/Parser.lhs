@@ -289,7 +289,12 @@ Terms
 
 Interface files
 
-> interface = manymany (single dataDecl <|> single classDecl <|> single instHeader <|> map Decl <$> sigDecls) <* eof
+> interface = manymany (   single dataDecl
+>                      <|> single typeDecl
+>                      <|> single classDecl
+>                      <|> single instHeader
+>                      <|> map Decl <$> sigDecls
+>                      ) <* eof
 
 
 Modules
@@ -321,10 +326,12 @@ Modules
 > moduleName = join . intersperse "." <$> identLike False "module name" `sepBy` dot
 
 
-> topdecls  = associateTop <$> manymany (single dataDecl
->                                    <|> single classDecl
->                                    <|> single instDecl
->                                    <|> (map Decl <$> (sigDecls <|> single funDecl)))
+> topdecls  = associateTop <$> manymany (   single dataDecl
+>                                       <|> single typeDecl
+>                                       <|> single classDecl
+>                                       <|> single instDecl
+>                                       <|> map Decl <$> (sigDecls <|> single funDecl)
+>                                       )
 >  where
 >     associateTop :: [STopDeclaration] -> [STopDeclaration]
 >     associateTop = map joinFun . groupBy sameFun
@@ -369,6 +376,25 @@ Modules
 >               <|> fmap pure className)
 >     return $ DataDecl s k cs ds
 >     
+
+
+> typeDecl = I.lineFold $ do
+>     reserved "type"
+>     x <- tyConName
+>     t <- tySyn
+>     return $ TypeDecl x t
+>   where
+>     tySyn = SSynTy <$> (reservedOp "=" *> tyExp)
+>           <|> SSynAll <$> tyVarName <*> pure SKSet <*> tySyn
+>           <|> (do
+>                 (x, k)  <- kindParens
+>                 t       <- tySyn
+>                 return $ SSynAll x k t
+>               )
+
+
+> kindParens = parens ((,) <$> tyVarName <* doubleColon <*> kind)
+
 
 > className = identLike False "type class name"
 

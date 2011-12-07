@@ -84,7 +84,7 @@ class  Monad (m :: * -> *)  where
     (>>=)  :: m a -> (a -> m b) -> m b  
     (>>)   :: m a -> m b -> m b  
     return :: a -> m a  
-    fail   :: [Char] -> m a  
+    fail   :: String -> m a  
 
 sequence         :: forall (m :: * -> *) a . [m a] -> m [a]  
 sequence_        :: forall (m :: * -> *) a . [m a] -> m ()
@@ -120,6 +120,8 @@ instance  Eq Char
 instance  Ord Char
 instance  Enum Char 
 instance  Bounded Char
+
+type String = [Char]
 
 data Maybe :: * -> * where
   Nothing :: Maybe a
@@ -203,7 +205,7 @@ uncurry :: (a -> (b -> c)) -> ((a, b) -> c)
 
 until :: (a -> Bool) -> ((a -> a) -> (a -> a))
 asTypeOf :: a -> (a -> a)
-error :: [Char] -> a
+error :: String -> a
 undefined :: a
 
 map :: (a -> b) -> ([a] -> [b])
@@ -237,10 +239,10 @@ takeWhile :: (a -> Bool) -> ([a] -> [a])
 dropWhile               :: (a -> Bool) -> [a] -> [a]
 span                    :: (a -> Bool) -> [a] -> ([a],[a])
 break                   :: (a -> Bool) -> [a] -> ([a],[a])
-lines            :: [Char] -> [[Char]]
-words            :: [Char] -> [[Char]]
-unlines :: [[Char]] -> [Char]
-unwords :: [[Char]] -> [Char]
+lines            :: String -> [String]
+words            :: String -> [String]
+unlines :: [String] -> String
+unwords :: [String] -> String
 reverse :: [a] -> [a]
 and, or :: [Bool] -> Bool
 any, all :: (a -> Bool) -> ([a] -> Bool)
@@ -254,22 +256,22 @@ zipWith3 :: (a -> (b -> (c -> d))) -> ([a] -> ([b] -> ([c] -> [d])))
 unzip            :: [(a,b)] -> ([a],[b])
 
 class  Read a  where  
-    readsPrec        :: Int -> [Char] -> [(a, [Char])]  
-    readList         :: [Char] -> [([a], [Char])]
+    readsPrec        :: Int -> String -> [(a, String)]  
+    readList         :: String -> [([a], String)]
 
 class  Show a  where  
-    showsPrec        :: Int -> a -> [Char] -> [Char]  
-    show             :: a -> [Char]
-    showList         :: [a] -> [Char] -> [Char]  
+    showsPrec        :: Int -> a -> String -> String  
+    show             :: a -> String
+    showList         :: [a] -> String -> String  
  
-reads            :: (Read a) => [Char] -> [(a, [Char])]  
-shows            :: (Show a) => a -> [Char] -> [Char]  
-read             :: (Read a) => [Char] -> a  
-showChar         :: Char -> [Char] -> [Char]  
-showString       :: [Char] -> [Char] -> [Char]  
-showParen        :: Bool -> ([Char] -> [Char]) -> ([Char] -> [Char])
-readParen        :: Bool -> ([Char] -> [(a, [Char])]) -> ([Char] -> [(a, [Char])])
-lex              :: [Char] -> [([Char], [Char])]  
+reads            :: (Read a) => String -> [(a, String)]  
+shows            :: (Show a) => a -> String -> String  
+read             :: (Read a) => String -> a  
+showChar         :: Char -> String -> String  
+showString       :: String -> String -> String  
+showParen        :: Bool -> (String -> String) -> (String -> String)
+readParen        :: Bool -> (String -> [(a, String)]) -> (String -> [(a, String)])
+lex              :: String -> [(String, String)]  
     
 instance  Show Int  
 instance  Read Int  
@@ -293,17 +295,17 @@ instance  Show IOError
 instance  Eq IOError
 
 ioError    ::  IOError -> IO a  
-userError  ::  [Char] -> IOError  
+userError  ::  String -> IOError  
 catch      ::  IO a -> (IOError -> IO a) -> IO a  
 putChar    :: Char -> IO ()  
-putStr     :: [Char] -> IO ()  
-putStrLn   :: [Char] -> IO ()  
+putStr     :: String -> IO ()  
+putStrLn   :: String -> IO ()  
 getChar    :: IO Char  
-getLine    :: IO [Char]  
-getContents :: IO [Char]  
-interact    ::  ([Char] -> [Char]) -> IO ()  
-readFile   :: [Char] -> IO [Char]
-writeFile  :: [Char] -> [Char] -> IO ()  
-appendFile :: [Char] -> [Char] -> IO ()  
-readIO :: Read a => [Char] -> IO a
+getLine    :: IO String  
+getContents :: IO String  
+interact    ::  (String -> String) -> IO ()  
+readFile   :: String -> IO String
+writeFile  :: String -> String -> IO ()  
+appendFile :: String -> String -> IO ()  
+readIO :: Read a => String -> IO a
 readLn :: Read a => IO a

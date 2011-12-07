@@ -193,6 +193,13 @@
 >     pretty (ImpHiding xs)  _ = text "hiding" <+> parens (hsep (punctuate (text ",") (map text xs)))
 
 
+> instance Pretty STypeSyn where
+>     pretty (SSynTy t)      _ = text "=" <+> prettyHigh t
+>     pretty (SSynAll x k t) _ = kindBracket k <+> prettyHigh t
+>       where
+>         kindBracket SKSet  = text x
+>         kindBracket l      = parens (text x <+> text "::" <+> prettyHigh l)
+
 > instance Pretty STopDeclaration where
 >     pretty (DataDecl n k cs ds) _ = hang (text "data" <+> text n
 >         <+> (if k /= SKSet then text "::" <+> prettyHigh k else empty)
@@ -202,6 +209,7 @@
 >         derivingClause []  = empty
 >         derivingClause xs  = text "deriving" <+>
 >                                parens (hsep (punctuate  (text ",") (map text xs)))
+>     pretty (TypeDecl x t) _ = text "type" <+> text x <+> prettyHigh t
 >     pretty (CDecl x (ClassDecl vs ss ms)) _ =
 >         hang (text "class"
 >               <+> (if null ss then empty else parens (fsepPretty ss) <+> text "=>")

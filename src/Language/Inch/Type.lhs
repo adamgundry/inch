@@ -124,6 +124,7 @@
 > data Ty a k where
 >     TyVar  :: Var a k                                       -> Ty a k
 >     TyCon  :: TyConName -> Kind k                           -> Ty a k
+>     TySyn  :: TyConName -> TySyn a k                        -> Ty a k
 >     TyApp  :: Ty a (l :-> k) -> Ty a l                      -> Ty a k
 >     Bind   :: Binder -> String -> Kind l -> Ty (a, l) k     -> Ty a k
 >     Qual   :: Ty a KConstraint -> Ty a k                    -> Ty a k
@@ -139,6 +140,7 @@
 > instance HetEq (Ty a) where
 >     hetEq (TyVar a)       (TyVar b)           yes no              = hetEq a b yes no
 >     hetEq (TyCon c k)     (TyCon c' k')       yes no | c == c'    = hetEq k k' yes no
+>     hetEq (TySyn c k)     (TySyn c' k')       yes no | c == c'    = hetEq k k' yes no
 >     hetEq (TyApp f s)     (TyApp f' s')       yes no              = hetEq f f' (hetEq s s' yes no) no
 >     hetEq (Bind b x k t)  (Bind b' x' k' t')  yes no | b == b' && x == x' = hetEq k k' (hetEq t t' yes no) no
 >     hetEq (Qual p t)      (Qual p' t')        yes no | p == p'    = hetEq t t' yes no
@@ -159,6 +161,9 @@
 >     TyCon c k  <?= TyCon d l  = c < d || (c == d && k <?= l)
 >     TyCon _ _  <?= _          = True
 >     _          <?= TyCon _ _  = False
+>     TySyn c k  <?= TySyn d l  = c < d || (c == d && k <?= l)
+>     TySyn _ _  <?= _          = True
+>     _          <?= TySyn _ _  = False
 >     TyApp f s  <?= TyApp g t  | f =?= g = s <?= t
 >                               | otherwise = f <?= g
 >     TyApp _ _  <?= _          = True
@@ -266,6 +271,7 @@
 > fogTy' :: (forall l. Var a l -> String) -> [String] -> Ty a k -> SType
 > fogTy' g _   (TyVar v)       = STyVar (g v)
 > fogTy' _ _   (TyCon c _)     = STyCon c
+> fogTy' _ _   (TySyn c _)     = STyCon c
 > fogTy' g xs  (TyApp f s)     = STyApp (fogTy' g xs f) (fogTy' g xs s)
 > fogTy' g xs  (Qual p t)      = SQual (fogTy' g xs p) (fogTy' g xs t)
 > fogTy' _ _   Arr             = SArr
@@ -297,6 +303,7 @@
 > getTyKind :: Type k -> Kind k
 > getTyKind (TyVar v)        = varKind v
 > getTyKind (TyCon _ k)      = k
+> getTyKind (TySyn _ t)      = getTySynKind t
 > getTyKind (TyApp f _)      = kindCod (getTyKind f)
 > getTyKind (TyInt _)        = KNum
 > getTyKind (UnOp _)         = KNum :-> KNum
@@ -346,6 +353,7 @@
 > renameTy :: (forall k. Var a k -> Var b k) -> Ty a l -> Ty b l
 > renameTy g (TyVar v)       = TyVar (g v)
 > renameTy _ (TyCon c k)     = TyCon c k
+> renameTy g (TySyn c t)     = TySyn c (renameTySyn g t)
 > renameTy g (TyApp f s)     = TyApp (renameTy g f) (renameTy g s)
 > renameTy g (Bind b x k t)  = Bind b x k (renameTy (wkRenaming g) t)
 > renameTy g (Qual p t)      = Qual (renameTy g p) (renameTy g t)
@@ -375,6 +383,7 @@
 > substTy :: (forall k . Var a k -> Ty b k) -> Ty a l -> Ty b l
 > substTy g (TyVar v)       = g v
 > substTy _ (TyCon c k)     = TyCon c k
+> substTy g (TySyn c t)     = TySyn c (substTySyn g t)
 > substTy g (TyApp f s)     = TyApp (substTy g f) (substTy g s)
 > substTy g (Bind b x k t)  = Bind b x k (substTy (wkSubst g) t)
 > substTy g (Qual p t)      = Qual (substTy g p) (substTy g t)
@@ -385,12 +394,13 @@
 > substTy _ (TyComp c)      = TyComp c
 
 > instTy :: forall a l k . Ty a l -> Ty (a, l) k -> Ty a k
-> instTy t = substTy g
->   where
->     g :: forall k' . Var (a, l) k' -> Ty a k'
->     g (BVar Top)      = t
->     g (BVar (Pop v))  = TyVar (BVar v)
->     g (FVar a k)      = TyVar (FVar a k)
+> instTy t = substTy (instTySubst t)
+
+> instTySubst :: Ty a l -> Var (a, l) k -> Ty a k
+> instTySubst t (BVar Top)      = t
+> instTySubst _ (BVar (Pop v))  = TyVar (BVar v)
+> instTySubst _ (FVar a k)      = TyVar (FVar a k)
+
 
 > replaceTy :: forall a k l. Var a k -> Ty a k -> Ty a l -> Ty a l
 > replaceTy a u = substTy f
@@ -496,6 +506,7 @@
 > instance a ~ b => FV (Ty a k) b where
 >     fvFoldMap f (TyVar a)       = f a
 >     fvFoldMap _ (TyCon _ _)     = M.mempty
+>     fvFoldMap _ (TySyn _ _)     = M.mempty
 >     fvFoldMap f (TyApp t u)     = fvFoldMap f t <.> fvFoldMap f u
 >     fvFoldMap f (Bind _ _ _ t)  = fvFoldMap (wkF f M.mempty) t
 >     fvFoldMap f (Qual p t)      = fvFoldMap f p <.> fvFoldMap f t
@@ -528,3 +539,58 @@
 >         help :: [Ex (Ty ())] -> Kind l -> Type l
 >         help []          l = f l
 >         help (Ex t : ts) l = help ts (getTyKind t :-> l) `TyApp` t
+
+
+
+
+
+
+> data STypeSyn where
+>     SSynTy   :: SType -> STypeSyn
+>     SSynAll  :: String -> SKind -> STypeSyn -> STypeSyn
+>   deriving (Eq, Show)
+
+
+> type TypeSyn k = TySyn () k
+
+> data TySyn a k where
+>     SynTy   :: Ty a k -> TySyn a k
+>     SynAll  :: String -> Kind l -> TySyn (a, l) k -> TySyn a (l :-> k)
+
+> deriving instance Show (TySyn a k)
+
+> instance HetEq (TySyn a) where
+>     hetEq (SynTy t)      (SynTy u)      yes no = hetEq t u yes no
+>     hetEq (SynAll x k t) (SynAll y l u) yes no | x == y = hetEq k l (hetEq t u yes no) no
+>     hetEq _ _ _ no = no
+
+> instance HetOrd (TySyn a) where
+>     SynTy t <?= SynTy u = t <?= u
+>     SynTy _ <?= SynAll _ _ _ = True
+>     SynAll _ _ _ <?= SynTy _ = False
+>     SynAll x k t <?= SynAll y l u = x <= y || (x == y && (k <?= l || (hetEq k l (t <?= u) False)))
+
+
+> substTySyn :: (forall k . Var a k -> Ty b k) -> TySyn a l -> TySyn b l
+> substTySyn g (SynTy t)      = SynTy (substTy g t)
+> substTySyn g (SynAll x k t) = SynAll x k (substTySyn (wkSubst g) t)
+
+> renameTySyn :: (forall k. Var a k -> Var b k) -> TySyn a l -> TySyn b l
+> renameTySyn g = substTySyn (TyVar . g)
+
+> bindTySyn :: Var a k -> TySyn a l -> TySyn (a, k) l
+> bindTySyn v = renameTySyn (bindVar v)
+
+> unbindTySyn :: Var a k -> TySyn (a, k) l -> TySyn a l
+> unbindTySyn v = renameTySyn (unbindVar v)
+
+> instTySyn :: Ty a k -> TySyn (a, k) l -> TySyn a l
+> instTySyn t = substTySyn (instTySubst t)
+
+> getTySynKind :: TySyn () k -> Kind k
+> getTySynKind (SynTy t)      = getTyKind t
+> getTySynKind (SynAll _ k t) = k :-> getTySynKind (unbindTySyn (FVar (error "tySynKind") k) t)
+
+> fogTySyn :: (forall k. Var a k -> String) -> TySyn a l -> STypeSyn
+> fogTySyn g (SynTy t)       = SSynTy (fogTy' g [] t)
+> fogTySyn g (SynAll x k t)  = SSynAll x (fogKind k) (fogTySyn (wkF g x) t)

@@ -3,9 +3,6 @@
 
 > module Language.Inch.ModuleSyntax where
 
-> import Control.Applicative
-> import Data.Traversable
-
 > import Language.Inch.Kit
 > import Language.Inch.Kind
 > import Language.Inch.Type
@@ -37,7 +34,9 @@
 > deriving instance Eq (Mod RAW)
 
 > instance TravTypes Mod where
->     travTypes    g (Mod mh is ds) = Mod mh is <$> traverse (travTypes g) ds
+
+<     travTypes    g (Mod mh is ds) = Mod mh is <$> traverse (travTypes g) ds
+
 >     fogTypes     g (Mod mh is ds) = Mod mh is (map (fogTypes g) ds)
 >     renameTypes  g (Mod mh is ds) = Mod mh is (map (renameTypes g) ds)
 
@@ -67,8 +66,10 @@
 > deriving instance Show (ClassDecl OK)
 
 > instance TravTypes ClassDecl where
->     travTypes g (ClassDecl vs ss ms) =
->         ClassDecl vs <$> traverse g ss <*> traverse (\ (y ::: t) -> (y :::) <$> g t) ms 
+
+<     travTypes g (ClassDecl vs ss ms) =
+<         ClassDecl vs <$> traverse g ss <*> traverse (\ (y ::: t) -> (y :::) <$> g t) ms 
+
 >     fogTypes g (ClassDecl vs ss ms) =
 >         ClassDecl (map (fogTypes1 g) vs)
 >                   (map (fogTy' g []) ss)
@@ -102,10 +103,12 @@
 > deriving instance Show (InstDecl OK)
 
 > instance TravTypes InstDecl where
->     travTypes g (InstDecl ts cs zs) = InstDecl
->         <$> traverse (travEx g) ts
->         <*> traverse g cs
->         <*> traverse (\ (n, as) -> (,) n <$> traverse (travTypes1 g) as) zs
+
+<     travTypes g (InstDecl ts cs zs) = InstDecl
+<         <$> traverse (travEx g) ts
+<         <*> traverse g cs
+<         <*> traverse (\ (n, as) -> (,) n <$> traverse (travTypes1 g) as) zs
+
 >     fogTypes g (InstDecl ts cs zs) = InstDecl
 >         (map (unEx2 (fogTy' g [])) ts)
 >         (map (fogTy' g []) cs)
@@ -116,10 +119,10 @@
 >         (map (\ (n, as) -> (n, map (renameTypes1 g) as)) zs)
 
 
-
 > data TopDecl s where
 >     DataDecl  :: TyConName -> AKind s k -> [TmConName ::: AType s KSet] ->
 >                      [String] -> TopDecl s
+>     TypeDecl  :: TyConName -> ATypeSyn s k -> TopDecl s
 >     CDecl     :: ClassName -> ClassDecl s -> TopDecl s
 >     IDecl     :: ClassName -> InstDecl s -> TopDecl s 
 >     Decl      :: Decl s () -> TopDecl s
@@ -130,15 +133,17 @@
 
 > instance TravTypes TopDecl where
 
->     travTypes g (DataDecl x k cs ds) =
->         DataDecl x k <$> traverse (\ (y ::: t) -> (y :::) <$> g t) cs <*> pure ds
->     travTypes g (CDecl x d) = CDecl x <$> travTypes g d
->     travTypes g (IDecl x d) = IDecl x <$> travTypes g d
->     travTypes g (Decl d) = Decl <$> travTypes1 g d
+<     travTypes g (DataDecl x k cs ds) =
+<         DataDecl x k <$> traverse (\ (y ::: t) -> (y :::) <$> g t) cs <*> pure ds
+<     travTypes g (TypeDecl x t) = error "travTypes _ TypeDecl"
+<     travTypes g (CDecl x d) = CDecl x <$> travTypes g d
+<     travTypes g (IDecl x d) = IDecl x <$> travTypes g d
+<     travTypes g (Decl d) = Decl <$> travTypes1 g d
 
 >     fogTypes g (DataDecl x k cs ds) = DataDecl x (fogKind k)
 >         (map (\ (y ::: t) -> y ::: fogTy' g [] t) cs)
 >         ds
+>     fogTypes g (TypeDecl x t) = TypeDecl x (fogTySyn g t)
 >     fogTypes g (CDecl x d) = CDecl x (fogTypes g d)
 >     fogTypes g (IDecl x d) = IDecl x (fogTypes g d)
 >     fogTypes g (Decl d)  = Decl (fogTypes1 g d)
@@ -146,6 +151,7 @@
 >     renameTypes g (DataDecl x k cs ds) = DataDecl x k
 >         (map (\ (y ::: t) -> y ::: renameTy g t) cs)
 >         ds
+>     renameTypes g (TypeDecl x t) = TypeDecl x (renameTySyn g t)
 >     renameTypes g (CDecl x d) = CDecl x (renameTypes g d)
 >     renameTypes g (IDecl x d) = IDecl x (renameTypes g d)
 >     renameTypes g (Decl d)  = Decl (renameTypes1 g d)
@@ -153,6 +159,7 @@
 
 > topDeclName :: TopDecl s -> String
 > topDeclName (DataDecl x _ _ _)  = x
+> topDeclName (TypeDecl x _)      = x
 > topDeclName (CDecl x _)         = x
 > topDeclName (IDecl x _)         = x
 > topDeclName (Decl d)            = declName d

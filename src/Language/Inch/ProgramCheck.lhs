@@ -36,19 +36,33 @@
 >     checkTopDecl' ds' = assertContextEmpty *> checkTopDecl ds' <* assertContextEmpty 
 >
 >     makeTyCon :: STopDeclaration -> Contextual ()
->     makeTyCon (DataDecl t k _ _) = inLocation (text $ "in data type " ++ t) $
+>     makeTyCon (DataDecl t k _ _) = inLocation (text "in data type" <+> text t) $
 >         case kindKind k of
 >           Ex k' -> do
 >             unless (targetsSet k') $ errKindTarget k
 >             insertTyCon t (Ex k')
+>     makeTyCon (TypeDecl x t) = inLocation (text "in type synonym" <+> text x) $ do
+>         Ex t' <- checkTySyn B0 t
+>         insertTySyn x t'
 >     makeTyCon (CDecl x d)  = insertTyCon x (classKind d)
 >     makeTyCon (IDecl _ _)  = return ()
 >     makeTyCon (Decl _)     = return ()
 
 
+> checkTySyn :: Bwd (Ex (Var ())) -> STypeSyn -> Contextual (Ex (TySyn ()))
+> checkTySyn b (SSynTy t) = do
+>     TK t' _ <- inferKind All b t
+>     return . Ex $ SynTy t'
+> checkTySyn b (SSynAll x k t) = case kindKind k of                               
+>     Ex k' -> do
+>         v   <- freshVar (UserVar All) x k'
+>         Ex t'  <- checkTySyn (b :< Ex v) t
+>         return . Ex $ SynAll x k' (bindTySyn v t')
+
 
 > makeTopBinding :: Bool -> STopDeclaration -> Contextual ()
 > makeTopBinding _ (DataDecl _ _ _ _)  = return ()
+> makeTopBinding _ (TypeDecl _ _)      = return ()
 > makeTopBinding _ (CDecl _ _)         = return ()
 > makeTopBinding _ (IDecl _ _)         = return ()
 > makeTopBinding b (Decl d)            = makeBinding b d
@@ -57,6 +71,9 @@
 
 > checkTopDecl :: STopDeclaration -> Contextual [TopDeclaration]
 > checkTopDecl (DataDecl t k cs ds) = checkDataDecl t k cs ds
+> checkTopDecl (TypeDecl x _)       = do
+>     Ex t' <- lookupTySyn x
+>     return [TypeDecl x t']
 > checkTopDecl (CDecl x d) = (\ d' -> [CDecl x d']) <$> checkClassDecl x d
 > checkTopDecl (IDecl x d) = (\ d' -> [IDecl x d']) <$> checkInstDecl x d
 > checkTopDecl (Decl d) = do

@@ -43,7 +43,8 @@
 > getInterface = renderMe . map fog . filter interfaceDecl . modDecls
 >   where
 >     interfaceDecl (DataDecl _ _ _ _)    = True
->     interfaceDecl (CDecl _ _      )     = True
+>     interfaceDecl (TypeDecl _ _)        = True
+>     interfaceDecl (CDecl _ _)           = True
 >     interfaceDecl (IDecl _ _)           = True
 >     interfaceDecl (Decl (SigDecl _ _))  = True
 >     interfaceDecl (Decl (FunDecl _ _))  = False

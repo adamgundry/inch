@@ -13,24 +13,27 @@ module RedBlack where
 -- We can't (yet) lift types to kinds automatically, but we can
 -- represent finite enumerations using numbers. Here we use 0 for
 -- black and 1 for red, and use a singleton type to fake pi-types for
--- colours. Type synonyms would make this clearer... or proper lifting
--- of algebraic data types to kinds.
+-- colours. Proper lifting of algebraic data types to kinds would be
+-- better.
+
+type Black = 0
+type Red   = 1
 
 data Colour :: Integer -> * where
-    Black  :: Colour 0
-    Red    :: Colour 1
+    Black  :: Colour Black
+    Red    :: Colour Red
   deriving Show
 
 data Tree :: Integer -> Integer -> Integer -> Nat -> * where
-    E   ::  forall (lo hi :: Integer) . lo < hi => Tree lo hi 0 0
+    E   ::  forall (lo hi :: Integer) . lo < hi => Tree lo hi Black 0
     TR  ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                Tree lo x 0 n -> Tree x hi 0 n -> Tree lo hi 1 n
+                Tree lo x Black n -> Tree x hi Black n -> Tree lo hi Red n
     TB  ::  forall (lo hi cl cr :: Integer)(n :: Nat) . pi (x :: Integer) .
-                Tree lo x cl n -> Tree x hi cr n -> Tree lo hi 0 (n+1)
+                Tree lo x cl n -> Tree x hi cr n -> Tree lo hi Black (n+1)
   deriving Show
 
 data RBT :: Integer -> Integer -> * where
-    RBT :: forall (lo hi :: Integer)(n :: Nat) . Tree lo hi 0 n -> RBT lo hi
+    RBT :: forall (lo hi :: Integer)(n :: Nat) . Tree lo hi Black n -> RBT lo hi
   deriving Show
 
 empty = RBT E
@@ -39,16 +42,16 @@ data TreeZip ::  Integer -> Integer -> Integer -> Nat ->
                  Integer -> Integer -> Integer -> Nat -> * where
     Root  :: forall (lo hi c :: Integer)(n :: Nat) . TreeZip lo hi c n lo hi c n
     ZRL   :: forall (rlo rhi lo hi rc :: Integer)(rn n :: Nat) . pi (x :: Integer) .
-                 TreeZip rlo rhi rc rn lo hi 1 n -> Tree x hi 0 n ->
-                     TreeZip rlo rhi rc rn lo x 0 n
+                 TreeZip rlo rhi rc rn lo hi Red n -> Tree x hi Black n ->
+                     TreeZip rlo rhi rc rn lo x Black n
     ZRR   :: forall (rlo rhi lo hi rc :: Integer)(rn n :: Nat) . pi (x :: Integer) .
-                 Tree lo x 0 n -> TreeZip rlo rhi rc rn lo hi 1 n  ->
-                     TreeZip rlo rhi rc rn x hi 0 n
+                 Tree lo x Black n -> TreeZip rlo rhi rc rn lo hi Red n  ->
+                     TreeZip rlo rhi rc rn x hi Black n
     ZBL   :: forall (rlo rhi lo hi rc c hc :: Integer)(rn n  :: Nat) . pi (x :: Integer) . 
-                 TreeZip rlo rhi rc rn lo hi 0 (n+1)  -> Tree x hi c n ->
+                 TreeZip rlo rhi rc rn lo hi Black (n+1)  -> Tree x hi c n ->
                      TreeZip rlo rhi rc rn lo x hc n
     ZBR   :: forall (rlo rhi lo hi rc c hc :: Integer)(rn n  :: Nat) . pi (x :: Integer) .
-                 Tree lo x c n -> TreeZip rlo rhi rc rn lo hi 0 (n+1) ->
+                 Tree lo x c n -> TreeZip rlo rhi rc rn lo hi Black (n+1) ->
                      TreeZip rlo rhi rc rn x hi hc n
   deriving Show
 
@@ -60,25 +63,25 @@ plug t (ZRR {x} l z)  = plug (TR {x} l t) z
 plug t (ZBL {x} z r)  = plug (TB {x} t r) z
 plug t (ZBR {x} l z)  = plug (TB {x} l t) z
 
-plugBR :: forall (rlo rhi lo hi n rn :: Integer) . Tree lo hi 0 n ->
-              TreeZip rlo rhi 0 rn lo hi 1 n -> Tree rlo rhi 0 rn
+plugBR :: forall (rlo rhi lo hi n rn :: Integer) . Tree lo hi Black n ->
+              TreeZip rlo rhi Black rn lo hi Red n -> Tree rlo rhi Black rn
 plugBR t (ZBL {x} z r) = plug t (ZBL {x} z r)
 plugBR t (ZBR {x} l z) = plug t (ZBR {x} l z)
 
 data SearchResult :: Integer -> Integer -> Integer -> Integer -> * where
   Nope  ::  forall (x rlo rhi lo hi :: Integer)(rn :: Nat) . (lo < x, x < hi) =>
-                TreeZip rlo rhi 0 rn lo hi 0 0 -> SearchResult x rlo rhi rn
+                TreeZip rlo rhi Black rn lo hi Black 0 -> SearchResult x rlo rhi rn
   Yep   ::  forall (x rlo rhi lo hi c :: Integer)(rn n :: Nat) .
-                TreeZip rlo rhi 0 rn lo hi c n -> Tree lo hi c n ->
+                TreeZip rlo rhi Black rn lo hi c n -> Tree lo hi c n ->
                     SearchResult x rlo rhi rn
 
 search ::  forall (rlo rhi :: Integer)(rn :: Nat) .
                pi (x :: Integer) . (rlo < x, x < rhi) =>
-                    Tree rlo rhi 0 rn -> SearchResult x rlo rhi rn
+                    Tree rlo rhi Black rn -> SearchResult x rlo rhi rn
 search {x} = help Root
   where
     help ::  forall (lo hi c :: Integer)(n :: Nat) . (lo < x, x < hi) =>
-                 TreeZip rlo rhi 0 rn lo hi c n -> Tree lo hi c n ->
+                 TreeZip rlo rhi Black rn lo hi c n -> Tree lo hi c n ->
                      SearchResult x rlo rhi rn
     help z E                       = Nope z
     help z (TR {y} l r) | {x < y}  = help (ZRL {y} z r) l
@@ -99,9 +102,9 @@ data InsProb :: Integer -> Integer -> Integer -> Integer -> * where
   Level    ::  forall (lo hi c ci :: Integer)( n :: Nat) .
                    Colour ci -> Tree lo hi ci n -> InsProb lo hi c n
   PanicRB  ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                   Tree lo x 1 n -> Tree x hi 0 n -> InsProb lo hi 1 n
+                   Tree lo x Red n -> Tree x hi Black n -> InsProb lo hi Red n
   PanicBR  ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) .
-                   Tree lo x 0 n -> Tree x hi 1 n -> InsProb lo hi 1 n
+                   Tree lo x Black n -> Tree x hi Red n -> InsProb lo hi Red n
 
 solveIns ::  forall (rlo rhi lo hi c rc :: Integer)(rn n :: Nat) . 
                 InsProb lo hi c n -> TreeZip rlo rhi rc rn lo hi c n ->
@@ -126,13 +129,13 @@ solveIns (PanicBR {xi} li (TR {xir} lir rir))  (ZBR {x} l z)  =
     solveIns (Level Red (TR {xi} (TB {x} l li) (TB {xir} lir rir))) z
 
 insert ::  forall (lo hi :: Integer)(n :: Nat) . pi (x :: Integer) . (lo < x, x < hi) =>
-               Tree lo hi 0 n -> RBT lo hi
+               Tree lo hi Black n -> RBT lo hi
 insert {x} t = case search {x} t :: SearchResult x lo hi n of
     Nope z   -> solveIns (Level Red (TR {x} E E)) z
     Yep _ _  -> RBT t
 
 
-r2b :: forall (lo hi n :: Integer) . Tree lo hi 1 n -> Tree lo hi 0 (n+1)
+r2b :: forall (lo hi n :: Integer) . Tree lo hi Red n -> Tree lo hi Black (n+1)
 r2b (TR {x} l r) = TB {x} l r
 
 rbt :: forall (lo hi c :: Integer)(n :: Nat) . Colour c -> Tree lo hi c n -> RBT lo hi
@@ -140,8 +143,8 @@ rbt Black  t = RBT t
 rbt Red    t = RBT (r2b t)
 
 
-solveDel ::  forall (rlo rhi lo hi :: Integer)(rn n :: Nat) . Tree lo hi 0 n ->
-                 TreeZip rlo rhi 0 rn lo hi 0 (n+1) -> RBT rlo rhi
+solveDel ::  forall (rlo rhi lo hi :: Integer)(rn n :: Nat) . Tree lo hi Black n ->
+                 TreeZip rlo rhi Black rn lo hi Black (n+1) -> RBT rlo rhi
 solveDel t Root = RBT t
 
 solveDel t (ZRL {x} z (TB {y} (TR {lx} ll lr) r)) = RBT (plug (TR {lx} (TB {x} t ll) (TB {y} lr r)) z)
@@ -195,7 +198,7 @@ solveDel t (ZBR {x} (TB {y} (TR {lx} ll lr) (TR {rx} rl rr)) z) = RBT (plug (TB 
 
 
 findMin ::  forall (rlo rhi lo hi c :: Integer)(rn n :: Nat) . Tree lo hi c (n+1) ->
-                (pi (k :: Integer) . lo < k => TreeZip rlo rhi 0 rn k hi c (n+1)) ->
+                (pi (k :: Integer) . lo < k => TreeZip rlo rhi Black rn k hi c (n+1)) ->
                     RBT rlo rhi
 findMin (TR {x} (TB {y} E E) r)                    f = solveDel E (ZRL {x} (f {y}) r)
 findMin (TR {x} (TB {y} E (TR {lx} ll lr)) r)      f = RBT (plug (TB {lx} ll lr) (ZRL {x} (f {y}) r))
@@ -215,7 +218,7 @@ wkTree (TR {x} l r)  = TR {x} l (wkTree r)
 wkTree (TB {x} l r)  = TB {x} l (wkTree r)
 
 delFocus ::  forall (rlo rhi lo hi c :: Integer)(rn n :: Nat) . Tree lo hi c n ->
-                 TreeZip rlo rhi 0 rn lo hi c n -> RBT rlo rhi
+                 TreeZip rlo rhi Black rn lo hi c n -> RBT rlo rhi
 delFocus E                                   z = RBT (plug E z)
 delFocus (TR {x} E E)                        z = RBT (plugBR E z)
 delFocus (TR {x} l (TB {rx} rl rr))          z = findMin (TB {rx} rl rr) (\ {k} -> ZRR {k} (wkTree l) z)
@@ -245,7 +248,7 @@ delete {x} (RBT t) = f (search {x} t)
 -- using unsafeCoerce. 
 
 data T where
-    T :: forall (n :: Nat)(lo hi :: Num) . Tree lo hi 0 n -> T
+    T :: forall (n :: Nat)(lo hi :: Num) . Tree lo hi Black n -> T
   deriving Show
 
 emptyT = T E

@@ -15,6 +15,8 @@
 > inferKind :: Binder -> Bwd (Ex (Var ())) -> SType -> Contextual TyKind
 > inferKind b g (STyVar x)   = (\ (Ex v) -> TK (TyVar v) (varKind v)) <$> lookupTyVar b g x
 > inferKind _ _ (STyCon c)   = (\ (Ex k) -> TK (TyCon c k) k) <$> lookupTyCon c
+>                            <|> (\ (Ex t) -> case getTySynKind t of
+>                                          k -> TK (TySyn c t) k) <$> lookupTySyn c
 > inferKind b g (STyApp f s)  = do
 >     TK f' k  <- inferKind b g f
 >     case k of
@@ -43,7 +45,6 @@
 >     p' <- checkKind KConstraint b g p
 >     TK t' KSet <- inferKind b g t
 >     return $ TK (Qual p' t') KSet
-
 
 
 > checkKind :: Kind k -> Binder -> Bwd (Ex (Var ())) -> SType -> Contextual (Type k)

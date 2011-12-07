@@ -240,6 +240,9 @@
 >   "x, y :: Integer" :
 >   "instance (S Integer, S a) => S [a] where" :
 >   "instance Monad [] where" :
+>   "type String = [Char]" :
+>   "type F a b = b a" :
+>   "type F (a :: *) (b :: * -> *) = b a" :
 >   []
 
 
@@ -558,4 +561,9 @@
 >   ("f :: Show a => b -> [Char]\nf = show", False) :
 >   ("f :: Eq a => (a,a) -> (a,a) -> Bool\nf = (==)", True) :
 >   ("badexp :: (Num a, Num b, Eq b, Ord b, Integral b) => a -> b -> a\nbadexp x n | (>) n 0 = f x ((-) n 1) x where\n  f :: forall _s _s' . (Num _s, Integral _s', Num _s', Eq _s') => _s -> (_s' -> (_s -> _s))\n  f _ 0 y = y\n  f x n y = g x n where\n    g x n | even n = g ((*) x x) (quot n 2)\n           | otherwise = f x ((-) n 1) ((*) x y)", False) :
+>   ("type Strung = [Char]\nx = [] :: Strung", True) :
+>   ("type F (a :: *) (b :: * -> *) = b a\nfoo :: a -> F a []\nfoo = return", True) :
+>   (vecDecl ++ "type Suc (n :: Integer) = n + 1\ntype Vect a (n :: Integer) = Vec n a\ncons :: forall a (n :: Nat) . a -> Vect a n -> Vect a (Suc n)\ncons = Cons", True) :
+>   ("type One = 1\nf :: forall (p :: Integer -> *) (n :: Integer) . n ~ One => p n -> p 1\nf x = x", True) :
+>   ("type A = Integer\ntype B = A\nf :: B -> Integer\nf x = x", True) :
 >   []

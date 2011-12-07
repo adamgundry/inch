@@ -42,11 +42,16 @@
 > type instance ATy OK   a k = Ty a k
 > type instance ATy RAW  a k = SType
 
-> type AType s k = ATy s () k
+> type family ATySyn s a k 
+> type instance ATySyn OK a k = TySyn a k
+> type instance ATySyn RAW a k = STypeSyn
 
 > type family AVar s a k
 > type instance AVar OK   a k = Var a k
 > type instance AVar RAW  a k = String
+
+> type AType s k = ATy s () k
+> type ATypeSyn s k = ATySyn s () k
 
 
 > type Con s        = TmConName ::: ATy s () KSet
@@ -74,8 +79,10 @@
 
 
 > class TravTypes t where
->     travTypes :: Applicative f =>
->          (forall a k . Ty a k -> f (Ty a k)) -> t OK -> f (t OK)
+
+<     travTypes :: Applicative f =>
+<          (forall a k . Ty a k -> f (Ty a k)) -> t OK -> f (t OK)
+
 >     fogTypes :: (forall k. Var () k -> String) -> t OK -> t RAW
 >     renameTypes :: (forall k . Var () k -> Var () k) -> t OK -> t OK
 
