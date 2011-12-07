@@ -219,7 +219,7 @@
 >     pretty (IDecl x (InstDecl ts cs zs)) _ =
 >         hang (text "instance"
 >               <+> (if null cs then empty else parens (fsepPretty cs) <+> text "=>")
->               <+> text x  <+> fsep (map prettyHigh ts)
+>               <+> text x  <+> fsep (map prettyLow ts)
 >               <+> text "where") 2 $
 >                   vcat (map (prettyHigh . uncurry FunDecl) zs)
 >     pretty (Decl d) s = pretty d s

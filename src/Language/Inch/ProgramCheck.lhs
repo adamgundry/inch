@@ -143,7 +143,7 @@
 
 > checkInstDecl :: ClassName -> SInstDeclaration -> Contextual InstDeclaration
 > checkInstDecl x (InstDecl ts cs zs) =
->   inLocation (text "in instance" <+> text x <+> fsep (map prettyHigh ts)) $ do
+>   inLocation (text "in instance" <+> text x <+> fsep (map prettyLow ts)) $ do
 >       let vs = unions (map (collectUnbound []) ts ++ map (collectUnbound []) cs)
 >       vs' <- traverse (\ s -> fresh (UserVar All) s KSet Fixed) vs
 >       ClassDecl vks _ _ <- lookupClassDecl x
