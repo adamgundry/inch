@@ -25,6 +25,9 @@ module Cost (Cost, weaken, force, returnCost, bindCost, weakenBy,
 data Cost :: Num -> * -> * where
   Hide :: forall (n :: Nat) a . a -> Cost n a
 
+instance Show a => Show (Cost 0 a) where
+  show (Hide x) = show x
+
 weaken :: forall (m n :: Nat) a . m <= n => Cost m a -> Cost n a
 weaken (Hide a) = Hide a
 

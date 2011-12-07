@@ -545,7 +545,7 @@
 >   ("f :: Show a => a -> [Char]\nf x = show x\nz :: [Char]\nz = show (3 :: Integer)", True) :
 >   ("f :: Show a => a -> [Char]\nf x = show x\nz :: [Char]\nz = show 3", True) :
 >   ("class Foo a where\n foo :: b -> a", True) :
->   (vecDecl ++ "class N a where n :: pi (x :: Nat) . a -> Vec x a", True) :
+>   (vecDecl ++ "class N a where n :: pi (x :: Nat) . a -> Vec x a\ninstance N Char where n {0} c = Nil", True) :
 >   ("class X a where x :: a\ninstance X Integer where x = 3", True) : 
 >   ("class X a where x :: a\ninstance X Integer where x = 'a'", False) : 
 >   ("class X a where x :: a\ninstance X Integer where x = 3\ny :: Integer\ny = x", True) : 
@@ -566,4 +566,6 @@
 >   (vecDecl ++ "type Suc (n :: Integer) = n + 1\ntype Vect a (n :: Integer) = Vec n a\ncons :: forall a (n :: Nat) . a -> Vect a n -> Vect a (Suc n)\ncons = Cons", True) :
 >   ("type One = 1\nf :: forall (p :: Integer -> *) (n :: Integer) . n ~ One => p n -> p 1\nf x = x", True) :
 >   ("type A = Integer\ntype B = A\nf :: B -> Integer\nf x = x", True) :
+>   (vecDecl ++ "instance Show (Vec 0 a) where\n  show Nil = \"Nil\"", True) :
+>   (vecDecl ++ "instance (0 ~ 1) => Show (Vec 0 a) where\n  show Nil = \"Nil\"", True) :
 >   []

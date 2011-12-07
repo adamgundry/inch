@@ -1,5 +1,6 @@
 > {-# LANGUAGE TypeOperators, MultiParamTypeClasses, TypeSynonymInstances,
->              GADTs, TypeFamilies, UndecidableInstances, ImpredicativeTypes #-}
+>              GADTs, TypeFamilies, UndecidableInstances, ImpredicativeTypes,
+>              TupleSections #-}
 
 > module Language.Inch.Erase where
 
@@ -215,7 +216,21 @@
 >     return $ ClassDecl vs' ss' ms'
 
 > eraseInstDecl :: InstDeclaration -> Contextual InstDeclaration
-> eraseInstDecl (InstDecl ts cs zs) = return $ (InstDecl ts cs zs)
+> eraseInstDecl (InstDecl ts cs zs) = do
+>     ts' <- eraseInstTypes ts
+>     cs' <- filter (not . isTrivial) <$> traverse (eraseTo KConstraint) cs
+>     zs' <- traverse (\ (n, as) -> (n,) <$> traverse eraseAlt as) zs
+>     return $ InstDecl ts' cs' zs'
+>   where
+>     eraseInstTypes :: [Ex (Ty ())] -> Contextual [Ex (Ty ())]
+>     eraseInstTypes [] = return []
+>     eraseInstTypes (Ex t:us) = do
+>         mtk <- eraseType t
+>         us' <- eraseInstTypes us
+>         case mtk of
+>             Nothing         -> return us'
+>             Just (TK t' _)  -> return (Ex t' : us')
+
 
 > eraseDecl :: Declaration () -> Contextual (Declaration ())
 > eraseDecl (FunDecl x ps) =
