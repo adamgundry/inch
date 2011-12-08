@@ -13,8 +13,8 @@ Homepage:            https://github.com/adamgundry/inch/
 bug-reports:         https://github.com/adamgundry/inch/issues
 License:             BSD3
 License-file:        LICENSE
-Author:              Adam Gundry <adam.gundry@cis.strath.ac.uk>
-Maintainer:          Adam Gundry <adam.gundry@cis.strath.ac.uk>
+Author:              Adam Gundry <adam.gundry@strath.ac.uk>
+Maintainer:          Adam Gundry <adam.gundry@strath.ac.uk>
 Copyright:           Copyright (c) 2011 Adam Gundry
 Category:            Language
 Build-type:          Simple
