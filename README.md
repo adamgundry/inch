@@ -3,6 +3,8 @@ inch
 
 **Inch** is a type-checker for a subset of Haskell (plus some GHC extensions) with the addition of integer constraints. After successfully type-checking a source file, it outputs an operationally equivalent version with the type-level integers erased, so it can be used as a preprocessor in order to compile programs.
 
+This is a very rough and ready prototype. Many Haskell features are missing or poorly implemented.
+
 
 Installation
 ------------
@@ -102,44 +104,51 @@ For more examples, look in the examples directory of the source distribution. Th
 Known limitations
 -----------------
 
-* Lots of Haskell features are unsupported, notably type synonyms (!), newtypes, records, type classes, ...
+* Lots of Haskell features are unsupported, notably list comprehensions, `do` notation, `if` expressions, newtypes, field labels, ...
 
-* The parser is somewhat idiosyncratic; look at the examples to figure out what syntax it accepts. Data types must be defined in GADT syntax, using a kind signature rather than a list of variables. Parsing of infix operators is almost but not entirely nonexistent. 
+* The parser is somewhat idiosyncratic; look at the examples to figure out what syntax it accepts. Data types must be defined in GADT syntax, using a kind signature rather than a list of variables. Parsing of infix operators is almost but not entirely nonexistent, so they must usually be written prefix.
 
-* Modules are poorly supported. A `.inch` file is generated when preprocessing a module, listing the identifiers it defines, and this file is looked up when the module is imported. Because preprocessing happens in reverse dependency order, manual intervention may be required to generate `.inch` files before they are needed.
+* Modules are poorly supported. A `.inch` file is generated when preprocessing a module, listing the identifiers it defines, and this file is looked up when the module is imported. Because preprocessing happens in reverse dependency order, manual intervention may be required to generate `.inch` files before they are needed (by loading dependencies in GHCi). Qualified names are not supported, so there will be problems if multiple modules bring the same name into scope.
 
-* No kind inference is performed, so type variables must be annotated with their kind if it is not `*`.
+* Type classes are not completely implemented: ambiguity checking and defaulting are lacking, superclasses are not taken into consideration when solving constraints, and the constraint solver is untested.
+
+* No kind inference is performed, so type variables must be annotated with their kind if it is not `*`. This means explicit `forall`-bindings must be used in some type signatures. Type variables in instance declarations cannot be annotated, so they may only have kind `*` (at the moment).
 
 * Only GADTs involving type-level numeric equalities are supported, not more general equations between types.
 
 * Support for higher-rank types is limited.
 
+
+
+Outstanding design issues
+-------------------------
+
+* Metavariables are solved using equational unification in the abelian group of integers with addition, which works well, but a better story about ambiguity is needed.
+
+* Constraint solving is based on normalisation and a solver for Presburger arithmetic, so only linear constraints are guaranteed to be solved. Hard constraints can be dealt with by the user invoking higher-rank functions that add facts to the context. A better characterisation of solvable constraints would be nice.
+
 * Exponentiation by a negative integer is possible but makes no sense.
-
-
-Outstanding issues
-------------------
-
-* Metavariables are solved using equational unification in the abelian group of integers with addition, which may lead to problems with ambiguity. A better story is needed here.
-
-* Constraint solving is based on normalisation and a solver for Presburger arithmetic, so only linear constraints are guaranteed to be solved. Hard constraints can be dealt with by invoking higher-rank functions that add facts to the context, but a better characterisation of solvable constraints would be nice.
 
 * At the moment, `Nat` is just `Integer` (with a positivity constraint added when it is used in a type signature). Kind polymorphism and subkinding might allow more precise kinds to be given to arithmetic operations, including a correct kind for exponentiation. 
 
 * `n+k`-patterns provide quite a nice syntax for defining dependent numeric functions, but they have been deprecated and removed from Haskell 2010, so perhaps an alternative should be found.
 
+* Erasure for type classes involving numeric kinds is not yet properly specified.
+
 
 Related work
 ------------
 
-Iavor Diatchki is working on [TypeNats](http://hackage.haskell.org/trac/ghc/wiki/TypeNats), an extension to GHC that aims to support type-level natural numbers. He also implemented the [presburger](https://github.com/yav/presburger) package which `inch` uses for constraint solving.
+Iavor Diatchki is working on [TypeNats](http://hackage.haskell.org/trac/ghc/wiki/TypeNats), an extension to GHC that aims to support type-level natural numbers. He also implemented the [presburger](http://github.com/yav/presburger) package, which `inch` uses for constraint solving.
 
-Conor McBride's [Strathclyde Haskell Enhancement](http://personal.cis.strath.ac.uk/~conor/pub/she/) is a preprocessor that supports Π-types and allows lifting algebraic data types (but not numeric types) to kinds. SHE inspired the braces syntax used in `inch`. These ideas (and more, including kind polymorphism) are being implemented in GHC: see [Giving Haskell a Promotion](https://research.microsoft.com/en-us/people/dimitris/fc-kind-poly.pdf) by Brent Yorgey, Stephanie Weirich, Julien Cretin, Simon Peyton Jones and Dimitrios Vytiniotis. 
+Conor McBride's [Strathclyde Haskell Enhancement](http://personal.cis.strath.ac.uk/~conor/pub/she/) is a preprocessor that supports Π-types and allows lifting algebraic data types (but not numeric types) to kinds. SHE inspired the braces syntax used in `inch`. These ideas (and more, including kind polymorphism) are being implemented in GHC: see [Giving Haskell a Promotion](http://research.microsoft.com/en-us/people/dimitris/fc-kind-poly.pdf) by Brent Yorgey, Stephanie Weirich, Julien Cretin, Simon Peyton Jones and Dimitrios Vytiniotis. 
 
-See also Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/DML/DML.html) and its successor [ATS](http://www.ats-lang.org/), which support type-level Presburger arithmetic.
+Max Bolingbroke has implemented the new [Constraint kind](http://blog.omega-prime.co.uk/?p=127) in GHC. This kind is supported by `inch` but not erased, so it will only work if GHC support is present.
+
+An inspiration for this work is Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/DML/DML.html) and its successor [ATS](http://www.ats-lang.org/), which support type-level Presburger arithmetic.
 
 
 Contact
 -------
 
-Adam Gundry, adam.gundry@cis.strath.ac.uk
+Adam Gundry, firstname.lastname@strath.ac.uk
