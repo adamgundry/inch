@@ -145,10 +145,10 @@ Conor McBride's [Strathclyde Haskell Enhancement](http://personal.cis.strath.ac.
 
 Max Bolingbroke has implemented the new [Constraint kind](http://blog.omega-prime.co.uk/?p=127) in GHC. This kind is supported by `inch` but not erased, so it will only work if GHC support is present.
 
-An inspiration for this work is Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/DML/DML.html) and its successor [ATS](http://www.ats-lang.org/), which support type-level Presburger arithmetic.
+This work is inspired by Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/DML/DML.html) and its successor [ATS](http://www.ats-lang.org/), which support type-level Presburger arithmetic.
 
 
 Contact
 -------
 
-Adam Gundry, firstname.lastname@strath.ac.uk
+Adam Gundry, adam.gundry@strath.ac.uk
