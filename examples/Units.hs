@@ -15,7 +15,7 @@
   implementation of this idea, using existing features of GHC Haskell.
 -}
 
-module Units (Quantity, dimensionless, metres, seconds, grams,
+module Units (Quantity, dimensionless, metres, seconds, kilograms,
                  minutes, hours, plus, minus, inv, times, over, scale,
                  kilo, centi, units) where
 
@@ -37,7 +37,7 @@ data Quantity :: * -> * -> * where
 type Dimensionless     = Unit 0 0 0
 type Metres            = Unit 1 0 0
 type Seconds           = Unit 0 1 0
-type Grams             = Unit 0 0 1
+type Kilograms         = Unit 0 0 1
 type MetresPerSecond   = Unit 1 (-1) 0
 type Newtons           = Unit 1 (-2) 1
 
@@ -53,8 +53,8 @@ metres = Q
 seconds :: a -> Quantity Seconds a
 seconds = Q
 
-grams :: a -> Quantity Grams a
-grams = Q
+kilograms :: a -> Quantity Kilograms a
+kilograms = Q
 
 minutes = (.) (scale 60) seconds
 hours   = (.) (scale 60) minutes
@@ -92,17 +92,21 @@ sqr = pow {2}
 
 -- We can write unit prefixes as transformers of the constructors...
 
-kilo :: Num a => (a -> Quantity u a) -> a -> Quantity u a
-kilo f x = scale 1000 (f x)
+type Prefix u a = (a -> Quantity u a) -> a -> Quantity u a
 
-centi :: (Num a, Fractional a) => (a -> Quantity u a) -> a -> Quantity u a
-centi f x = scale (recip 100) (f x)
+prefix :: Num a => a -> Prefix u a
+prefix n f x = scale n (f x)
 
+kilo = prefix 1000
+centi = prefix (recip 100)
+milli = prefix (recip 1000)
 
 -- ...allowing things like this:
 
-kg = kilo grams
-cm = centi metres
+km  = kilo metres
+cm  = centi metres
+mm  = milli metres
+g   = milli kilograms
 
 
 -- With a special name for flipped application, we can write
@@ -122,8 +126,14 @@ distanceTravelled t = plus (times vel t) (times accel (sqr t))
     accel  = over (units 36 metres) (sqr (units 10 seconds))
 
 
-nastyExample x = let d = over x
-                 in (d mass, d time)
+-- This is Kennedy's example of a function whose type cannot be
+-- inferred by the units-of-measure type system in F#, because of
+-- difficulties with generalisation (see Kennedy, Types for
+-- Units-of-Measure: Theory and Practice, 2009, section 3.10).
+
+nastyExample = \ x -> let d = div x
+                      in (d mass, d time)
   where
-    mass = units 5 kg
+    div = over
+    mass = units 5 kilograms
     time = units 3 seconds
