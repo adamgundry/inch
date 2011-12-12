@@ -569,4 +569,5 @@
 >   ("type A = Integer\ntype B = A\nf :: B -> Integer\nf x = x", True) :
 >   (vecDecl ++ "instance Show (Vec 0 a) where\n  show Nil = \"Nil\"", True) :
 >   (vecDecl ++ "instance (0 ~ 1) => Show (Vec 0 a) where\n  show Nil = \"Nil\"", True) :
+>   (vec2Decl ++ "class Nummy (n :: Integer) where num :: (pi (m :: Integer) . m ~ n => a) -> a\ninstance Nummy 0 where num f = f {0}\nclass Applicative (f :: * -> *) where\n  pure :: a -> f a\n  (<*>) :: f (a -> b) -> f a -> f b\ninstance (Nummy n, n > 0) => Applicative (Vec n) where", True) :
 >   []

@@ -42,6 +42,8 @@ vzipWith f (VCons x xs) (VCons y ys) = VCons (f x y) (vzipWith f xs ys)
 
 vzip = vzipWith (,)
 
+vapp = vzipWith ($)
+
 vifold :: forall (n :: Nat) a (f :: Nat -> *) .
            f 0 -> (forall (m :: Nat) . a -> f m -> f (m + 1)) ->
              Vec a n -> f n
@@ -84,3 +86,33 @@ vjoin (VCons (VCons x xs) xss) = VCons x (vjoin (vmap vtail xss))
 vsnoc :: forall a (n :: Nat) . Vec a n -> a -> Vec a (n+1)
 vsnoc VNil          a = VCons a VNil
 vsnoc (VCons x xs)  a = VCons x (vsnoc xs a)
+
+
+type Matrix a (m :: Nat) (n :: Nat) = Vec (Vec a n) m
+
+mid :: forall a . Num a => pi (n :: Nat) . Matrix a n n
+mid {0}   = VNil
+mid {n+1} = VCons (VCons 1 (vec {n} 0))
+                  (vmap (VCons 0) (mid {n}))
+
+mfill :: pi (m n :: Nat) . a -> Matrix a m n
+mfill {m} {n} x = vec {m} (vec {n} x)
+
+mmult :: forall a (i j k :: Nat) . Num a => Matrix a i j -> Matrix a j k -> Matrix a i k
+mmult xij yjk = vmap (\ xj -> colSum (vzipWith ((.) vmap (*)) xj yjk)) xij
+  where
+    colSum :: forall a (m n :: Nat) . Num a => Vec (Vec a n) m -> Vec a n
+    colSum (VCons xs VNil) = xs
+    colSum (VCons xs xss) = vzipWith (+) xs (colSum xss)
+
+mshow :: forall a (m n :: Nat) . Show a => Matrix a m n -> String
+mshow VNil = ""
+mshow (VCons xs xss) = (++) (vshow xs) ('\n' : mshow xss) 
+  where
+    vshow :: forall (i :: Nat) . Vec a i -> String
+    vshow VNil = ""
+    vshow (VCons y ys) = (++) (show y) ('\t' : vshow ys) 
+
+m1234 :: Matrix Integer 2 2
+m1234 = VCons (VCons 1 (VCons 2 VNil))
+          (VCons (VCons 3 (VCons 4 VNil)) VNil) 
