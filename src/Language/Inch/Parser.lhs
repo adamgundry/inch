@@ -428,7 +428,7 @@ Modules
 >     uncomma x = [x]
 > implyBits (STyApp f t) = do
 >     ([], s, ts) <- implyBits f
->     return ([], s, t:ts)
+>     return ([], s, ts ++ [t])
 > implyBits (STyCon c) = return ([], c, [])
 > implyBits _ = fail "ook"
 

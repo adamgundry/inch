@@ -243,6 +243,7 @@
 >   "type String = [Char]" :
 >   "type F a b = b a" :
 >   "type F (a :: *) (b :: * -> *) = b a" :
+>   "instance N a 0 where" :
 >   []
 
 
