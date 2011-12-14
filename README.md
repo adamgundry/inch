@@ -88,7 +88,7 @@ After type-checking and preprocecessing with `inch`, the resulting file is as fo
     plan 0         = VNil
     plan m | m > 0 = VCons m (plan (m-1))
 
-For more examples, look in the examples directory of the source distribution. These include:
+For more examples, look in the [examples directory](https://github.com/adamgundry/inch/tree/master/examples) of the source distribution. These include:
 
 * More fun with vectors
 
@@ -98,7 +98,7 @@ For more examples, look in the examples directory of the source distribution. Th
 
 * Time complexity annotations showing that red-black tree insert/delete are linear in the black height, plus a few other examples
 
-* Units of measure with good type inference properties and no runtime overhead
+* Units of measure with good type inference properties and (morally) no runtime overhead
 
 
 Known limitations
