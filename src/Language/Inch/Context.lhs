@@ -7,7 +7,7 @@
 > import Control.Applicative
 > import Control.Monad.Error
 > import Control.Monad.State
-> import Control.Monad.Writer hiding (All)
+> import Control.Monad.Writer hiding (All, (<>))
 > import qualified Data.Map as Map
 > import Data.Map (Map)
 > import Data.Foldable
