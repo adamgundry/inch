@@ -2,8 +2,8 @@
 
 > module Language.Inch.File where
 
-> import Prelude hiding (catch)
-> import Control.Exception
+> import Prelude 
+> import qualified Control.Exception as E
 > import Control.Monad.State
 > import System.Exit
 > import System.FilePath
@@ -52,8 +52,8 @@
 
 > readImport :: FilePath -> Import -> IO [STopDeclaration]
 > readImport dir im = do
->     s <- catch (readFile (combine dir inchFile)) $ \ (_ :: IOException) ->
->              catch (readFile =<< getDataFileName inchFile) $ \ (_ :: IOException) ->
+>     s <- E.catch (readFile (combine dir inchFile)) $ \ (_ :: E.IOException) ->
+>              E.catch (readFile =<< getDataFileName inchFile) $ \ (_ :: E.IOException) ->
 >                  hPutStrLn stderr ("Could not load " ++ inchFile) >> return ""
 >     case parseInterface inchFile s of
 >         Right ds  -> return $ filter (included . topDeclName) ds

@@ -2,7 +2,7 @@
 
 > module Main where
 
-> import Prelude hiding (catch)
+> import Prelude
 > import System.Environment
 > import System.FilePath
 
