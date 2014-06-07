@@ -1,7 +1,7 @@
 Name:                inch
 Version:             0.1.0
 Synopsis:            A type-checker for Haskell with integer constraints
-Description:         
+Description:
     Inch is a type-checker for a subset of Haskell (plus some GHC
     extensions) with the addition of integer constraints. After
     successfully type-checking a source file, it outputs an
@@ -63,8 +63,8 @@ Executable inch
                          Language.Inch.TyNum
                          Language.Inch.TypeCheck
                          Language.Inch.Type
-                         Language.Inch.Unify         
-  
+                         Language.Inch.Unify
+
 Test-Suite test-inch
     type:            exitcode-stdio-1.0
     hs-source-dirs:  src tests
