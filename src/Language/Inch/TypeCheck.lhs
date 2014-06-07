@@ -134,8 +134,10 @@ status.
 
 >     solveForLots :: Var () KNum -> [Type KConstraint] -> Maybe NormalNum
 >     solveForLots a = getFirst . foldMap (First . maybeSolveFor a) . mapMaybe f
->       where  f (TyComp EL `TyApp` m `TyApp` n)  = Just (normaliseNum (m - n))
->              f _           = Nothing
+>       where
+>         f :: Type k -> Maybe NormalNum
+>         f (TyComp EL `TyApp` m `TyApp` n)  = Just (normaliseNum (m - n))
+>         f _           = Nothing
 
 
 > subsCheck :: Sigma -> Sigma -> Contextual ()

@@ -3,7 +3,7 @@
 >              StandaloneDeriving, TypeFamilies, RankNTypes,
 >              ImpredicativeTypes, FlexibleContexts,
 >              MultiParamTypeClasses, EmptyDataDecls,
->              UndecidableInstances #-}
+>              UndecidableInstances, AllowAmbiguousTypes #-}
 
 > module Language.Inch.Syntax where
 

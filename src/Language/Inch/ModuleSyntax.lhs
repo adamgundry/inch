@@ -1,5 +1,6 @@
 > {-# LANGUAGE StandaloneDeriving, TypeOperators, GADTs,
->              FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
+>              FlexibleInstances, MultiParamTypeClasses,
+>              TypeFamilies, AllowAmbiguousTypes #-}
 
 > module Language.Inch.ModuleSyntax where
 
