@@ -1,5 +1,5 @@
 Name:                inch
-Version:             0.1.0
+Version:             0.2.0
 Synopsis:            A type-checker for Haskell with integer constraints
 Description:
     Inch is a type-checker for a subset of Haskell (plus some GHC
