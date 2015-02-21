@@ -151,6 +151,6 @@ This work is inspired by Hongwei Xi's [Dependent ML](http://www.cs.bu.edu/~hwxi/
 Contact
 -------
 
-Adam Gundry
-adam (at) well (dash) typed (dot) com
+Adam Gundry  
+adam (at) well (dash) typed (dot) com  
 http://adam.gundry.co.uk/
